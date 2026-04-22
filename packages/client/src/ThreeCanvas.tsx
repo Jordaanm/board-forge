@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import { createTable } from './scene/Table';
+import { CameraController } from './camera/CameraController';
 
 export function ThreeCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -17,40 +19,45 @@ export function ThreeCanvas() {
       0.1,
       1000
     );
-    camera.position.set(0, 8, 10);
-    camera.lookAt(0, 0, 0);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.shadowMap.enabled = true;
     container.appendChild(renderer.domElement);
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
     scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    directionalLight.position.set(5, 10, 5);
-    scene.add(directionalLight);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+    dirLight.position.set(5, 12, 5);
+    dirLight.castShadow = true;
+    scene.add(dirLight);
 
-    let animationId: number;
+    scene.add(createTable());
+
+    const camController = new CameraController(camera, renderer.domElement);
+
+    let animId: number;
     const animate = () => {
-      animationId = requestAnimationFrame(animate);
+      animId = requestAnimationFrame(animate);
       renderer.render(scene, camera);
     };
     animate();
 
-    const handleResize = () => {
-      const width = container.clientWidth;
-      const height = container.clientHeight;
-      camera.aspect = width / height;
+    const onResize = () => {
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      camera.aspect = w / h;
       camera.updateProjectionMatrix();
-      renderer.setSize(width, height);
+      renderer.setSize(w, h);
     };
-    window.addEventListener('resize', handleResize);
+    window.addEventListener('resize', onResize);
 
     return () => {
-      cancelAnimationFrame(animationId);
-      window.removeEventListener('resize', handleResize);
+      cancelAnimationFrame(animId);
+      window.removeEventListener('resize', onResize);
+      camController.dispose();
       renderer.dispose();
       container.removeChild(renderer.domElement);
     };
