@@ -1,7 +1,10 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { createTable } from './scene/Table';
+import { createTokenMesh, createTokenBody } from './scene/Token';
 import { CameraController } from './camera/CameraController';
+import { PhysicsWorld } from './physics/PhysicsWorld';
+import { DragController } from './input/DragController';
 
 export function ThreeCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -36,11 +39,35 @@ export function ThreeCanvas() {
 
     scene.add(createTable());
 
-    const camController = new CameraController(camera, renderer.domElement);
+    const tokenMesh = createTokenMesh();
+    scene.add(tokenMesh);
 
+    const physics = new PhysicsWorld();
+    const tokenBody = createTokenBody();
+    physics.addBody(tokenBody);
+
+    const camController = new CameraController(camera, renderer.domElement);
+    const dragController = new DragController(camera, renderer.domElement, tokenMesh, tokenBody);
+
+    let lastTime = performance.now();
     let animId: number;
     const animate = () => {
       animId = requestAnimationFrame(animate);
+      const now = performance.now();
+      const dt = Math.min((now - lastTime) / 1000, 0.05);
+      lastTime = now;
+
+      physics.step(dt);
+      dragController.update();
+
+      tokenMesh.position.set(tokenBody.position.x, tokenBody.position.y, tokenBody.position.z);
+      tokenMesh.quaternion.set(
+        tokenBody.quaternion.x,
+        tokenBody.quaternion.y,
+        tokenBody.quaternion.z,
+        tokenBody.quaternion.w,
+      );
+
       renderer.render(scene, camera);
     };
     animate();
@@ -58,6 +85,7 @@ export function ThreeCanvas() {
       cancelAnimationFrame(animId);
       window.removeEventListener('resize', onResize);
       camController.dispose();
+      dragController.dispose();
       renderer.dispose();
       container.removeChild(renderer.domElement);
     };

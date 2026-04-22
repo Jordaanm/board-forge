@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 
 export const TABLE_SURFACE_Y = 0;
-const TABLE_WIDTH = 12;
-const TABLE_DEPTH = 8;
-const TABLE_THICKNESS = 0.3;
+export const TABLE_WIDTH = 12;
+export const TABLE_DEPTH = 8;
+export const TABLE_THICKNESS = 0.3;
 
 export function createTable(): THREE.Mesh {
   const geometry = new THREE.BoxGeometry(TABLE_WIDTH, TABLE_THICKNESS, TABLE_DEPTH);
