@@ -57,13 +57,30 @@ export function ThreeCanvas({
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(renderer.domElement);
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
-    dirLight.position.set(5, 12, 5);
-    dirLight.castShadow = true;
-    scene.add(dirLight);
+    const hemiLight = new THREE.HemisphereLight(0xbfd9ff, 0x3a2e24, 0.55);
+    scene.add(hemiLight);
+
+    const keyLight = new THREE.DirectionalLight(0xfff1dc, 1.1);
+    keyLight.position.set(6, 14, 4);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.set(2048, 2048);
+    keyLight.shadow.camera.near   =  0.5;
+    keyLight.shadow.camera.far    = 40;
+    keyLight.shadow.camera.left   = -10;
+    keyLight.shadow.camera.right  =  10;
+    keyLight.shadow.camera.top    =  8;
+    keyLight.shadow.camera.bottom = -8;
+    keyLight.shadow.bias       = -0.0005;
+    keyLight.shadow.normalBias =  0.02;
+    keyLight.shadow.radius     =  4;
+    scene.add(keyLight);
+
+    const rimLight = new THREE.DirectionalLight(0x9cc9ff, 0.35);
+    rimLight.position.set(-6, 6, -4);
+    scene.add(rimLight);
 
     const tableMesh = createTable();
     scene.add(tableMesh);
