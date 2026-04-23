@@ -23,6 +23,10 @@ export class ContextMenuController {
     private readonly camera:  THREE.PerspectiveCamera,
     private readonly graph:   SceneGraph,
     private readonly onOpen:  (req: ContextMenuRequest) => void,
+    // When provided, the menu only opens if the hit object's id matches the
+    // currently-selected id. Used on the guest path where a menu requires
+    // the object to already be selected.
+    private readonly requireSelectedId?: () => string | null,
   ) {
     // The browser fires 'contextmenu' only on a stationary right-click, not
     // during a right-drag, so drag-suppression is handled for us automatically.
@@ -49,6 +53,8 @@ export class ContextMenuController {
 
     const entry = this.graph.findEntry(hits[0].object);
     if (!entry) return;
+
+    if (this.requireSelectedId && this.requireSelectedId() !== entry.id) return;
 
     const def       = OBJECT_TYPE_REGISTRY[entry.objectType];
     const itemCount = def.actions.length + 1; // +1 for Delete

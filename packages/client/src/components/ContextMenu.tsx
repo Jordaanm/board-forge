@@ -2,6 +2,7 @@ import { type ContextMenuRequest } from '../input/ContextMenuController';
 
 interface Props {
   menu:      ContextMenuRequest;
+  isHost:    boolean;
   onAction:  (actionId: string, objectId: string) => void;
   onDismiss: () => void;
 }
@@ -19,8 +20,10 @@ const HEADER: React.CSSProperties = {
   fontFamily: 'sans-serif',
 };
 
-export function ContextMenu({ menu, onAction, onDismiss }: Props) {
-  const items = [...menu.actions, { id: 'delete', label: 'Delete' }];
+export function ContextMenu({ menu, isHost, onAction, onDismiss }: Props) {
+  // Guests see the header only; action items are a host-only affordance
+  // until an ownership model lands.
+  const items = isHost ? [...menu.actions, { id: 'delete', label: 'Delete' }] : [];
 
   return (
     <>

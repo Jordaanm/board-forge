@@ -187,6 +187,12 @@ export function ThreeCanvas({
         selectCallback,
       );
 
+      contextCtrl = new ContextMenuController(
+        renderer.domElement, camera, graph,
+        (req) => onContextMenuRef.current(req),
+        () => highlightId,
+      );
+
       onMsgRef.current = (msg) => {
         if (msg.type === 'snapshot' || msg.type === 'patch') {
           guestInterp!.receive(msg);

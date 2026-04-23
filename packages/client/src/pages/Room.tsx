@@ -168,6 +168,7 @@ export function Room({ roomId, isHost }: Props) {
       {contextMenu && (
         <ContextMenu
           menu={contextMenu}
+          isHost={isHost}
           onAction={handleContextAction}
           onDismiss={() => setContextMenu(null)}
         />
