@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ThreeCanvas } from '../ThreeCanvas';
 import { ConnectionManager } from '../net/ConnectionManager';
+import type { GameMessage } from '../net/SceneState';
 
 type Status = 'connecting' | 'connected' | 'disconnected' | 'room-full';
 
@@ -25,9 +26,31 @@ interface Props {
   isHost: boolean;
 }
 
+// Stable no-op so refs always hold a callable function.
+const noop = () => {};
+
 export function Room({ roomId, isHost }: Props) {
   const [status, setStatus] = useState<Status>('connecting');
-  const managerRef = useRef<ConnectionManager | null>(null);
+
+  // Stable refs — .current is swapped when the connection changes, never the ref itself.
+  const sendRef  = useRef<(msg: GameMessage) => void>(noop);
+  const onMsgRef = useRef<(msg: GameMessage) => void>(noop);
+
+  useEffect(() => {
+    const mgr = new ConnectionManager(
+      (msg) => onMsgRef.current(msg as GameMessage),
+      (s) => setStatus(s as Status),
+    );
+    sendRef.current = (msg) => mgr.send(msg);
+
+    if (isHost) mgr.hostRoom(SIGNALING_URL, roomId);
+    else mgr.joinRoom(SIGNALING_URL, roomId);
+
+    return () => {
+      mgr.dispose();
+      sendRef.current = noop;
+    };
+  }, [roomId, isHost]);
 
   const shareUrl = (() => {
     const u = new URL(window.location.href);
@@ -35,22 +58,9 @@ export function Room({ roomId, isHost }: Props) {
     return u.toString();
   })();
 
-  useEffect(() => {
-    const mgr = new ConnectionManager(
-      () => { /* game messages handled in later slices */ },
-      (s) => setStatus(s as Status)
-    );
-    managerRef.current = mgr;
-
-    if (isHost) mgr.hostRoom(SIGNALING_URL, roomId);
-    else mgr.joinRoom(SIGNALING_URL, roomId);
-
-    return () => mgr.dispose();
-  }, [roomId, isHost]);
-
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-      <ThreeCanvas />
+      <ThreeCanvas isHost={isHost} sendRef={sendRef} onMsgRef={onMsgRef} />
 
       <div style={{
         position: 'absolute', top: 12, right: 12,
