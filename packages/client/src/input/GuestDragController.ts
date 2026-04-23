@@ -1,23 +1,23 @@
 import * as THREE from 'three';
-import * as CANNON from 'cannon-es';
-import { TABLE_SURFACE_Y } from '../scene/Table';
+import { CARRY_HEIGHT } from './DragController';
 import { type SceneGraph } from '../scene/SceneGraph';
+import { type ChannelMessage } from '../net/SceneState';
 
-export const CARRY_HEIGHT    = TABLE_SURFACE_Y + 1.5;
-const        VELOCITY_SAMPLES = 6;
+const VELOCITY_SAMPLES = 6;
 
-export class DragController {
-  private held:             { id: string; body: CANNON.Body } | null = null;
-  private readonly raycaster    = new THREE.Raycaster();
-  private readonly pointer      = new THREE.Vector2();
-  private readonly carryPlane   = new THREE.Plane(new THREE.Vector3(0, 1, 0), -CARRY_HEIGHT);
-  private readonly carryTarget  = new THREE.Vector3();
-  private readonly velHistory:    { pos: THREE.Vector3; t: number }[] = [];
+export class GuestDragController {
+  private heldId:           string | null = null;
+  private readonly raycaster   = new THREE.Raycaster();
+  private readonly pointer     = new THREE.Vector2();
+  private readonly carryPlane  = new THREE.Plane(new THREE.Vector3(0, 1, 0), -CARRY_HEIGHT);
+  private readonly carryTarget = new THREE.Vector3();
+  private readonly velHistory:   { pos: THREE.Vector3; t: number }[] = [];
 
   constructor(
     private readonly camera:  THREE.PerspectiveCamera,
     private readonly element: HTMLElement,
     private readonly graph:   SceneGraph,
+    private readonly send:    (msg: ChannelMessage) => void,
   ) {
     element.addEventListener('pointerdown', this.onDown);
     element.addEventListener('pointermove', this.onMove);
@@ -28,15 +28,6 @@ export class DragController {
     this.element.removeEventListener('pointerdown', this.onDown);
     this.element.removeEventListener('pointermove', this.onMove);
     this.element.removeEventListener('pointerup',   this.onUp);
-  }
-
-  update() {
-    if (!this.held) return;
-    const { body } = this.held;
-    body.wakeUp();
-    body.position.set(this.carryTarget.x, CARRY_HEIGHT, this.carryTarget.z);
-    body.velocity.setZero();
-    body.angularVelocity.setZero();
   }
 
   private setPointer(e: PointerEvent) {
@@ -53,20 +44,20 @@ export class DragController {
   }
 
   private onDown = (e: PointerEvent) => {
-    if (e.button !== 0 || this.held) return;
+    if (e.button !== 0 || this.heldId) return;
     this.setPointer(e);
     this.raycaster.setFromCamera(this.pointer, this.camera);
 
-    const throwable = this.graph.getAll().filter(en => en.body !== null);
+    const throwable = this.graph.getAll().filter(en => en.objectType !== 'board');
     const hits = this.raycaster.intersectObjects(throwable.map(en => en.mesh), true);
     if (hits.length === 0) return;
 
     const entry = this.graph.findEntry(hits[0].object);
-    if (!entry?.body) return;
+    if (!entry) return;
 
-    this.held = { id: entry.id, body: entry.body };
+    this.heldId = entry.id;
     this.velHistory.length = 0;
-    entry.body.wakeUp();
+    this.send({ type: 'guest-drag-start', objectId: entry.id });
 
     const pt = this.castToCarryPlane();
     if (pt) {
@@ -77,7 +68,7 @@ export class DragController {
   };
 
   private onMove = (e: PointerEvent) => {
-    if (!this.held) return;
+    if (!this.heldId) return;
     this.setPointer(e);
     this.raycaster.setFromCamera(this.pointer, this.camera);
     const pt = this.castToCarryPlane();
@@ -85,16 +76,15 @@ export class DragController {
     this.carryTarget.copy(pt);
     this.velHistory.push({ pos: pt.clone(), t: performance.now() });
     if (this.velHistory.length > VELOCITY_SAMPLES) this.velHistory.shift();
+    this.send({ type: 'guest-drag-move', objectId: this.heldId, px: pt.x, py: CARRY_HEIGHT, pz: pt.z });
   };
 
   private onUp = (e: PointerEvent) => {
-    if (e.button !== 0 || !this.held) return;
-    const { body } = this.held;
-    this.held = null;
+    if (e.button !== 0 || !this.heldId) return;
     const vel = this.computeThrowVelocity();
-    body.velocity.set(vel.x, 0, vel.z);
-    body.angularVelocity.setZero();
-    body.wakeUp();
+    this.send({ type: 'guest-drag-end', objectId: this.heldId, vx: vel.x, vy: 0, vz: vel.z });
+    this.heldId = null;
+    this.velHistory.length = 0;
   };
 
   private computeThrowVelocity(): THREE.Vector3 {

@@ -1,28 +1,34 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type MutableRefObject } from 'react';
 import * as THREE from 'three';
 import { createTable } from './scene/Table';
-import { createTokenMesh, createTokenBody } from './scene/Token';
+import { SceneGraph } from './scene/SceneGraph';
+import { getDieFace } from './scene/objectTypes';
 import { CameraController } from './camera/CameraController';
 import { PhysicsWorld } from './physics/PhysicsWorld';
 import { DragController } from './input/DragController';
+import { GuestDragController } from './input/GuestDragController';
+import { GuestInputHandler } from './input/GuestInputHandler';
 import { HostReplicator } from './net/HostReplicator';
 import { GuestInterpolator } from './net/GuestInterpolator';
-import type { GameMessage, ObjectState } from './net/SceneState';
+import { type ChannelMessage, type SpawnableType } from './net/SceneState';
 
 interface Props {
-  isHost: boolean;
-  sendRef:  React.MutableRefObject<(msg: GameMessage) => void>;
-  onMsgRef: React.MutableRefObject<(msg: GameMessage) => void>;
+  isHost:     boolean;
+  sendRef:    MutableRefObject<(msg: ChannelMessage) => void>;
+  onMsgRef:   MutableRefObject<(msg: ChannelMessage) => void>;
+  spawnRef:   MutableRefObject<(type: SpawnableType) => void>;
+  rollRef:    MutableRefObject<() => void>;
 }
 
-export function ThreeCanvas({ isHost, sendRef, onMsgRef }: Props) {
+export function ThreeCanvas({ isHost, sendRef, onMsgRef, spawnRef, rollRef }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const overlayRef   = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
-    // ── Renderer ────────────────────────────────────────────────────────────
+    // ── Renderer ─────────────────────────────────────────────────────────
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x1a1a2e);
 
@@ -36,8 +42,7 @@ export function ThreeCanvas({ isHost, sendRef, onMsgRef }: Props) {
     renderer.shadowMap.enabled = true;
     container.appendChild(renderer.domElement);
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-    scene.add(ambientLight);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
     const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
     dirLight.position.set(5, 12, 5);
     dirLight.castShadow = true;
@@ -45,68 +50,113 @@ export function ThreeCanvas({ isHost, sendRef, onMsgRef }: Props) {
 
     scene.add(createTable());
 
-    const tokenMesh = createTokenMesh();
-    scene.add(tokenMesh);
-
     const camController = new CameraController(camera, renderer.domElement);
+    const graph         = new SceneGraph();
 
-    // ── Host-only setup ──────────────────────────────────────────────────────
-    let physics:      PhysicsWorld  | null = null;
-    let dragCtrl:     DragController | null = null;
-    let hostRepl:     HostReplicator | null = null;
-    let guestInterp:  GuestInterpolator | null = null;
-    // cannon-es Body ref for host (accessed in animate closure)
-    let tokenBodyRef: ReturnType<typeof createTokenBody> | null = null;
+    // ── Host ─────────────────────────────────────────────────────────────
+    let physics:      PhysicsWorld       | null = null;
+    let dragCtrl:     DragController     | null = null;
+    let guestInput:   GuestInputHandler  | null = null;
+    let hostRepl:     HostReplicator     | null = null;
+    let guestInterp:  GuestInterpolator  | null = null;
+    let guestDrag:    GuestDragController | null = null;
 
     if (isHost) {
-      physics = new PhysicsWorld();
-      const body = createTokenBody();
-      tokenBodyRef = body;
-      physics.addBody(body);
-      dragCtrl  = new DragController(camera, renderer.domElement, tokenMesh, body);
-      hostRepl  = new HostReplicator((msg) => sendRef.current(msg));
+      physics    = new PhysicsWorld();
+      dragCtrl   = new DragController(camera, renderer.domElement, graph);
+      guestInput = new GuestInputHandler();
+      hostRepl   = new HostReplicator((msg) => sendRef.current(msg));
+
+      spawnRef.current = (type) => graph.spawn(type, scene, physics!);
+      rollRef.current  = () => {
+        for (const e of graph.getAll()) {
+          if (e.objectType !== 'die' || !e.body) continue;
+          e.body.wakeUp();
+          e.body.angularVelocity.set(
+            (Math.random() - 0.5) * 40,
+            (Math.random() - 0.5) * 40,
+            (Math.random() - 0.5) * 40,
+          );
+          e.body.velocity.set(
+            (Math.random() - 0.5) * 4,
+            3,
+            (Math.random() - 0.5) * 4,
+          );
+        }
+      };
+
+      onMsgRef.current = (msg) => {
+        if (msg.type === 'guest-drag-start' ||
+            msg.type === 'guest-drag-move'  ||
+            msg.type === 'guest-drag-end') {
+          guestInput!.handleMessage(msg, graph);
+        }
+      };
+
     } else {
       guestInterp = new GuestInterpolator();
-      onMsgRef.current = (msg) => guestInterp!.receive(msg);
+      guestDrag   = new GuestDragController(
+        camera, renderer.domElement, graph,
+        (msg) => sendRef.current(msg),
+      );
+
+      onMsgRef.current = (msg) => {
+        if (msg.type === 'snapshot' || msg.type === 'patch') {
+          guestInterp!.receive(msg);
+          const objects = msg.type === 'snapshot' ? msg.objects : msg.changed;
+          graph.ensureObjects(objects, scene);
+        }
+      };
     }
 
-    // ── Animation loop ───────────────────────────────────────────────────────
+    // ── Animation loop ────────────────────────────────────────────────────
     let lastTime = performance.now();
     let animId: number;
 
     const animate = () => {
       animId = requestAnimationFrame(animate);
 
-      if (isHost && physics && dragCtrl && hostRepl && tokenBodyRef) {
+      if (isHost && physics && dragCtrl && guestInput && hostRepl) {
         const now = performance.now();
         const dt  = Math.min((now - lastTime) / 1000, 0.05);
         lastTime  = now;
 
         physics.step(dt);
         dragCtrl.update();
+        guestInput.update(graph);
+        graph.syncFromPhysics();
+        hostRepl.update(graph.getPhysicsStates());
 
-        tokenMesh.position.set(
-          tokenBodyRef.position.x, tokenBodyRef.position.y, tokenBodyRef.position.z,
-        );
-        tokenMesh.quaternion.set(
-          tokenBodyRef.quaternion.x, tokenBodyRef.quaternion.y,
-          tokenBodyRef.quaternion.z, tokenBodyRef.quaternion.w,
-        );
-
-        const objects: ObjectState[] = [{
-          id: 'token-0',
-          px: tokenBodyRef.position.x, py: tokenBodyRef.position.y, pz: tokenBodyRef.position.z,
-          qx: tokenBodyRef.quaternion.x, qy: tokenBodyRef.quaternion.y,
-          qz: tokenBodyRef.quaternion.z, qw: tokenBodyRef.quaternion.w,
-        }];
-        hostRepl.update(objects);
+        // Die face overlay
+        const dieFaces: string[] = [];
+        for (const e of graph.getAll()) {
+          if (e.objectType !== 'die' || !e.body) continue;
+          const speed = e.body.velocity.length() + e.body.angularVelocity.length();
+          if (speed < 0.1) {
+            const face = getDieFace(
+              e.body.quaternion.x, e.body.quaternion.y,
+              e.body.quaternion.z, e.body.quaternion.w,
+            );
+            dieFaces.push(`D6: ${face}`);
+          }
+        }
+        if (overlayRef.current) {
+          overlayRef.current.textContent = dieFaces.join('  |  ');
+        }
 
       } else if (!isHost && guestInterp) {
-        for (const s of guestInterp.update()) {
-          if (s.id === 'token-0') {
-            tokenMesh.position.set(s.px, s.py, s.pz);
-            tokenMesh.quaternion.set(s.qx, s.qy, s.qz, s.qw);
+        const states = guestInterp.update();
+        graph.applyStates(states);
+
+        // Die face overlay from interpolated state
+        const dieFaces: string[] = [];
+        for (const s of states) {
+          if (s.objectType === 'die') {
+            dieFaces.push(`D6: ${getDieFace(s.qx, s.qy, s.qz, s.qw)}`);
           }
+        }
+        if (overlayRef.current) {
+          overlayRef.current.textContent = dieFaces.join('  |  ');
         }
       }
 
@@ -114,10 +164,8 @@ export function ThreeCanvas({ isHost, sendRef, onMsgRef }: Props) {
     };
     animate();
 
-    // ── Resize ───────────────────────────────────────────────────────────────
     const onResize = () => {
-      const w = container.clientWidth;
-      const h = container.clientHeight;
+      const w = container.clientWidth, h = container.clientHeight;
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
@@ -129,11 +177,27 @@ export function ThreeCanvas({ isHost, sendRef, onMsgRef }: Props) {
       window.removeEventListener('resize', onResize);
       camController.dispose();
       dragCtrl?.dispose();
+      guestDrag?.dispose();
       if (!isHost) onMsgRef.current = () => {};
+      spawnRef.current = () => {};
+      rollRef.current  = () => {};
       renderer.dispose();
       container.removeChild(renderer.domElement);
     };
-  }, [isHost, sendRef, onMsgRef]);
+  }, [isHost, sendRef, onMsgRef, spawnRef, rollRef]);
 
-  return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />;
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+      <div
+        ref={overlayRef}
+        style={{
+          position: 'absolute', top: 8, left: 8,
+          color: '#ffd740', fontSize: 14, fontFamily: 'monospace',
+          background: 'rgba(0,0,0,0.55)', padding: '3px 10px', borderRadius: 4,
+          pointerEvents: 'none',
+        }}
+      />
+    </div>
+  );
 }

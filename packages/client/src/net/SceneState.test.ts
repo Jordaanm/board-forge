@@ -2,7 +2,7 @@ import { describe, test, expect } from 'vitest';
 import { diffObjects, applyPatch, type ObjectState } from './SceneState';
 
 function obj(id: string, px = 0, py = 0, pz = 0): ObjectState {
-  return { id, px, py, pz, qx: 0, qy: 0, qz: 0, qw: 1 };
+  return { id, objectType: 'token', px, py, pz, qx: 0, qy: 0, qz: 0, qw: 1 };
 }
 
 describe('diffObjects', () => {

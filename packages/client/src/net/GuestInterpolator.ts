@@ -25,7 +25,6 @@ export class GuestInterpolator {
 
     const renderTime = performance.now() - INTERP_DELAY_MS;
 
-    // Find the two entries that bracket renderTime
     let i = 0;
     while (i < this.buffer.length - 2 && this.buffer[i + 1].localTs <= renderTime) i++;
 
@@ -45,7 +44,6 @@ function lerpStates(a: ObjectState[], b: ObjectState[], t: number): ObjectState[
     const bo = bMap.get(ao.id);
     if (!bo) return ao;
 
-    // nlerp for quaternion
     const qx = ao.qx + (bo.qx - ao.qx) * t;
     const qy = ao.qy + (bo.qy - ao.qy) * t;
     const qz = ao.qz + (bo.qz - ao.qz) * t;
@@ -53,7 +51,8 @@ function lerpStates(a: ObjectState[], b: ObjectState[], t: number): ObjectState[
     const len = Math.sqrt(qx * qx + qy * qy + qz * qz + qw * qw) || 1;
 
     return {
-      id: ao.id,
+      id:         ao.id,
+      objectType: ao.objectType,
       px: ao.px + (bo.px - ao.px) * t,
       py: ao.py + (bo.py - ao.py) * t,
       pz: ao.pz + (bo.pz - ao.pz) * t,

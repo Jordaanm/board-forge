@@ -1,5 +1,8 @@
+export type SpawnableType = 'board' | 'die' | 'token';
+
 export type ObjectState = {
   id: string;
+  objectType: SpawnableType;
   px: number; py: number; pz: number;
   qx: number; qy: number; qz: number; qw: number;
 };
@@ -7,6 +10,13 @@ export type ObjectState = {
 export type GameMessage =
   | { type: 'snapshot'; ts: number; objects: ObjectState[] }
   | { type: 'patch';    ts: number; changed: ObjectState[] };
+
+export type GuestInputMessage =
+  | { type: 'guest-drag-start'; objectId: string }
+  | { type: 'guest-drag-move';  objectId: string; px: number; py: number; pz: number }
+  | { type: 'guest-drag-end';   objectId: string; vx: number; vy: number; vz: number };
+
+export type ChannelMessage = GameMessage | GuestInputMessage;
 
 const DEFAULT_THRESHOLD = 0.0001;
 
