@@ -2,7 +2,16 @@
   "permissions": {
     "allow": [
       "Bash(git *)",
-      "Bash(gh issue *)"
+      "Bash(gh issue *)",
+      "Bash(bun --version)",
+      "Bash(npm --version)",
+      "Bash(npm run *)",
+      "Bash(bun test *)",
+      "Bash(gh repo *)",
+      "Bash(npx tsc *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5173)",
+      "Bash(pkill -f \"vite --port 5173\")",
+      "Bash(npm test *)"
     ]
   }
 }
