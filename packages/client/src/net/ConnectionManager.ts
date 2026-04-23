@@ -25,7 +25,7 @@ export class ConnectionManager {
   }
 
   send(data: unknown) {
-    this.channel?.send(JSON.stringify(data));
+    if (this.channel?.readyState === 'open') this.channel.send(JSON.stringify(data));
   }
 
   dispose() {
