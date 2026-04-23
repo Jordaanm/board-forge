@@ -6,15 +6,23 @@ export type ActionDef      = { id: string; label: string };
 export type PropertyDef    = { key: string; label: string; type: 'number' | 'string' | 'color' };
 export type PropertySchema = PropertyDef[];
 
+// Minimal shape needed by applyProp — avoids circular import with SceneGraph
+export interface PropTarget {
+  mesh:  THREE.Object3D;
+  props: Record<string, unknown>;
+}
+
 export interface ObjectTypeDef {
   type: SpawnableType;
   label: string;
   isThrowable: boolean;
   spawnHeight: number;
+  defaultProps: Record<string, unknown>;
   propertySchema: PropertySchema;
   actions: ActionDef[];
   createMesh(): THREE.Object3D;
   createBody(): CANNON.Body | null;
+  applyProp(target: PropTarget, key: string, value: unknown): void;
 }
 
 // ── Board ─────────────────────────────────────────────────────────────────
@@ -25,9 +33,11 @@ export const BoardTypeDef: ObjectTypeDef = {
   label: 'Board',
   isThrowable: true,
   spawnHeight: BOARD_T / 2,
+  defaultProps: { width: BOARD_W, depth: BOARD_D, textureUrl: '' },
   propertySchema: [
-    { key: 'width', label: 'Width', type: 'number' },
-    { key: 'depth', label: 'Depth', type: 'number' },
+    { key: 'width',      label: 'Width',   type: 'number' },
+    { key: 'depth',      label: 'Depth',   type: 'number' },
+    { key: 'textureUrl', label: 'Texture', type: 'string' },
   ],
   actions: [],
   createMesh() {
@@ -46,6 +56,24 @@ export const BoardTypeDef: ObjectTypeDef = {
       shape: new CANNON.Box(new CANNON.Vec3(BOARD_W / 2, BOARD_T / 2, BOARD_D / 2)),
     });
   },
+  applyProp(target, key, value) {
+    const w = (target.props['width']  as number | undefined) ?? BOARD_W;
+    const d = (target.props['depth']  as number | undefined) ?? BOARD_D;
+    if (key === 'width' || key === 'depth') {
+      target.mesh.scale.set(w / BOARD_W, 1, d / BOARD_D);
+    } else if (key === 'textureUrl') {
+      const mat = (target.mesh as THREE.Mesh).material as THREE.MeshLambertMaterial;
+      if (value && typeof value === 'string') {
+        new THREE.TextureLoader().load(value, (tex) => {
+          mat.map = tex;
+          mat.needsUpdate = true;
+        });
+      } else {
+        mat.map = null;
+        mat.needsUpdate = true;
+      }
+    }
+  },
 };
 
 // ── Die (D6) ──────────────────────────────────────────────────────────────
@@ -56,9 +84,8 @@ export const DieTypeDef: ObjectTypeDef = {
   label: 'Die (D6)',
   isThrowable: true,
   spawnHeight: DIE_SIZE / 2,
-  propertySchema: [
-    { key: 'sides', label: 'Sides', type: 'number' },
-  ],
+  defaultProps: {},
+  propertySchema: [],
   actions: [{ id: 'roll', label: 'Roll' }],
   createMesh() {
     const mesh = new THREE.Mesh(
@@ -77,6 +104,7 @@ export const DieTypeDef: ObjectTypeDef = {
       shape: new CANNON.Box(new CANNON.Vec3(DIE_SIZE / 2, DIE_SIZE / 2, DIE_SIZE / 2)),
     });
   },
+  applyProp() {},
 };
 
 // ── Token (Meeple) ────────────────────────────────────────────────────────
@@ -88,6 +116,7 @@ export const TokenTypeDef: ObjectTypeDef = {
   label: 'Token',
   isThrowable: true,
   spawnHeight: MEEPLE_H / 2,
+  defaultProps: { color: '#2266cc' },
   propertySchema: [
     { key: 'color', label: 'Color', type: 'color' },
   ],
@@ -119,6 +148,15 @@ export const TokenTypeDef: ObjectTypeDef = {
       linearDamping: 0.4,
       angularDamping: 0.8,
       shape: new CANNON.Cylinder(MEEPLE_R, MEEPLE_R, MEEPLE_H, 12),
+    });
+  },
+  applyProp(target, key, value) {
+    if (key !== 'color') return;
+    const color = new THREE.Color(value as string);
+    target.mesh.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        (child.material as THREE.MeshLambertMaterial).color.set(color);
+      }
     });
   },
 };

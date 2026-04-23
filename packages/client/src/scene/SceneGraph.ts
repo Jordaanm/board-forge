@@ -10,11 +10,21 @@ export interface SceneEntry {
   objectType: SpawnableType;
   mesh: THREE.Object3D;
   body: CANNON.Body | null;
+  props: Record<string, unknown>;
 }
 
 export class SceneGraph {
   private entries = new Map<string, SceneEntry>();
   private nextId   = 0;
+  private listeners: Array<() => void> = [];
+
+  // Subscribe to add/remove/prop-change events. Returns unsubscribe fn.
+  subscribe(fn: () => void): () => void {
+    this.listeners.push(fn);
+    return () => { this.listeners = this.listeners.filter(l => l !== fn); };
+  }
+
+  private notify() { for (const l of this.listeners) l(); }
 
   // Host: spawn a new object with physics
   spawn(objectType: SpawnableType, scene: THREE.Scene, physics: PhysicsWorld): SceneEntry {
@@ -34,13 +44,15 @@ export class SceneGraph {
     }
     scene.add(mesh);
 
-    const entry: SceneEntry = { id, objectType, mesh, body };
+    const entry: SceneEntry = { id, objectType, mesh, body, props: { ...def.defaultProps } };
     this.entries.set(id, entry);
+    this.notify();
     return entry;
   }
 
   // Guest: create meshes for new object IDs arriving in state updates
   ensureObjects(states: ObjectState[], scene: THREE.Scene) {
+    let added = false;
     for (const s of states) {
       if (this.entries.has(s.id)) continue;
       const def  = OBJECT_TYPE_REGISTRY[s.objectType];
@@ -48,8 +60,13 @@ export class SceneGraph {
       mesh.position.set(s.px, s.py, s.pz);
       (mesh.quaternion as THREE.Quaternion).set(s.qx, s.qy, s.qz, s.qw);
       scene.add(mesh);
-      this.entries.set(s.id, { id: s.id, objectType: s.objectType, mesh, body: null });
+      this.entries.set(s.id, {
+        id: s.id, objectType: s.objectType, mesh, body: null,
+        props: { ...def.defaultProps },
+      });
+      added = true;
     }
+    if (added) this.notify();
   }
 
   getAll():                       SceneEntry[]          { return [...this.entries.values()]; }
@@ -96,6 +113,7 @@ export class SceneGraph {
     scene.remove(entry.mesh);
     if (entry.body && physics) physics.world.removeBody(entry.body);
     this.entries.delete(id);
+    this.notify();
   }
 
   applyStates(states: ObjectState[]) {
@@ -105,5 +123,24 @@ export class SceneGraph {
       e.mesh.position.set(s.px, s.py, s.pz);
       e.mesh.quaternion.set(s.qx, s.qy, s.qz, s.qw);
     }
+  }
+
+  updateProp(id: string, key: string, value: unknown) {
+    const entry = this.entries.get(id);
+    if (!entry) return;
+    entry.props[key] = value;
+    OBJECT_TYPE_REGISTRY[entry.objectType].applyProp(entry, key, value);
+    this.notify();
+  }
+
+  // Bulk apply for guest receiving an update-props replication message
+  applyProps(id: string, props: Record<string, unknown>) {
+    const entry = this.entries.get(id);
+    if (!entry) return;
+    for (const [k, v] of Object.entries(props)) {
+      entry.props[k] = v;
+      OBJECT_TYPE_REGISTRY[entry.objectType].applyProp(entry, k, v);
+    }
+    this.notify();
   }
 }

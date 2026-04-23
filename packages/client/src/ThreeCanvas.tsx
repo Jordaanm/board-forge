@@ -1,6 +1,6 @@
 import { useEffect, useRef, type MutableRefObject } from 'react';
 import * as THREE from 'three';
-import { createTable } from './scene/Table';
+import { createTable, applyTableProp, type TableProps } from './scene/Table';
 import { SceneGraph } from './scene/SceneGraph';
 import { getDieFace } from './scene/objectTypes';
 import { CameraController } from './camera/CameraController';
@@ -12,21 +12,27 @@ import { ContextMenuController, type ContextMenuRequest } from './input/ContextM
 import { HostReplicator } from './net/HostReplicator';
 import { GuestInterpolator } from './net/GuestInterpolator';
 import { type ChannelMessage, type SpawnableType } from './net/SceneState';
+import { type ObjectSummary } from './components/EditorPanel';
 
 interface Props {
-  isHost:           boolean;
-  sendRef:          MutableRefObject<(msg: ChannelMessage) => void>;
-  onMsgRef:         MutableRefObject<(msg: ChannelMessage) => void>;
-  spawnRef:         MutableRefObject<(type: SpawnableType) => void>;
-  rollRef:          MutableRefObject<() => void>;
-  onContextMenuRef: MutableRefObject<(req: ContextMenuRequest) => void>;
-  rollObjectRef:    MutableRefObject<(id: string) => void>;
-  deleteObjectRef:  MutableRefObject<(id: string) => void>;
+  isHost:              boolean;
+  sendRef:             MutableRefObject<(msg: ChannelMessage) => void>;
+  onMsgRef:            MutableRefObject<(msg: ChannelMessage) => void>;
+  spawnRef:            MutableRefObject<(type: SpawnableType) => void>;
+  rollRef:             MutableRefObject<() => void>;
+  onContextMenuRef:    MutableRefObject<(req: ContextMenuRequest) => void>;
+  rollObjectRef:       MutableRefObject<(id: string) => void>;
+  deleteObjectRef:     MutableRefObject<(id: string) => void>;
+  updatePropRef:       MutableRefObject<(id: string, key: string, value: unknown) => void>;
+  updateTablePropRef:  MutableRefObject<(key: keyof TableProps, value: unknown) => void>;
+  freeCameraRef:       MutableRefObject<(on: boolean) => void>;
+  onObjectsChangeRef:  MutableRefObject<(objects: ObjectSummary[]) => void>;
 }
 
 export function ThreeCanvas({
   isHost, sendRef, onMsgRef, spawnRef, rollRef,
   onContextMenuRef, rollObjectRef, deleteObjectRef,
+  updatePropRef, updateTablePropRef, freeCameraRef, onObjectsChangeRef,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const overlayRef   = useRef<HTMLDivElement>(null);
@@ -55,10 +61,20 @@ export function ThreeCanvas({
     dirLight.castShadow = true;
     scene.add(dirLight);
 
-    scene.add(createTable());
+    const tableMesh = createTable();
+    scene.add(tableMesh);
 
     const camController = new CameraController(camera, renderer.domElement);
     const graph         = new SceneGraph();
+
+    freeCameraRef.current = (on) => camController.setRestricted(on);
+
+    // Push graph snapshots to React on every change
+    const unsubscribe = graph.subscribe(() => {
+      onObjectsChangeRef.current(graph.getAll().map(e => ({
+        id: e.id, objectType: e.objectType, props: { ...e.props },
+      })));
+    });
 
     // ── Host ─────────────────────────────────────────────────────────────
     let physics:     PhysicsWorld        | null = null;
@@ -107,6 +123,16 @@ export function ThreeCanvas({
         sendRef.current({ type: 'delete', id });
       };
 
+      updatePropRef.current = (id, key, value) => {
+        graph.updateProp(id, key, value);
+        sendRef.current({ type: 'update-props', id, props: { [key]: value } });
+      };
+
+      updateTablePropRef.current = (key, value) => {
+        applyTableProp(tableMesh, key, value);
+        sendRef.current({ type: 'table-update', props: { [key]: value } });
+      };
+
       contextCtrl = new ContextMenuController(
         renderer.domElement, camera, graph,
         (req) => onContextMenuRef.current(req),
@@ -135,6 +161,12 @@ export function ThreeCanvas({
         } else if (msg.type === 'delete') {
           guestInterp!.receive(msg);
           graph.remove(msg.id, scene, null);
+        } else if (msg.type === 'update-props') {
+          graph.applyProps(msg.id, msg.props);
+        } else if (msg.type === 'table-update') {
+          for (const [k, v] of Object.entries(msg.props)) {
+            applyTableProp(tableMesh, k as keyof TableProps, v);
+          }
         }
       };
     }
@@ -199,19 +231,27 @@ export function ThreeCanvas({
     return () => {
       cancelAnimationFrame(animId);
       window.removeEventListener('resize', onResize);
+      unsubscribe();
       camController.dispose();
       dragCtrl?.dispose();
       guestDrag?.dispose();
       contextCtrl?.dispose();
       if (!isHost) onMsgRef.current = () => {};
-      spawnRef.current      = () => {};
-      rollRef.current       = () => {};
-      rollObjectRef.current  = () => {};
+      spawnRef.current        = () => {};
+      rollRef.current         = () => {};
+      rollObjectRef.current   = () => {};
       deleteObjectRef.current = () => {};
+      updatePropRef.current      = () => {};
+      updateTablePropRef.current = () => {};
+      freeCameraRef.current      = () => {};
       renderer.dispose();
       container.removeChild(renderer.domElement);
     };
-  }, [isHost, sendRef, onMsgRef, spawnRef, rollRef, onContextMenuRef, rollObjectRef, deleteObjectRef]);
+  }, [
+    isHost, sendRef, onMsgRef, spawnRef, rollRef,
+    onContextMenuRef, rollObjectRef, deleteObjectRef,
+    updatePropRef, updateTablePropRef, freeCameraRef, onObjectsChangeRef,
+  ]);
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>

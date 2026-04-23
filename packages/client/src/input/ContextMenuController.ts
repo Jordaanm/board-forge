@@ -11,49 +11,28 @@ export type ContextMenuRequest = {
   actions: ActionDef[];
 };
 
-const MOVE_THRESHOLD_SQ = 25; // 5 px
-const MENU_W            = 175;
-const MENU_ITEM_H       = 36;
-const MENU_PADDING      = 12;
+const MENU_W        = 175;
+const MENU_ITEM_H   = 36;
+const MENU_PADDING  = 12;
 
 export class ContextMenuController {
-  private startX = 0;
-  private startY = 0;
-  private moved  = false;
-
   constructor(
     private readonly element: HTMLElement,
     private readonly camera:  THREE.PerspectiveCamera,
     private readonly graph:   SceneGraph,
     private readonly onOpen:  (req: ContextMenuRequest) => void,
   ) {
-    element.addEventListener('pointerdown', this.onDown);
-    element.addEventListener('pointermove', this.onMove);
-    element.addEventListener('pointerup',   this.onUp);
+    // The browser fires 'contextmenu' only on a stationary right-click, not
+    // during a right-drag, so drag-suppression is handled for us automatically.
+    element.addEventListener('contextmenu', this.onContextMenu);
   }
 
   dispose() {
-    this.element.removeEventListener('pointerdown', this.onDown);
-    this.element.removeEventListener('pointermove', this.onMove);
-    this.element.removeEventListener('pointerup',   this.onUp);
+    this.element.removeEventListener('contextmenu', this.onContextMenu);
   }
 
-  private onDown = (e: PointerEvent) => {
-    if (e.button !== 2) return;
-    this.startX = e.clientX;
-    this.startY = e.clientY;
-    this.moved  = false;
-  };
-
-  private onMove = (e: PointerEvent) => {
-    if (!(e.buttons & 2)) return;
-    const dx = e.clientX - this.startX;
-    const dy = e.clientY - this.startY;
-    if (dx * dx + dy * dy > MOVE_THRESHOLD_SQ) this.moved = true;
-  };
-
-  private onUp = (e: PointerEvent) => {
-    if (e.button !== 2 || this.moved) return;
+  private onContextMenu = (e: MouseEvent) => {
+    e.preventDefault(); // suppress native browser menu
 
     const rect = this.element.getBoundingClientRect();
     const ptr  = new THREE.Vector2(
@@ -69,15 +48,13 @@ export class ContextMenuController {
     const entry = this.graph.findEntry(hits[0].object);
     if (!entry) return;
 
-    const def     = OBJECT_TYPE_REGISTRY[entry.objectType];
+    const def      = OBJECT_TYPE_REGISTRY[entry.objectType];
     const itemCount = def.actions.length + 1; // +1 for Delete
-    const menuH   = itemCount * MENU_ITEM_H + MENU_PADDING;
-
-    const x = Math.min(e.clientX, window.innerWidth  - MENU_W);
-    const y = Math.min(e.clientY, window.innerHeight - menuH);
+    const menuH    = itemCount * MENU_ITEM_H + MENU_PADDING;
 
     this.onOpen({
-      x, y,
+      x:          Math.min(e.clientX, window.innerWidth  - MENU_W),
+      y:          Math.min(e.clientY, window.innerHeight - menuH),
       objectId:   entry.id,
       objectType: entry.objectType,
       actions:    def.actions,

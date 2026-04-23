@@ -12,6 +12,8 @@ function isValidDef(def: ObjectTypeDef): boolean {
     typeof def.spawnHeight       === 'number'  &&
     typeof def.createMesh        === 'function' &&
     typeof def.createBody        === 'function' &&
+    typeof def.applyProp         === 'function' &&
+    typeof def.defaultProps      === 'object'  &&
     Array.isArray(def.propertySchema) &&
     Array.isArray(def.actions)
   );

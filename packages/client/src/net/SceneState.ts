@@ -8,9 +8,11 @@ export type ObjectState = {
 };
 
 export type GameMessage =
-  | { type: 'snapshot'; ts: number; objects: ObjectState[] }
-  | { type: 'patch';    ts: number; changed: ObjectState[] }
-  | { type: 'delete';   id: string };
+  | { type: 'snapshot';      ts: number; objects: ObjectState[] }
+  | { type: 'patch';         ts: number; changed: ObjectState[] }
+  | { type: 'delete';        id: string }
+  | { type: 'update-props';  id: string; props: Record<string, unknown> }
+  | { type: 'table-update';  props: Record<string, unknown> };
 
 export type GuestInputMessage =
   | { type: 'guest-drag-start'; objectId: string }

@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { ThreeCanvas } from '../ThreeCanvas';
 import { ConnectionManager } from '../net/ConnectionManager';
-import { SpawnPanel } from '../components/SpawnPanel';
+import { EditorPanel, type ObjectSummary } from '../components/EditorPanel';
 import { ContextMenu } from '../components/ContextMenu';
 import { type ContextMenuRequest } from '../input/ContextMenuController';
 import { type ChannelMessage, type SpawnableType } from '../net/SceneState';
+import { DEFAULT_TABLE_PROPS, type TableProps } from '../scene/Table';
 
 type Status = 'connecting' | 'connected' | 'disconnected' | 'room-full';
 
@@ -32,19 +33,28 @@ interface Props {
 const noop = () => {};
 
 export function Room({ roomId, isHost }: Props) {
-  const [status,      setStatus]      = useState<Status>('connecting');
-  const [contextMenu, setContextMenu] = useState<ContextMenuRequest | null>(null);
+  const [status,       setStatus]       = useState<Status>('connecting');
+  const [contextMenu,  setContextMenu]  = useState<ContextMenuRequest | null>(null);
+  const [objects,      setObjects]      = useState<ObjectSummary[]>([]);
+  const [selectedId,   setSelectedId]   = useState<string | null>(null);
+  const [isFreeCamera, setIsFreeCamera] = useState(false);
+  const [tableProps,   setTableProps]   = useState<TableProps>(DEFAULT_TABLE_PROPS);
 
-  const sendRef          = useRef<(msg: ChannelMessage) => void>(noop);
-  const onMsgRef         = useRef<(msg: ChannelMessage) => void>(noop);
-  const spawnRef         = useRef<(type: SpawnableType) => void>(noop);
-  const rollRef          = useRef<() => void>(noop);
-  const onContextMenuRef = useRef<(req: ContextMenuRequest) => void>(noop);
-  const rollObjectRef    = useRef<(id: string) => void>(noop);
-  const deleteObjectRef  = useRef<(id: string) => void>(noop);
+  const sendRef            = useRef<(msg: ChannelMessage) => void>(noop);
+  const onMsgRef           = useRef<(msg: ChannelMessage) => void>(noop);
+  const spawnRef           = useRef<(type: SpawnableType) => void>(noop);
+  const rollRef            = useRef<() => void>(noop);
+  const onContextMenuRef   = useRef<(req: ContextMenuRequest) => void>(noop);
+  const rollObjectRef      = useRef<(id: string) => void>(noop);
+  const deleteObjectRef    = useRef<(id: string) => void>(noop);
+  const updatePropRef      = useRef<(id: string, key: string, value: unknown) => void>(noop);
+  const updateTablePropRef = useRef<(key: keyof TableProps, value: unknown) => void>(noop);
+  const freeCameraRef      = useRef<(on: boolean) => void>(noop);
+  const onObjectsChangeRef = useRef<(objs: ObjectSummary[]) => void>(noop);
 
   // Set every render — fine, it's just a ref assignment.
-  onContextMenuRef.current = (req) => setContextMenu(req);
+  onContextMenuRef.current   = (req) => setContextMenu(req);
+  onObjectsChangeRef.current = (objs) => setObjects(objs);
 
   useEffect(() => {
     const mgr = new ConnectionManager(
@@ -62,9 +72,24 @@ export function Room({ roomId, isHost }: Props) {
     };
   }, [roomId, isHost]);
 
+  // Clear selection if the selected object is removed
+  useEffect(() => {
+    if (selectedId && !objects.some(o => o.id === selectedId)) setSelectedId(null);
+  }, [objects, selectedId]);
+
   const handleContextAction = (actionId: string, objectId: string) => {
     if (actionId === 'roll')   rollObjectRef.current(objectId);
     if (actionId === 'delete') deleteObjectRef.current(objectId);
+  };
+
+  const handleToggleFreeCamera = (on: boolean) => {
+    setIsFreeCamera(on);
+    freeCameraRef.current(on);
+  };
+
+  const handleUpdateTableProp = (key: keyof TableProps, value: unknown) => {
+    setTableProps(p => ({ ...p, [key]: value }));
+    updateTablePropRef.current(key, value);
   };
 
   const shareUrl = (() => {
@@ -84,6 +109,10 @@ export function Room({ roomId, isHost }: Props) {
         onContextMenuRef={onContextMenuRef}
         rollObjectRef={rollObjectRef}
         deleteObjectRef={deleteObjectRef}
+        updatePropRef={updatePropRef}
+        updateTablePropRef={updateTablePropRef}
+        freeCameraRef={freeCameraRef}
+        onObjectsChangeRef={onObjectsChangeRef}
       />
 
       <div style={{
@@ -96,9 +125,17 @@ export function Room({ roomId, isHost }: Props) {
       </div>
 
       {isHost && (
-        <SpawnPanel
+        <EditorPanel
+          objects={objects}
+          selectedId={selectedId}
+          isFreeCamera={isFreeCamera}
+          tableProps={tableProps}
+          onSelect={setSelectedId}
           onSpawn={(t) => spawnRef.current(t)}
           onRollDice={() => rollRef.current()}
+          onUpdateProp={(id, key, value) => updatePropRef.current(id, key, value)}
+          onUpdateTableProp={handleUpdateTableProp}
+          onToggleFreeCamera={handleToggleFreeCamera}
         />
       )}
 

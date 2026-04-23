@@ -20,8 +20,10 @@ export class GuestInterpolator {
     }
     if (msg.type === 'snapshot') {
       this.knownState = msg.objects;
-    } else {
+    } else if (msg.type === 'patch') {
       this.knownState = applyPatch(this.knownState, msg.changed);
+    } else {
+      return; // update-props doesn't affect interpolated transforms
     }
     this.buffer.push({ localTs: performance.now(), objects: [...this.knownState] });
     if (this.buffer.length > MAX_BUFFER) this.buffer.shift();
