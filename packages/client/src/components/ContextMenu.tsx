@@ -12,6 +12,13 @@ const ITEM: React.CSSProperties = {
   textAlign: 'left', fontSize: 13, fontFamily: 'sans-serif',
 };
 
+const HEADER: React.CSSProperties = {
+  padding: '8px 16px',
+  borderBottom: '1px solid rgba(255,255,255,0.1)',
+  userSelect: 'none',
+  fontFamily: 'sans-serif',
+};
+
 export function ContextMenu({ menu, onAction, onDismiss }: Props) {
   const items = [...menu.actions, { id: 'delete', label: 'Delete' }];
 
@@ -32,6 +39,14 @@ export function ContextMenu({ menu, onAction, onDismiss }: Props) {
           boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
         }}
       >
+        <div style={HEADER}>
+          <div style={{ color: '#e8e8e8', fontSize: 13, fontWeight: 600 }}>
+            {menu.objectName}
+          </div>
+          <div style={{ color: '#888', fontSize: 11, fontFamily: 'monospace' }}>
+            {menu.objectId}
+          </div>
+        </div>
         {items.map(item => (
           <button
             key={item.id}
