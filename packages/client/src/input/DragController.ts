@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { type SceneEntry, type SceneGraph } from '../scene/SceneGraph';
 import { CARRY_LIFT_HEIGHT } from '../config/dragConfig';
+import { type MoveGizmo, type GizmoAxis } from '../scene/MoveGizmo';
+import { projectRayOntoAxis } from './axisDrag';
 
 const VELOCITY_SAMPLES = 6;
 
@@ -18,10 +20,21 @@ type Pending = {
   pointerId: number;
 };
 
+type AxisDrag = {
+  body:      CANNON.Body;
+  axis:      THREE.Vector3;
+  origin:    THREE.Vector3;
+  grabAxisT: number;
+  currentX:  number;
+  currentY:  number;
+  currentZ:  number;
+};
+
 export class DragController {
   private pending: Pending | null = null;
   private pendingEmpty: { pointerId: number } | null = null;
-  private held:    { id: string; body: CANNON.Body } | null = null;
+  private held:     { id: string; body: CANNON.Body } | null = null;
+  private axisDrag: AxisDrag | null = null;
   private holdOffsetX = 0;
   private holdOffsetZ = 0;
   private holdY       = 0;
@@ -36,6 +49,7 @@ export class DragController {
     private readonly camera:   THREE.PerspectiveCamera,
     private readonly element:  HTMLElement,
     private readonly graph:    SceneGraph,
+    private readonly gizmo:    MoveGizmo,
     private readonly onSelect: (id: string | null) => void,
   ) {
     element.addEventListener('pointerdown', this.onDown);
@@ -50,6 +64,14 @@ export class DragController {
   }
 
   update() {
+    if (this.axisDrag) {
+      const a = this.axisDrag;
+      a.body.wakeUp();
+      a.body.position.set(a.currentX, a.currentY, a.currentZ);
+      a.body.velocity.setZero();
+      a.body.angularVelocity.setZero();
+      return;
+    }
     if (this.pending && performance.now() - this.pending.startT >= HOLD_MS) {
       this.beginDrag(this.pending);
     }
@@ -75,9 +97,21 @@ export class DragController {
   }
 
   private onDown = (e: PointerEvent) => {
-    if (e.button !== 0 || this.held || this.pending || this.pendingEmpty) return;
+    if (e.button !== 0 || this.held || this.axisDrag || this.pending || this.pendingEmpty) return;
     this.setPointer(e);
     this.raycaster.setFromCamera(this.pointer, this.camera);
+
+    // Gizmo arms take priority over the object body.
+    const axisName = this.gizmo.pickAxis(this.raycaster);
+    if (axisName) {
+      const target = this.gizmo.getTarget();
+      const entry  = target ? this.graph.findEntry(target) : undefined;
+      if (entry?.body) {
+        this.beginAxisDrag(entry.body, axisName);
+        this.element.setPointerCapture(e.pointerId);
+        return;
+      }
+    }
 
     const all  = this.graph.getAll();
     const hits = this.raycaster.intersectObjects(all.map(en => en.mesh), true);
@@ -102,6 +136,19 @@ export class DragController {
   };
 
   private onMove = (e: PointerEvent) => {
+    if (this.axisDrag) {
+      this.setPointer(e);
+      this.raycaster.setFromCamera(this.pointer, this.camera);
+      const a = this.axisDrag;
+      const t = projectRayOntoAxis(this.raycaster.ray, a.origin, a.axis, this.camera.position);
+      if (t === null) return;
+      const delta = t - a.grabAxisT;
+      a.currentX = a.origin.x + a.axis.x * delta;
+      a.currentY = a.origin.y + a.axis.y * delta;
+      a.currentZ = a.origin.z + a.axis.z * delta;
+      return;
+    }
+
     if (this.pending) {
       const dx = e.clientX - this.pending.startX;
       const dy = e.clientY - this.pending.startY;
@@ -119,6 +166,15 @@ export class DragController {
 
   private onUp = (e: PointerEvent) => {
     if (e.button !== 0) return;
+
+    if (this.axisDrag) {
+      const { body } = this.axisDrag;
+      body.velocity.setZero();
+      body.angularVelocity.setZero();
+      body.wakeUp();
+      this.axisDrag = null;
+      return;
+    }
 
     if (this.held) {
       const { body } = this.held;
@@ -160,6 +216,24 @@ export class DragController {
       this.holdOffsetX = 0;
       this.holdOffsetZ = 0;
     }
+  }
+
+  private beginAxisDrag(body: CANNON.Body, axisName: GizmoAxis) {
+    const axis = axisName === 'x' ? new THREE.Vector3(1, 0, 0)
+              :  axisName === 'y' ? new THREE.Vector3(0, 1, 0)
+              :                     new THREE.Vector3(0, 0, 1);
+    const origin = new THREE.Vector3(body.position.x, body.position.y, body.position.z);
+    const t = projectRayOntoAxis(this.raycaster.ray, origin, axis, this.camera.position);
+    body.wakeUp();
+    body.velocity.setZero();
+    body.angularVelocity.setZero();
+    this.axisDrag = {
+      body, axis, origin,
+      grabAxisT: t ?? 0,
+      currentX:  origin.x,
+      currentY:  origin.y,
+      currentZ:  origin.z,
+    };
   }
 
   private computeThrowVelocity(): THREE.Vector3 {

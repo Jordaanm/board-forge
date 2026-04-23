@@ -102,6 +102,7 @@ export function ThreeCanvas({
         highlightHelper = null;
       }
       if (moveGizmo.group.parent) scene.remove(moveGizmo.group);
+      moveGizmo.detach();
     };
 
     setHighlightRef.current = (id) => {
@@ -143,7 +144,7 @@ export function ThreeCanvas({
 
     if (isHost) {
       physics    = new PhysicsWorld();
-      dragCtrl   = new DragController(camera, renderer.domElement, graph, selectCallback);
+      dragCtrl   = new DragController(camera, renderer.domElement, graph, moveGizmo, selectCallback);
       guestInput = new GuestInputHandler();
       hostRepl   = new HostReplicator((msg) => sendRef.current(msg));
 
@@ -205,7 +206,7 @@ export function ThreeCanvas({
     } else {
       guestInterp = new GuestInterpolator();
       guestDrag   = new GuestDragController(
-        camera, renderer.domElement, graph,
+        camera, renderer.domElement, graph, moveGizmo,
         (msg) => sendRef.current(msg),
         selectCallback,
       );

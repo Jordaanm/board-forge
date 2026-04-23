@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { CARRY_LIFT_HEIGHT } from '../config/dragConfig';
 import { type SceneEntry, type SceneGraph } from '../scene/SceneGraph';
 import { type ChannelMessage } from '../net/SceneState';
+import { type MoveGizmo, type GizmoAxis } from '../scene/MoveGizmo';
+import { projectRayOntoAxis } from './axisDrag';
 
 const VELOCITY_SAMPLES = 6;
 const HOLD_MS = 150;
@@ -15,10 +17,18 @@ type Pending = {
   pointerId: number;
 };
 
+type AxisDrag = {
+  objectId:  string;
+  axis:      THREE.Vector3;
+  origin:    THREE.Vector3;
+  grabAxisT: number;
+};
+
 export class GuestDragController {
   private pending: Pending | null = null;
   private pendingEmpty: { pointerId: number } | null = null;
   private heldId:      string | null = null;
+  private axisDrag:    AxisDrag | null = null;
   private holdOffsetX = 0;
   private holdOffsetZ = 0;
   private holdY       = 0;
@@ -33,6 +43,7 @@ export class GuestDragController {
     private readonly camera:   THREE.PerspectiveCamera,
     private readonly element:  HTMLElement,
     private readonly graph:    SceneGraph,
+    private readonly gizmo:    MoveGizmo,
     private readonly send:     (msg: ChannelMessage) => void,
     private readonly onSelect: (id: string | null) => void,
   ) {
@@ -67,9 +78,21 @@ export class GuestDragController {
   }
 
   private onDown = (e: PointerEvent) => {
-    if (e.button !== 0 || this.heldId || this.pending || this.pendingEmpty) return;
+    if (e.button !== 0 || this.heldId || this.axisDrag || this.pending || this.pendingEmpty) return;
     this.setPointer(e);
     this.raycaster.setFromCamera(this.pointer, this.camera);
+
+    // Gizmo arms take priority over the object body.
+    const axisName = this.gizmo.pickAxis(this.raycaster);
+    if (axisName) {
+      const target = this.gizmo.getTarget();
+      const entry  = target ? this.graph.findEntry(target) : undefined;
+      if (entry && entry.objectType !== 'board') {
+        this.beginAxisDrag(entry, axisName);
+        this.element.setPointerCapture(e.pointerId);
+        return;
+      }
+    }
 
     const all  = this.graph.getAll();
     const hits = this.raycaster.intersectObjects(all.map(en => en.mesh), true);
@@ -94,6 +117,20 @@ export class GuestDragController {
   };
 
   private onMove = (e: PointerEvent) => {
+    if (this.axisDrag) {
+      this.setPointer(e);
+      this.raycaster.setFromCamera(this.pointer, this.camera);
+      const a = this.axisDrag;
+      const t = projectRayOntoAxis(this.raycaster.ray, a.origin, a.axis, this.camera.position);
+      if (t === null) return;
+      const delta = t - a.grabAxisT;
+      const px = a.origin.x + a.axis.x * delta;
+      const py = a.origin.y + a.axis.y * delta;
+      const pz = a.origin.z + a.axis.z * delta;
+      this.send({ type: 'guest-drag-move', objectId: a.objectId, px, py, pz });
+      return;
+    }
+
     if (this.pending) {
       const dx = e.clientX - this.pending.startX;
       const dy = e.clientY - this.pending.startY;
@@ -113,6 +150,12 @@ export class GuestDragController {
 
   private onUp = (e: PointerEvent) => {
     if (e.button !== 0) return;
+
+    if (this.axisDrag) {
+      this.send({ type: 'guest-drag-end', objectId: this.axisDrag.objectId, vx: 0, vy: 0, vz: 0 });
+      this.axisDrag = null;
+      return;
+    }
 
     if (this.heldId) {
       const vel = this.computeThrowVelocity();
@@ -156,6 +199,25 @@ export class GuestDragController {
       this.holdOffsetX = 0;
       this.holdOffsetZ = 0;
     }
+  }
+
+  private beginAxisDrag(entry: SceneEntry, axisName: GizmoAxis) {
+    const axis = axisName === 'x' ? new THREE.Vector3(1, 0, 0)
+              :  axisName === 'y' ? new THREE.Vector3(0, 1, 0)
+              :                     new THREE.Vector3(0, 0, 1);
+    const origin = entry.mesh.position.clone();
+    const t = projectRayOntoAxis(this.raycaster.ray, origin, axis, this.camera.position);
+    this.axisDrag = {
+      objectId:  entry.id,
+      axis,
+      origin,
+      grabAxisT: t ?? 0,
+    };
+    this.send({ type: 'guest-drag-start', objectId: entry.id });
+    // Seed position so host's GuestInputHandler doesn't snap to (0,_,0) before
+    // the first pointermove arrives.
+    this.send({ type: 'guest-drag-move',  objectId: entry.id,
+                px: origin.x, py: origin.y, pz: origin.z });
   }
 
   private computeThrowVelocity(): THREE.Vector3 {
