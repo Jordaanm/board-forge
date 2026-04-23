@@ -23,6 +23,8 @@ export class DragController {
   private pending: Pending | null = null;
   private pendingEmpty: { pointerId: number } | null = null;
   private held:    { id: string; body: CANNON.Body } | null = null;
+  private holdOffsetX = 0;
+  private holdOffsetZ = 0;
 
   private readonly raycaster    = new THREE.Raycaster();
   private readonly pointer      = new THREE.Vector2();
@@ -110,7 +112,7 @@ export class DragController {
     this.raycaster.setFromCamera(this.pointer, this.camera);
     const pt = this.castToCarryPlane();
     if (!pt) return;
-    this.carryTarget.copy(pt);
+    this.carryTarget.set(pt.x + this.holdOffsetX, CARRY_HEIGHT, pt.z + this.holdOffsetZ);
     this.velHistory.push({ pos: pt.clone(), t: performance.now() });
     if (this.velHistory.length > VELOCITY_SAMPLES) this.velHistory.shift();
   };
@@ -148,8 +150,13 @@ export class DragController {
     p.entry.body.wakeUp();
     const pt = this.castToCarryPlane();
     if (pt) {
-      this.carryTarget.copy(pt);
+      this.holdOffsetX = p.entry.body.position.x - pt.x;
+      this.holdOffsetZ = p.entry.body.position.z - pt.z;
+      this.carryTarget.set(pt.x + this.holdOffsetX, CARRY_HEIGHT, pt.z + this.holdOffsetZ);
       this.velHistory.push({ pos: pt.clone(), t: performance.now() });
+    } else {
+      this.holdOffsetX = 0;
+      this.holdOffsetZ = 0;
     }
   }
 

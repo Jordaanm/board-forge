@@ -19,6 +19,8 @@ export class GuestDragController {
   private pending: Pending | null = null;
   private pendingEmpty: { pointerId: number } | null = null;
   private heldId:      string | null = null;
+  private holdOffsetX = 0;
+  private holdOffsetZ = 0;
 
   private readonly raycaster   = new THREE.Raycaster();
   private readonly pointer     = new THREE.Vector2();
@@ -101,10 +103,11 @@ export class GuestDragController {
     this.raycaster.setFromCamera(this.pointer, this.camera);
     const pt = this.castToCarryPlane();
     if (!pt) return;
-    this.carryTarget.copy(pt);
+    this.carryTarget.set(pt.x + this.holdOffsetX, CARRY_HEIGHT, pt.z + this.holdOffsetZ);
     this.velHistory.push({ pos: pt.clone(), t: performance.now() });
     if (this.velHistory.length > VELOCITY_SAMPLES) this.velHistory.shift();
-    this.send({ type: 'guest-drag-move', objectId: this.heldId, px: pt.x, py: CARRY_HEIGHT, pz: pt.z });
+    this.send({ type: 'guest-drag-move', objectId: this.heldId,
+                px: this.carryTarget.x, py: CARRY_HEIGHT, pz: this.carryTarget.z });
   };
 
   private onUp = (e: PointerEvent) => {
@@ -139,8 +142,16 @@ export class GuestDragController {
     this.send({ type: 'guest-drag-start', objectId: p.entry.id });
     const pt = this.castToCarryPlane();
     if (pt) {
-      this.carryTarget.copy(pt);
+      this.holdOffsetX = p.entry.mesh.position.x - pt.x;
+      this.holdOffsetZ = p.entry.mesh.position.z - pt.z;
+      this.carryTarget.set(pt.x + this.holdOffsetX, CARRY_HEIGHT, pt.z + this.holdOffsetZ);
       this.velHistory.push({ pos: pt.clone(), t: performance.now() });
+      // Send initial position so host's GuestInputHandler does not snap the body to (0,_,0).
+      this.send({ type: 'guest-drag-move', objectId: p.entry.id,
+                  px: this.carryTarget.x, py: CARRY_HEIGHT, pz: this.carryTarget.z });
+    } else {
+      this.holdOffsetX = 0;
+      this.holdOffsetZ = 0;
     }
   }
 
