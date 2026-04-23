@@ -1,10 +1,9 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
-import { TABLE_SURFACE_Y } from '../scene/Table';
 import { type SceneEntry, type SceneGraph } from '../scene/SceneGraph';
+import { CARRY_LIFT_HEIGHT } from '../config/dragConfig';
 
-export const CARRY_HEIGHT    = TABLE_SURFACE_Y + 1.5;
-const        VELOCITY_SAMPLES = 6;
+const VELOCITY_SAMPLES = 6;
 
 // A tap must finish in under HOLD_MS with pointer moving less than MOVE_PX
 // for it to count as a select; otherwise the interaction becomes a drag.
@@ -25,10 +24,11 @@ export class DragController {
   private held:    { id: string; body: CANNON.Body } | null = null;
   private holdOffsetX = 0;
   private holdOffsetZ = 0;
+  private holdY       = 0;
 
   private readonly raycaster    = new THREE.Raycaster();
   private readonly pointer      = new THREE.Vector2();
-  private readonly carryPlane   = new THREE.Plane(new THREE.Vector3(0, 1, 0), -CARRY_HEIGHT);
+  private readonly carryPlane   = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   private readonly carryTarget  = new THREE.Vector3();
   private readonly velHistory:    { pos: THREE.Vector3; t: number }[] = [];
 
@@ -56,7 +56,7 @@ export class DragController {
     if (!this.held) return;
     const { body } = this.held;
     body.wakeUp();
-    body.position.set(this.carryTarget.x, CARRY_HEIGHT, this.carryTarget.z);
+    body.position.set(this.carryTarget.x, this.holdY, this.carryTarget.z);
     body.velocity.setZero();
     body.angularVelocity.setZero();
   }
@@ -112,7 +112,7 @@ export class DragController {
     this.raycaster.setFromCamera(this.pointer, this.camera);
     const pt = this.castToCarryPlane();
     if (!pt) return;
-    this.carryTarget.set(pt.x + this.holdOffsetX, CARRY_HEIGHT, pt.z + this.holdOffsetZ);
+    this.carryTarget.set(pt.x + this.holdOffsetX, this.holdY, pt.z + this.holdOffsetZ);
     this.velHistory.push({ pos: pt.clone(), t: performance.now() });
     if (this.velHistory.length > VELOCITY_SAMPLES) this.velHistory.shift();
   };
@@ -148,11 +148,13 @@ export class DragController {
     this.held = { id: p.entry.id, body: p.entry.body };
     this.velHistory.length = 0;
     p.entry.body.wakeUp();
+    this.holdY = p.entry.body.position.y + CARRY_LIFT_HEIGHT;
+    this.carryPlane.constant = -this.holdY;
     const pt = this.castToCarryPlane();
     if (pt) {
       this.holdOffsetX = p.entry.body.position.x - pt.x;
       this.holdOffsetZ = p.entry.body.position.z - pt.z;
-      this.carryTarget.set(pt.x + this.holdOffsetX, CARRY_HEIGHT, pt.z + this.holdOffsetZ);
+      this.carryTarget.set(pt.x + this.holdOffsetX, this.holdY, pt.z + this.holdOffsetZ);
       this.velHistory.push({ pos: pt.clone(), t: performance.now() });
     } else {
       this.holdOffsetX = 0;

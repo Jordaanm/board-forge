@@ -1,4 +1,3 @@
-import { CARRY_HEIGHT } from './DragController';
 import { type SceneGraph } from '../scene/SceneGraph';
 import { type GuestInputMessage } from '../net/SceneState';
 
@@ -6,6 +5,7 @@ import { type GuestInputMessage } from '../net/SceneState';
 export class GuestInputHandler {
   private heldObjectId: string | null = null;
   private carryX = 0;
+  private carryY = 0;
   private carryZ = 0;
 
   handleMessage(msg: GuestInputMessage, graph: SceneGraph) {
@@ -13,6 +13,7 @@ export class GuestInputHandler {
       this.heldObjectId = msg.objectId;
     } else if (msg.type === 'guest-drag-move') {
       this.carryX = msg.px;
+      this.carryY = msg.py;
       this.carryZ = msg.pz;
     } else if (msg.type === 'guest-drag-end') {
       const entry = graph.getEntry(msg.objectId);
@@ -31,7 +32,7 @@ export class GuestInputHandler {
     const entry = graph.getEntry(this.heldObjectId);
     if (!entry?.body) return;
     entry.body.wakeUp();
-    entry.body.position.set(this.carryX, CARRY_HEIGHT, this.carryZ);
+    entry.body.position.set(this.carryX, this.carryY, this.carryZ);
     entry.body.velocity.setZero();
     entry.body.angularVelocity.setZero();
   }
