@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { type SpawnableType, type ObjectState } from '../net/SceneState';
-import { OBJECT_TYPE_REGISTRY } from './objectTypes';
+import { OBJECT_TYPE_REGISTRY, defaultObjectName } from './objectTypes';
 import { type PhysicsWorld } from '../physics/PhysicsWorld';
 import { TABLE_SURFACE_Y } from './Table';
 
@@ -44,7 +44,10 @@ export class SceneGraph {
     }
     scene.add(mesh);
 
-    const entry: SceneEntry = { id, objectType, mesh, body, props: { ...def.defaultProps } };
+    const entry: SceneEntry = {
+      id, objectType, mesh, body,
+      props: { ...def.defaultProps, name: defaultObjectName(objectType, id) },
+    };
     this.entries.set(id, entry);
     this.notify();
     return entry;
@@ -62,7 +65,7 @@ export class SceneGraph {
       scene.add(mesh);
       this.entries.set(s.id, {
         id: s.id, objectType: s.objectType, mesh, body: null,
-        props: { ...def.defaultProps },
+        props: { ...def.defaultProps, name: defaultObjectName(s.objectType, s.id) },
       });
       added = true;
     }

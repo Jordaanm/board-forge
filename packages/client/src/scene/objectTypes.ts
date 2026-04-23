@@ -35,6 +35,7 @@ export const BoardTypeDef: ObjectTypeDef = {
   spawnHeight: BOARD_T / 2,
   defaultProps: { width: BOARD_W, depth: BOARD_D, textureUrl: '' },
   propertySchema: [
+    { key: 'name',       label: 'Name',    type: 'string' },
     { key: 'width',      label: 'Width',   type: 'number' },
     { key: 'depth',      label: 'Depth',   type: 'number' },
     { key: 'textureUrl', label: 'Texture', type: 'string' },
@@ -85,7 +86,9 @@ export const DieTypeDef: ObjectTypeDef = {
   isThrowable: true,
   spawnHeight: DIE_SIZE / 2,
   defaultProps: {},
-  propertySchema: [],
+  propertySchema: [
+    { key: 'name', label: 'Name', type: 'string' },
+  ],
   actions: [{ id: 'roll', label: 'Roll' }],
   createMesh() {
     const mesh = new THREE.Mesh(
@@ -118,6 +121,7 @@ export const TokenTypeDef: ObjectTypeDef = {
   spawnHeight: MEEPLE_H / 2,
   defaultProps: { color: '#2266cc' },
   propertySchema: [
+    { key: 'name',  label: 'Name',  type: 'string' },
     { key: 'color', label: 'Color', type: 'color' },
   ],
   actions: [],
@@ -167,6 +171,14 @@ export const OBJECT_TYPE_REGISTRY: Record<SpawnableType, ObjectTypeDef> = {
   die:   DieTypeDef,
   token: TokenTypeDef,
 };
+
+// Build the default display name for a freshly-spawned object.
+// id is `${objectType}-${counter}`; we keep the counter but swap the
+// lowercase type prefix for the type's display label, e.g. "board-3" → "Die-3".
+export function defaultObjectName(objectType: SpawnableType, id: string): string {
+  const suffix = id.startsWith(`${objectType}-`) ? id.slice(objectType.length + 1) : id;
+  return `${OBJECT_TYPE_REGISTRY[objectType].label}-${suffix}`;
+}
 
 // ── Die face detection ────────────────────────────────────────────────────
 const _qInv    = new THREE.Quaternion();

@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { OBJECT_TYPE_REGISTRY, type ObjectTypeDef } from './objectTypes';
+import { OBJECT_TYPE_REGISTRY, defaultObjectName, type ObjectTypeDef } from './objectTypes';
 import { type SpawnableType } from '../net/SceneState';
 
 const TYPES: SpawnableType[] = ['board', 'die', 'token'];
@@ -54,6 +54,24 @@ describe('OBJECT_TYPE_REGISTRY', () => {
       test('spawnHeight is positive', () => {
         expect(def.spawnHeight).toBeGreaterThan(0);
       });
+
+      test('exposes a string "name" property in its schema', () => {
+        const nameProp = def.propertySchema.find(p => p.key === 'name');
+        expect(nameProp).toBeDefined();
+        expect(nameProp?.type).toBe('string');
+      });
     });
   }
+});
+
+describe('defaultObjectName', () => {
+  test('uses the type label and preserves the counter suffix', () => {
+    expect(defaultObjectName('board', 'board-0')).toBe('Board-0');
+    expect(defaultObjectName('die',   'die-3')).toBe('Die (D6)-3');
+    expect(defaultObjectName('token', 'token-42')).toBe('Token-42');
+  });
+
+  test('falls back to the full id when the prefix does not match', () => {
+    expect(defaultObjectName('board', 'custom-id')).toBe('Board-custom-id');
+  });
 });
