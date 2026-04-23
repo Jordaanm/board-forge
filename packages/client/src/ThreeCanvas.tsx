@@ -224,6 +224,7 @@ export function ThreeCanvas({
         lastTime  = now;
 
         physics.step(dt);
+        graph.enforceTableBounds();
         dragCtrl.update();
         guestInput.update(graph);
         graph.syncFromPhysics();

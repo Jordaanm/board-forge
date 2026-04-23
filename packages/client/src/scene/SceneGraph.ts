@@ -3,7 +3,17 @@ import * as CANNON from 'cannon-es';
 import { type SpawnableType, type ObjectState } from '../net/SceneState';
 import { OBJECT_TYPE_REGISTRY, defaultObjectName } from './objectTypes';
 import { type PhysicsWorld } from '../physics/PhysicsWorld';
-import { TABLE_SURFACE_Y } from './Table';
+import { TABLE_SURFACE_Y, TABLE_WIDTH, TABLE_DEPTH } from './Table';
+
+const REST_VEL_THRESHOLD = 0.05;
+const REST_Y_MAX         = TABLE_SURFACE_Y + 1.4;
+const REST_Y_MIN         = TABLE_SURFACE_Y - 0.05;
+const FALL_OFF_Y         = TABLE_SURFACE_Y - 2.0;
+
+export interface RestPose {
+  px: number; py: number; pz: number;
+  qx: number; qy: number; qz: number; qw: number;
+}
 
 export interface SceneEntry {
   id: string;
@@ -11,6 +21,7 @@ export interface SceneEntry {
   mesh: THREE.Object3D;
   body: CANNON.Body | null;
   props: Record<string, unknown>;
+  restPose: RestPose | null;
 }
 
 export class SceneGraph {
@@ -47,6 +58,7 @@ export class SceneGraph {
     const entry: SceneEntry = {
       id, objectType, mesh, body,
       props: { ...def.defaultProps, name: defaultObjectName(objectType, id) },
+      restPose: { px: x, py: y, pz: z, qx: 0, qy: 0, qz: 0, qw: 1 },
     };
     this.entries.set(id, entry);
     this.notify();
@@ -66,6 +78,7 @@ export class SceneGraph {
       this.entries.set(s.id, {
         id: s.id, objectType: s.objectType, mesh, body: null,
         props: { ...def.defaultProps, name: defaultObjectName(s.objectType, s.id) },
+        restPose: null,
       });
       added = true;
     }
@@ -97,6 +110,37 @@ export class SceneGraph {
         qx: e.body!.quaternion.x,  qy: e.body!.quaternion.y,
         qz: e.body!.quaternion.z,  qw: e.body!.quaternion.w,
       }));
+  }
+
+  // Host-only. Records the at-rest pose of each settled body on the table,
+  // and snaps any body that has fallen below the table back to its last rest
+  // pose (or spawn pose if it never settled).
+  enforceTableBounds() {
+    for (const e of this.entries.values()) {
+      if (!e.body) continue;
+      const body = e.body;
+      const px = body.position.x, py = body.position.y, pz = body.position.z;
+
+      const onTable = py >= REST_Y_MIN && py <= REST_Y_MAX
+                   && Math.abs(px) <= TABLE_WIDTH  / 2
+                   && Math.abs(pz) <= TABLE_DEPTH / 2;
+      const settled = body.velocity.length() + body.angularVelocity.length() < REST_VEL_THRESHOLD;
+      if (onTable && settled) {
+        e.restPose = {
+          px, py, pz,
+          qx: body.quaternion.x, qy: body.quaternion.y,
+          qz: body.quaternion.z, qw: body.quaternion.w,
+        };
+      }
+
+      if (py < FALL_OFF_Y && e.restPose) {
+        body.position.set(e.restPose.px, e.restPose.py, e.restPose.pz);
+        body.quaternion.set(e.restPose.qx, e.restPose.qy, e.restPose.qz, e.restPose.qw);
+        body.velocity.setZero();
+        body.angularVelocity.setZero();
+        body.wakeUp();
+      }
+    }
   }
 
   syncFromPhysics() {
