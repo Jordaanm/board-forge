@@ -23,7 +23,7 @@ const BOARD_W = 4, BOARD_D = 3, BOARD_T = 0.05;
 export const BoardTypeDef: ObjectTypeDef = {
   type: 'board',
   label: 'Board',
-  isThrowable: false,
+  isThrowable: true,
   spawnHeight: BOARD_T / 2,
   propertySchema: [
     { key: 'width', label: 'Width', type: 'number' },
@@ -40,7 +40,9 @@ export const BoardTypeDef: ObjectTypeDef = {
   },
   createBody() {
     return new CANNON.Body({
-      mass: 0,
+      mass: 0.5,
+      linearDamping: 0.3,
+      angularDamping: 0.6,
       shape: new CANNON.Box(new CANNON.Vec3(BOARD_W / 2, BOARD_T / 2, BOARD_D / 2)),
     });
   },
