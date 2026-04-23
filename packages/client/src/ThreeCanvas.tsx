@@ -27,12 +27,15 @@ interface Props {
   updateTablePropRef:  MutableRefObject<(key: keyof TableProps, value: unknown) => void>;
   freeCameraRef:       MutableRefObject<(on: boolean) => void>;
   onObjectsChangeRef:  MutableRefObject<(objects: ObjectSummary[]) => void>;
+  onSelectRef:         MutableRefObject<(id: string | null) => void>;
+  setHighlightRef:     MutableRefObject<(id: string | null) => void>;
 }
 
 export function ThreeCanvas({
   isHost, sendRef, onMsgRef, spawnRef, rollRef,
   onContextMenuRef, rollObjectRef, deleteObjectRef,
   updatePropRef, updateTablePropRef, freeCameraRef, onObjectsChangeRef,
+  onSelectRef, setHighlightRef,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const overlayRef   = useRef<HTMLDivElement>(null);
@@ -69,8 +72,38 @@ export function ThreeCanvas({
 
     freeCameraRef.current = (on) => camController.setRestricted(on);
 
-    // Push graph snapshots to React on every change
+    // ── Selection highlight ─────────────────────────────────────────────
+    let highlightHelper: THREE.BoxHelper | null = null;
+    let highlightId:     string | null = null;
+
+    const clearHighlight = () => {
+      if (!highlightHelper) return;
+      scene.remove(highlightHelper);
+      highlightHelper.dispose();
+      highlightHelper = null;
+    };
+
+    setHighlightRef.current = (id) => {
+      if (highlightId === id) return;
+      highlightId = id;
+      clearHighlight();
+      if (!id) return;
+      const entry = graph.getEntry(id);
+      if (!entry) return;
+      highlightHelper = new THREE.BoxHelper(entry.mesh, 0xffd740);
+      (highlightHelper.material as THREE.LineBasicMaterial).linewidth = 2;
+      scene.add(highlightHelper);
+    };
+
+    const selectCallback = (id: string | null) => onSelectRef.current(id);
+
+    // Push graph snapshots to React on every change. Also clean up a stale
+    // highlight if the selected entry was just removed.
     const unsubscribe = graph.subscribe(() => {
+      if (highlightId && !graph.getEntry(highlightId)) {
+        highlightId = null;
+        clearHighlight();
+      }
       onObjectsChangeRef.current(graph.getAll().map(e => ({
         id: e.id, objectType: e.objectType, props: { ...e.props },
       })));
@@ -87,7 +120,7 @@ export function ThreeCanvas({
 
     if (isHost) {
       physics    = new PhysicsWorld();
-      dragCtrl   = new DragController(camera, renderer.domElement, graph);
+      dragCtrl   = new DragController(camera, renderer.domElement, graph, selectCallback);
       guestInput = new GuestInputHandler();
       hostRepl   = new HostReplicator((msg) => sendRef.current(msg));
 
@@ -151,6 +184,7 @@ export function ThreeCanvas({
       guestDrag   = new GuestDragController(
         camera, renderer.domElement, graph,
         (msg) => sendRef.current(msg),
+        selectCallback,
       );
 
       onMsgRef.current = (msg) => {
@@ -206,6 +240,7 @@ export function ThreeCanvas({
       } else if (!isHost && guestInterp) {
         const states = guestInterp.update();
         graph.applyStates(states);
+        guestDrag?.update();
 
         const dieFaces: string[] = [];
         for (const s of states) {
@@ -215,6 +250,8 @@ export function ThreeCanvas({
         }
         if (overlayRef.current) overlayRef.current.textContent = dieFaces.join('  |  ');
       }
+
+      if (highlightHelper) highlightHelper.update();
 
       renderer.render(scene, camera);
     };
@@ -232,6 +269,7 @@ export function ThreeCanvas({
       cancelAnimationFrame(animId);
       window.removeEventListener('resize', onResize);
       unsubscribe();
+      clearHighlight();
       camController.dispose();
       dragCtrl?.dispose();
       guestDrag?.dispose();
@@ -244,6 +282,7 @@ export function ThreeCanvas({
       updatePropRef.current      = () => {};
       updateTablePropRef.current = () => {};
       freeCameraRef.current      = () => {};
+      setHighlightRef.current    = () => {};
       renderer.dispose();
       container.removeChild(renderer.domElement);
     };
@@ -251,6 +290,7 @@ export function ThreeCanvas({
     isHost, sendRef, onMsgRef, spawnRef, rollRef,
     onContextMenuRef, rollObjectRef, deleteObjectRef,
     updatePropRef, updateTablePropRef, freeCameraRef, onObjectsChangeRef,
+    onSelectRef, setHighlightRef,
   ]);
 
   return (

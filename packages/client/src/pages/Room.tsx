@@ -51,10 +51,13 @@ export function Room({ roomId, isHost }: Props) {
   const updateTablePropRef = useRef<(key: keyof TableProps, value: unknown) => void>(noop);
   const freeCameraRef      = useRef<(on: boolean) => void>(noop);
   const onObjectsChangeRef = useRef<(objs: ObjectSummary[]) => void>(noop);
+  const onSelectRef        = useRef<(id: string | null) => void>(noop);
+  const setHighlightRef    = useRef<(id: string | null) => void>(noop);
 
   // Set every render — fine, it's just a ref assignment.
   onContextMenuRef.current   = (req) => setContextMenu(req);
   onObjectsChangeRef.current = (objs) => setObjects(objs);
+  onSelectRef.current        = (id) => setSelectedId(id);
 
   useEffect(() => {
     const mgr = new ConnectionManager(
@@ -76,6 +79,11 @@ export function Room({ roomId, isHost }: Props) {
   useEffect(() => {
     if (selectedId && !objects.some(o => o.id === selectedId)) setSelectedId(null);
   }, [objects, selectedId]);
+
+  // Drive the canvas's highlight helper from React selection state
+  useEffect(() => {
+    setHighlightRef.current(selectedId);
+  }, [selectedId]);
 
   const handleContextAction = (actionId: string, objectId: string) => {
     if (actionId === 'roll')   rollObjectRef.current(objectId);
@@ -113,6 +121,8 @@ export function Room({ roomId, isHost }: Props) {
         updateTablePropRef={updateTablePropRef}
         freeCameraRef={freeCameraRef}
         onObjectsChangeRef={onObjectsChangeRef}
+        onSelectRef={onSelectRef}
+        setHighlightRef={setHighlightRef}
       />
 
       <div style={{

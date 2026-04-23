@@ -1,13 +1,29 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { TABLE_SURFACE_Y } from '../scene/Table';
-import { type SceneGraph } from '../scene/SceneGraph';
+import { type SceneEntry, type SceneGraph } from '../scene/SceneGraph';
 
 export const CARRY_HEIGHT    = TABLE_SURFACE_Y + 1.5;
 const        VELOCITY_SAMPLES = 6;
 
+// A tap must finish in under HOLD_MS with pointer moving less than MOVE_PX
+// for it to count as a select; otherwise the interaction becomes a drag.
+const HOLD_MS = 150;
+const MOVE_PX = 5;
+
+type Pending = {
+  entry:     SceneEntry;
+  startX:    number;
+  startY:    number;
+  startT:    number;
+  pointerId: number;
+};
+
 export class DragController {
-  private held:             { id: string; body: CANNON.Body } | null = null;
+  private pending: Pending | null = null;
+  private pendingEmpty: { pointerId: number } | null = null;
+  private held:    { id: string; body: CANNON.Body } | null = null;
+
   private readonly raycaster    = new THREE.Raycaster();
   private readonly pointer      = new THREE.Vector2();
   private readonly carryPlane   = new THREE.Plane(new THREE.Vector3(0, 1, 0), -CARRY_HEIGHT);
@@ -15,9 +31,10 @@ export class DragController {
   private readonly velHistory:    { pos: THREE.Vector3; t: number }[] = [];
 
   constructor(
-    private readonly camera:  THREE.PerspectiveCamera,
-    private readonly element: HTMLElement,
-    private readonly graph:   SceneGraph,
+    private readonly camera:   THREE.PerspectiveCamera,
+    private readonly element:  HTMLElement,
+    private readonly graph:    SceneGraph,
+    private readonly onSelect: (id: string | null) => void,
   ) {
     element.addEventListener('pointerdown', this.onDown);
     element.addEventListener('pointermove', this.onMove);
@@ -31,6 +48,9 @@ export class DragController {
   }
 
   update() {
+    if (this.pending && performance.now() - this.pending.startT >= HOLD_MS) {
+      this.beginDrag(this.pending);
+    }
     if (!this.held) return;
     const { body } = this.held;
     body.wakeUp();
@@ -53,30 +73,38 @@ export class DragController {
   }
 
   private onDown = (e: PointerEvent) => {
-    if (e.button !== 0 || this.held) return;
+    if (e.button !== 0 || this.held || this.pending || this.pendingEmpty) return;
     this.setPointer(e);
     this.raycaster.setFromCamera(this.pointer, this.camera);
 
-    const throwable = this.graph.getAll().filter(en => en.body !== null);
-    const hits = this.raycaster.intersectObjects(throwable.map(en => en.mesh), true);
-    if (hits.length === 0) return;
+    const all  = this.graph.getAll();
+    const hits = this.raycaster.intersectObjects(all.map(en => en.mesh), true);
+
+    if (hits.length === 0) {
+      this.pendingEmpty = { pointerId: e.pointerId };
+      this.element.setPointerCapture(e.pointerId);
+      return;
+    }
 
     const entry = this.graph.findEntry(hits[0].object);
-    if (!entry?.body) return;
+    if (!entry) return;
 
-    this.held = { id: entry.id, body: entry.body };
-    this.velHistory.length = 0;
-    entry.body.wakeUp();
-
-    const pt = this.castToCarryPlane();
-    if (pt) {
-      this.carryTarget.copy(pt);
-      this.velHistory.push({ pos: pt.clone(), t: performance.now() });
-    }
+    this.pending = {
+      entry,
+      startX:    e.clientX,
+      startY:    e.clientY,
+      startT:    performance.now(),
+      pointerId: e.pointerId,
+    };
     this.element.setPointerCapture(e.pointerId);
   };
 
   private onMove = (e: PointerEvent) => {
+    if (this.pending) {
+      const dx = e.clientX - this.pending.startX;
+      const dy = e.clientY - this.pending.startY;
+      if (dx * dx + dy * dy > MOVE_PX * MOVE_PX) this.beginDrag(this.pending);
+    }
     if (!this.held) return;
     this.setPointer(e);
     this.raycaster.setFromCamera(this.pointer, this.camera);
@@ -88,14 +116,42 @@ export class DragController {
   };
 
   private onUp = (e: PointerEvent) => {
-    if (e.button !== 0 || !this.held) return;
-    const { body } = this.held;
-    this.held = null;
-    const vel = this.computeThrowVelocity();
-    body.velocity.set(vel.x, 0, vel.z);
-    body.angularVelocity.setZero();
-    body.wakeUp();
+    if (e.button !== 0) return;
+
+    if (this.held) {
+      const { body } = this.held;
+      this.held = null;
+      const vel = this.computeThrowVelocity();
+      body.velocity.set(vel.x, 0, vel.z);
+      body.angularVelocity.setZero();
+      body.wakeUp();
+      return;
+    }
+
+    if (this.pending) {
+      this.onSelect(this.pending.entry.id);
+      this.pending = null;
+      return;
+    }
+
+    if (this.pendingEmpty) {
+      this.onSelect(null);
+      this.pendingEmpty = null;
+    }
   };
+
+  private beginDrag(p: Pending) {
+    this.pending = null;
+    if (!p.entry.body) return; // not draggable — stays un-selected; tap-to-select requires pointerup
+    this.held = { id: p.entry.id, body: p.entry.body };
+    this.velHistory.length = 0;
+    p.entry.body.wakeUp();
+    const pt = this.castToCarryPlane();
+    if (pt) {
+      this.carryTarget.copy(pt);
+      this.velHistory.push({ pos: pt.clone(), t: performance.now() });
+    }
+  }
 
   private computeThrowVelocity(): THREE.Vector3 {
     if (this.velHistory.length < 2) return new THREE.Vector3();
