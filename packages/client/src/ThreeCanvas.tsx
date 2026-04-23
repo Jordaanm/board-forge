@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { createTable, applyTableProp, type TableProps } from './scene/Table';
 import { SceneGraph } from './scene/SceneGraph';
 import { getDieFace } from './scene/objectTypes';
+import { MoveGizmo } from './scene/MoveGizmo';
 import { CameraController } from './camera/CameraController';
 import { PhysicsWorld } from './physics/PhysicsWorld';
 import { DragController } from './input/DragController';
@@ -75,12 +76,15 @@ export function ThreeCanvas({
     // ── Selection highlight ─────────────────────────────────────────────
     let highlightHelper: THREE.BoxHelper | null = null;
     let highlightId:     string | null = null;
+    const moveGizmo = new MoveGizmo();
 
     const clearHighlight = () => {
-      if (!highlightHelper) return;
-      scene.remove(highlightHelper);
-      highlightHelper.dispose();
-      highlightHelper = null;
+      if (highlightHelper) {
+        scene.remove(highlightHelper);
+        highlightHelper.dispose();
+        highlightHelper = null;
+      }
+      if (moveGizmo.group.parent) scene.remove(moveGizmo.group);
     };
 
     setHighlightRef.current = (id) => {
@@ -93,6 +97,8 @@ export function ThreeCanvas({
       highlightHelper = new THREE.BoxHelper(entry.mesh, 0xffd740);
       (highlightHelper.material as THREE.LineBasicMaterial).linewidth = 2;
       scene.add(highlightHelper);
+      moveGizmo.attach(entry.mesh);
+      scene.add(moveGizmo.group);
     };
 
     const selectCallback = (id: string | null) => onSelectRef.current(id);
@@ -259,6 +265,7 @@ export function ThreeCanvas({
       }
 
       if (highlightHelper) highlightHelper.update();
+      moveGizmo.update();
 
       renderer.render(scene, camera);
     };
@@ -277,6 +284,7 @@ export function ThreeCanvas({
       window.removeEventListener('resize', onResize);
       unsubscribe();
       clearHighlight();
+      moveGizmo.dispose();
       camController.dispose();
       dragCtrl?.dispose();
       guestDrag?.dispose();
