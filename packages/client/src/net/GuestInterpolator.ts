@@ -10,6 +10,14 @@ export class GuestInterpolator {
   private knownState: ObjectState[] = [];
 
   receive(msg: GameMessage) {
+    if (msg.type === 'delete') {
+      this.knownState = this.knownState.filter(o => o.id !== msg.id);
+      this.buffer = this.buffer.map(e => ({
+        localTs: e.localTs,
+        objects: e.objects.filter(o => o.id !== msg.id),
+      }));
+      return;
+    }
     if (msg.type === 'snapshot') {
       this.knownState = msg.objects;
     } else {

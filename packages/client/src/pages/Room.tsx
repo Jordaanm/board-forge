@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { ThreeCanvas } from '../ThreeCanvas';
 import { ConnectionManager } from '../net/ConnectionManager';
 import { SpawnPanel } from '../components/SpawnPanel';
+import { ContextMenu } from '../components/ContextMenu';
+import { type ContextMenuRequest } from '../input/ContextMenuController';
 import { type ChannelMessage, type SpawnableType } from '../net/SceneState';
 
 type Status = 'connecting' | 'connected' | 'disconnected' | 'room-full';
@@ -30,12 +32,19 @@ interface Props {
 const noop = () => {};
 
 export function Room({ roomId, isHost }: Props) {
-  const [status, setStatus] = useState<Status>('connecting');
+  const [status,      setStatus]      = useState<Status>('connecting');
+  const [contextMenu, setContextMenu] = useState<ContextMenuRequest | null>(null);
 
-  const sendRef    = useRef<(msg: ChannelMessage) => void>(noop);
-  const onMsgRef   = useRef<(msg: ChannelMessage) => void>(noop);
-  const spawnRef   = useRef<(type: SpawnableType) => void>(noop);
-  const rollRef    = useRef<() => void>(noop);
+  const sendRef          = useRef<(msg: ChannelMessage) => void>(noop);
+  const onMsgRef         = useRef<(msg: ChannelMessage) => void>(noop);
+  const spawnRef         = useRef<(type: SpawnableType) => void>(noop);
+  const rollRef          = useRef<() => void>(noop);
+  const onContextMenuRef = useRef<(req: ContextMenuRequest) => void>(noop);
+  const rollObjectRef    = useRef<(id: string) => void>(noop);
+  const deleteObjectRef  = useRef<(id: string) => void>(noop);
+
+  // Set every render — fine, it's just a ref assignment.
+  onContextMenuRef.current = (req) => setContextMenu(req);
 
   useEffect(() => {
     const mgr = new ConnectionManager(
@@ -53,6 +62,11 @@ export function Room({ roomId, isHost }: Props) {
     };
   }, [roomId, isHost]);
 
+  const handleContextAction = (actionId: string, objectId: string) => {
+    if (actionId === 'roll')   rollObjectRef.current(objectId);
+    if (actionId === 'delete') deleteObjectRef.current(objectId);
+  };
+
   const shareUrl = (() => {
     const u = new URL(window.location.href);
     u.searchParams.delete('host');
@@ -67,6 +81,9 @@ export function Room({ roomId, isHost }: Props) {
         onMsgRef={onMsgRef}
         spawnRef={spawnRef}
         rollRef={rollRef}
+        onContextMenuRef={onContextMenuRef}
+        rollObjectRef={rollObjectRef}
+        deleteObjectRef={deleteObjectRef}
       />
 
       <div style={{
@@ -99,6 +116,14 @@ export function Room({ roomId, isHost }: Props) {
             {shareUrl}
           </div>
         </div>
+      )}
+
+      {contextMenu && (
+        <ContextMenu
+          menu={contextMenu}
+          onAction={handleContextAction}
+          onDismiss={() => setContextMenu(null)}
+        />
       )}
     </div>
   );

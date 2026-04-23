@@ -90,6 +90,14 @@ export class SceneGraph {
     }
   }
 
+  remove(id: string, scene: THREE.Scene, physics: PhysicsWorld | null) {
+    const entry = this.entries.get(id);
+    if (!entry) return;
+    scene.remove(entry.mesh);
+    if (entry.body && physics) physics.world.removeBody(entry.body);
+    this.entries.delete(id);
+  }
+
   applyStates(states: ObjectState[]) {
     for (const s of states) {
       const e = this.entries.get(s.id);

@@ -9,7 +9,8 @@ export type ObjectState = {
 
 export type GameMessage =
   | { type: 'snapshot'; ts: number; objects: ObjectState[] }
-  | { type: 'patch';    ts: number; changed: ObjectState[] };
+  | { type: 'patch';    ts: number; changed: ObjectState[] }
+  | { type: 'delete';   id: string };
 
 export type GuestInputMessage =
   | { type: 'guest-drag-start'; objectId: string }
