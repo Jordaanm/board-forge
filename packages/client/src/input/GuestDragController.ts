@@ -1,11 +1,11 @@
 import * as THREE from 'three';
-import { CARRY_LIFT_HEIGHT } from '../config/dragConfig';
+import { CARRY_LIFT_HEIGHT, THROW_VELOCITY_WINDOW_MS } from '../config/dragConfig';
 import { type SceneEntry, type SceneGraph } from '../scene/SceneGraph';
 import { type ChannelMessage } from '../net/SceneState';
 import { type MoveGizmo, type GizmoAxis } from '../scene/MoveGizmo';
 import { projectRayOntoAxis } from './axisDrag';
 
-const VELOCITY_SAMPLES = 6;
+const VELOCITY_SAMPLES = 20;
 const HOLD_MS = 150;
 const MOVE_PX = 5;
 
@@ -221,10 +221,16 @@ export class GuestDragController {
   }
 
   private computeThrowVelocity(): THREE.Vector3 {
-    if (this.velHistory.length < 2) return new THREE.Vector3();
-    const first = this.velHistory[0];
-    const last  = this.velHistory[this.velHistory.length - 1];
-    const dt    = (last.t - first.t) / 1000;
+    if (this.velHistory.length === 0) return new THREE.Vector3();
+    const now    = performance.now();
+    const last   = this.velHistory[this.velHistory.length - 1];
+    const cutoff = now - THROW_VELOCITY_WINDOW_MS;
+    let first = last;
+    for (let i = this.velHistory.length - 1; i >= 0; i--) {
+      if (this.velHistory[i].t < cutoff) break;
+      first = this.velHistory[i];
+    }
+    const dt = (now - first.t) / 1000;
     if (dt < 0.001) return new THREE.Vector3();
     return new THREE.Vector3(
       (last.pos.x - first.pos.x) / dt,
