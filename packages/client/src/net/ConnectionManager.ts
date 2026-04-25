@@ -7,7 +7,7 @@ type PeerLeftHandler   = (peerId: string) => void;
 
 type SignalingMsg = { type: string; [k: string]: unknown };
 
-const ICE_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }];
+const FALLBACK_ICE_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }];
 
 interface PeerEntry {
   pc:      RTCPeerConnection;
@@ -15,12 +15,30 @@ interface PeerEntry {
   open:    boolean;
 }
 
+// Convert ws://host or wss://host into http(s)://host so we can hit /ice-config.
+function httpFromWs(wsUrl: string): string {
+  return wsUrl.replace(/^ws/, 'http');
+}
+
+async function fetchIceServers(signalingUrl: string): Promise<RTCIceServer[]> {
+  try {
+    const res  = await fetch(`${httpFromWs(signalingUrl)}/ice-config`);
+    if (!res.ok) throw new Error(`ice-config status ${res.status}`);
+    const body = await res.json() as { iceServers?: RTCIceServer[] };
+    if (Array.isArray(body.iceServers) && body.iceServers.length) return body.iceServers;
+  } catch (err) {
+    console.warn('[ICE] failed to fetch /ice-config, falling back to default STUN', err);
+  }
+  return FALLBACK_ICE_SERVERS;
+}
+
 export class ConnectionManager {
-  private ws:     WebSocket | null = null;
-  private peerId: string | null = null;
-  private role:   Role | null = null;
-  private hostId: string | null = null;
-  private peers   = new Map<string, PeerEntry>();
+  private ws:         WebSocket | null = null;
+  private peerId:     string | null = null;
+  private role:       Role | null = null;
+  private hostId:     string | null = null;
+  private peers       = new Map<string, PeerEntry>();
+  private iceServers: RTCIceServer[] = FALLBACK_ICE_SERVERS;
 
   constructor(
     private readonly onMsg:      MsgHandler,
@@ -29,11 +47,11 @@ export class ConnectionManager {
   ) {}
 
   hostRoom(signalingUrl: string, roomId: string) {
-    this.connect(signalingUrl, roomId, 'host');
+    void this.connect(signalingUrl, roomId, 'host');
   }
 
   joinRoom(signalingUrl: string, roomId: string) {
-    this.connect(signalingUrl, roomId, 'guest');
+    void this.connect(signalingUrl, roomId, 'guest');
   }
 
   // Broadcast (host) or send to host (guest).
@@ -56,9 +74,12 @@ export class ConnectionManager {
     this.peers.clear();
   }
 
-  private connect(url: string, roomId: string, role: Role) {
+  private async connect(url: string, roomId: string, role: Role) {
     this.role = role;
     this.onStatus('connecting');
+
+    this.iceServers = await fetchIceServers(url);
+
     const ws = new WebSocket(url);
     this.ws = ws;
 
@@ -145,7 +166,7 @@ export class ConnectionManager {
   }
 
   private createPeer(remoteId: string, localRole: Role): PeerEntry {
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    const pc = new RTCPeerConnection({ iceServers: this.iceServers });
     const entry: PeerEntry = { pc, channel: null, open: false };
     this.peers.set(remoteId, entry);
 
