@@ -1,50 +1,76 @@
 import type { WebSocket } from 'ws';
+import { MAX_PEERS_PER_ROOM } from './config';
 
-interface Room {
-  host: WebSocket | null;
-  guest: WebSocket | null;
+export type Role = 'host' | 'guest';
+
+export interface Member {
+  peerId: string;
+  role:   Role;
+  ws:     WebSocket;
 }
 
-const rooms = new Map<string, Room>();
-const clientRoom = new Map<WebSocket, { roomId: string; role: 'host' | 'guest' }>();
+interface Room {
+  hostId:  string | null;
+  members: Map<string, Member>;
+}
 
-export function join(
-  roomId: string,
-  role: 'host' | 'guest',
-  ws: WebSocket
-): 'ok' | 'full' {
+export interface JoinResult {
+  peerId:     string;
+  hostId:     string | null;
+  otherPeers: { peerId: string; role: Role }[];
+}
+
+const rooms        = new Map<string, Room>();
+const clientLookup = new Map<WebSocket, { roomId: string; peerId: string }>();
+
+export function join(roomId: string, role: Role, ws: WebSocket): JoinResult | 'full' | 'has-host' {
   let room = rooms.get(roomId);
   if (!room) {
-    room = { host: null, guest: null };
+    room = { hostId: null, members: new Map() };
     rooms.set(roomId, room);
   }
 
-  if (role === 'host') {
-    room.host = ws;
-  } else {
-    if (room.guest) return 'full';
-    room.guest = ws;
-  }
+  if (role === 'host' && room.hostId) return 'has-host';
+  if (room.members.size >= MAX_PEERS_PER_ROOM) return 'full';
 
-  clientRoom.set(ws, { roomId, role });
-  return 'ok';
+  const peerId = crypto.randomUUID();
+  room.members.set(peerId, { peerId, role, ws });
+  if (role === 'host') room.hostId = peerId;
+  clientLookup.set(ws, { roomId, peerId });
+
+  const otherPeers = Array.from(room.members.values())
+    .filter(m => m.peerId !== peerId)
+    .map(m => ({ peerId: m.peerId, role: m.role }));
+
+  return { peerId, hostId: room.hostId, otherPeers };
 }
 
-export function getPeer(ws: WebSocket): WebSocket | null {
-  const info = clientRoom.get(ws);
+export function getMember(roomId: string, peerId: string): Member | null {
+  return rooms.get(roomId)?.members.get(peerId) ?? null;
+}
+
+export function getRoomMembers(roomId: string): Member[] {
+  const room = rooms.get(roomId);
+  return room ? Array.from(room.members.values()) : [];
+}
+
+export function lookup(ws: WebSocket): { roomId: string; peerId: string } | null {
+  return clientLookup.get(ws) ?? null;
+}
+
+export function leave(ws: WebSocket): { roomId: string; peerId: string; role: Role } | null {
+  const info = clientLookup.get(ws);
   if (!info) return null;
+  clientLookup.delete(ws);
+
   const room = rooms.get(info.roomId);
   if (!room) return null;
-  return info.role === 'host' ? room.guest : room.host;
-}
+  const member = room.members.get(info.peerId);
+  if (!member) return null;
 
-export function leave(ws: WebSocket) {
-  const info = clientRoom.get(ws);
-  if (!info) return;
-  clientRoom.delete(ws);
-  const room = rooms.get(info.roomId);
-  if (!room) return;
-  if (info.role === 'host') room.host = null;
-  else room.guest = null;
-  if (!room.host && !room.guest) rooms.delete(info.roomId);
+  room.members.delete(info.peerId);
+  if (room.hostId === info.peerId) room.hostId = null;
+  if (room.members.size === 0) rooms.delete(info.roomId);
+
+  return { roomId: info.roomId, peerId: info.peerId, role: member.role };
 }

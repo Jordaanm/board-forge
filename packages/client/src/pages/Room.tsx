@@ -41,7 +41,8 @@ export function Room({ roomId, isHost }: Props) {
   const [tableProps,   setTableProps]   = useState<TableProps>(DEFAULT_TABLE_PROPS);
 
   const sendRef            = useRef<(msg: ChannelMessage) => void>(noop);
-  const onMsgRef           = useRef<(msg: ChannelMessage) => void>(noop);
+  const onMsgRef           = useRef<(peerId: string, msg: ChannelMessage) => void>(noop);
+  const onPeerLeftRef      = useRef<(peerId: string) => void>(noop);
   const spawnRef           = useRef<(type: SpawnableType) => void>(noop);
   const rollRef            = useRef<() => void>(noop);
   const onContextMenuRef   = useRef<(req: ContextMenuRequest) => void>(noop);
@@ -61,8 +62,9 @@ export function Room({ roomId, isHost }: Props) {
 
   useEffect(() => {
     const mgr = new ConnectionManager(
-      (msg) => onMsgRef.current(msg as ChannelMessage),
-      (s)   => setStatus(s as Status),
+      (peerId, msg) => onMsgRef.current(peerId, msg as ChannelMessage),
+      (s)           => setStatus(s as Status),
+      (peerId)      => onPeerLeftRef.current(peerId),
     );
     sendRef.current = (msg) => mgr.send(msg);
 
@@ -112,6 +114,7 @@ export function Room({ roomId, isHost }: Props) {
         isHost={isHost}
         sendRef={sendRef}
         onMsgRef={onMsgRef}
+        onPeerLeftRef={onPeerLeftRef}
         spawnRef={spawnRef}
         rollRef={rollRef}
         onContextMenuRef={onContextMenuRef}

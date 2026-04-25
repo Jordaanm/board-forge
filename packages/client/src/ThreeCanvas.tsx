@@ -18,7 +18,8 @@ import { type ObjectSummary } from './components/EditorPanel';
 interface Props {
   isHost:              boolean;
   sendRef:             MutableRefObject<(msg: ChannelMessage) => void>;
-  onMsgRef:            MutableRefObject<(msg: ChannelMessage) => void>;
+  onMsgRef:            MutableRefObject<(peerId: string, msg: ChannelMessage) => void>;
+  onPeerLeftRef:       MutableRefObject<(peerId: string) => void>;
   spawnRef:            MutableRefObject<(type: SpawnableType) => void>;
   rollRef:             MutableRefObject<() => void>;
   onContextMenuRef:    MutableRefObject<(req: ContextMenuRequest) => void>;
@@ -33,7 +34,7 @@ interface Props {
 }
 
 export function ThreeCanvas({
-  isHost, sendRef, onMsgRef, spawnRef, rollRef,
+  isHost, sendRef, onMsgRef, onPeerLeftRef, spawnRef, rollRef,
   onContextMenuRef, rollObjectRef, deleteObjectRef,
   updatePropRef, updateTablePropRef, freeCameraRef, onObjectsChangeRef,
   onSelectRef, setHighlightRef,
@@ -195,12 +196,16 @@ export function ThreeCanvas({
         (req) => onContextMenuRef.current(req),
       );
 
-      onMsgRef.current = (msg) => {
+      onMsgRef.current = (peerId, msg) => {
         if (msg.type === 'guest-drag-start' ||
             msg.type === 'guest-drag-move'  ||
             msg.type === 'guest-drag-end') {
-          guestInput!.handleMessage(msg, graph);
+          guestInput!.handleMessage(peerId, msg, graph);
         }
+      };
+
+      onPeerLeftRef.current = (peerId) => {
+        guestInput!.releasePeer(peerId, graph);
       };
 
     } else {
@@ -217,7 +222,7 @@ export function ThreeCanvas({
         () => highlightId,
       );
 
-      onMsgRef.current = (msg) => {
+      onMsgRef.current = (_peerId, msg) => {
         if (msg.type === 'snapshot' || msg.type === 'patch') {
           guestInterp!.receive(msg);
           const objects = msg.type === 'snapshot' ? msg.objects : msg.changed;
@@ -308,6 +313,7 @@ export function ThreeCanvas({
       guestDrag?.dispose();
       contextCtrl?.dispose();
       if (!isHost) onMsgRef.current = () => {};
+      onPeerLeftRef.current   = () => {};
       spawnRef.current        = () => {};
       rollRef.current         = () => {};
       rollObjectRef.current   = () => {};
@@ -320,7 +326,7 @@ export function ThreeCanvas({
       container.removeChild(renderer.domElement);
     };
   }, [
-    isHost, sendRef, onMsgRef, spawnRef, rollRef,
+    isHost, sendRef, onMsgRef, onPeerLeftRef, spawnRef, rollRef,
     onContextMenuRef, rollObjectRef, deleteObjectRef,
     updatePropRef, updateTablePropRef, freeCameraRef, onObjectsChangeRef,
     onSelectRef, setHighlightRef,
