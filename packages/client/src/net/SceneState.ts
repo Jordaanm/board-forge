@@ -19,7 +19,9 @@ export type GuestInputMessage =
   | { type: 'guest-drag-move';  objectId: string; px: number; py: number; pz: number }
   | { type: 'guest-drag-end';   objectId: string; vx: number; vy: number; vz: number };
 
-export type ChannelMessage = GameMessage | GuestInputMessage;
+import type { RoomStateMessage } from '../seats/RoomState';
+
+export type ChannelMessage = GameMessage | GuestInputMessage | RoomStateMessage;
 
 const DEFAULT_THRESHOLD = 0.0001;
 

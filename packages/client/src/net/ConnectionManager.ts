@@ -1,9 +1,11 @@
 type Status = 'connecting' | 'connected' | 'disconnected' | 'room-full';
 type Role   = 'host' | 'guest';
 
-type MsgHandler        = (peerId: string, msg: unknown) => void;
-type StatusHandler     = (s: Status) => void;
-type PeerLeftHandler   = (peerId: string) => void;
+type MsgHandler           = (peerId: string, msg: unknown) => void;
+type StatusHandler        = (s: Status) => void;
+type PeerLeftHandler      = (peerId: string) => void;
+type PeerConnectedHandler = (peerId: string) => void;
+type JoinedHandler        = (peerId: string, hostPeerId: string | null) => void;
 
 type SignalingMsg = { type: string; [k: string]: unknown };
 
@@ -41,10 +43,15 @@ export class ConnectionManager {
   private iceServers: RTCIceServer[] = FALLBACK_ICE_SERVERS;
 
   constructor(
-    private readonly onMsg:      MsgHandler,
-    private readonly onStatus:   StatusHandler,
-    private readonly onPeerLeft: PeerLeftHandler = () => {},
+    private readonly onMsg:           MsgHandler,
+    private readonly onStatus:        StatusHandler,
+    private readonly onPeerLeft:      PeerLeftHandler      = () => {},
+    private readonly onPeerConnected: PeerConnectedHandler = () => {},
+    private readonly onJoined:        JoinedHandler        = () => {},
   ) {}
+
+  getPeerId(): string | null { return this.peerId; }
+  getHostId(): string | null { return this.hostId; }
 
   hostRoom(signalingUrl: string, roomId: string) {
     void this.connect(signalingUrl, roomId, 'host');
@@ -102,6 +109,7 @@ export class ConnectionManager {
       case 'joined':
         this.peerId = msg.peerId as string;
         this.hostId = (msg.hostId as string | null) ?? null;
+        this.onJoined(this.peerId, this.hostId);
         if (this.role === 'host') {
           // Existing peers (rare path: host joining late) get offers.
           for (const p of msg.otherPeers as { peerId: string; role: Role }[]) {
@@ -199,6 +207,7 @@ export class ConnectionManager {
       const entry = this.peers.get(remoteId);
       if (entry) entry.open = true;
       this.onStatus('connected');
+      this.onPeerConnected(remoteId);
     };
     ch.onclose = () => this.markPeerClosed(remoteId);
     ch.onmessage = (e) => this.onMsg(remoteId, JSON.parse(e.data as string));

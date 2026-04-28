@@ -6,6 +6,9 @@ import { ContextMenu } from '../components/ContextMenu';
 import { type ContextMenuRequest } from '../input/ContextMenuController';
 import { type ChannelMessage, type SpawnableType } from '../net/SceneState';
 import { DEFAULT_TABLE_PROPS, type TableProps } from '../scene/Table';
+import { RoomStateManager } from '../seats/RoomStateManager';
+import { RoomStateClient } from '../seats/RoomStateClient';
+import type { RoomStateMessage } from '../seats/RoomState';
 
 type Status = 'connecting' | 'connected' | 'disconnected' | 'room-full';
 
@@ -61,10 +64,48 @@ export function Room({ roomId, isHost }: Props) {
   onSelectRef.current        = (id) => setSelectedId(id);
 
   useEffect(() => {
-    const mgr = new ConnectionManager(
-      (peerId, msg) => onMsgRef.current(peerId, msg as ChannelMessage),
-      (s)           => setStatus(s as Status),
-      (peerId)      => onPeerLeftRef.current(peerId),
+    let manager: RoomStateManager | null = null;
+    let client:  RoomStateClient  | null = null;
+    let mgr!: ConnectionManager;
+
+    mgr = new ConnectionManager(
+      (peerId, msg) => {
+        const m = msg as ChannelMessage;
+        if (m.type === 'room-state') {
+          client?.applySnapshot(m.snapshot);
+          if (client) console.log('[RoomState] my seat:', client.getMySeat());
+          return;
+        }
+        if (m.type === 'room-state-patch') {
+          client?.applyPatch(m.patch);
+          if (client) console.log('[RoomState] my seat:', client.getMySeat());
+          return;
+        }
+        onMsgRef.current(peerId, m);
+      },
+      (s) => setStatus(s as Status),
+      (peerId) => {
+        manager?.removePeer(peerId);
+        onPeerLeftRef.current(peerId);
+      },
+      (peerId) => {
+        if (!manager) return;
+        manager.assignOnJoin(peerId);
+        const snapshotMsg: RoomStateMessage = { type: 'room-state', snapshot: manager.snapshot() };
+        mgr.sendTo(peerId, snapshotMsg);
+      },
+      (peerId) => {
+        if (isHost) {
+          manager = new RoomStateManager(peerId);
+          manager.onChange((change) => {
+            const patchMsg: RoomStateMessage = { type: 'room-state-patch', patch: change.patch };
+            mgr.send(patchMsg);
+          });
+          console.log('[RoomState] my seat:', manager.getSeat(peerId));
+        } else {
+          client = new RoomStateClient(peerId);
+        }
+      },
     );
     sendRef.current = (msg) => mgr.send(msg);
 
