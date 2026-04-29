@@ -23,3 +23,20 @@ export {
 
 export { Scene, entityToSerialized } from './Scene';
 export type { EntitySerialized } from './Scene';
+
+export type {
+  ComponentPatch,
+  ComponentPatchesMessage,
+  EntityPatch,
+  EntityFieldsPartial,
+  DespawnBatch,
+  InvokeAction,
+  HoldClaim,
+  HoldRelease,
+  RequestUpdate,
+  SceneMessage,
+} from './wire';
+
+export { HostReplicatorV2 } from './HostReplicatorV2';
+export { applySceneMessage } from './GuestReceiver';
+export type { GuestReceiveContext } from './GuestReceiver';
