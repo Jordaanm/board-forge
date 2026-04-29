@@ -4,7 +4,8 @@ import { ConnectionManager } from '../net/ConnectionManager';
 import { EditorPanel, type ObjectSummary } from '../components/EditorPanel';
 import { ContextMenu } from '../components/ContextMenu';
 import { type ContextMenuRequest } from '../input/ContextMenuController';
-import { type ChannelMessage, type SpawnableType } from '../net/SceneState';
+import { type ChannelMessage, type SpawnableType, type GameMessage } from '../net/SceneState';
+import { type ReplicationTarget } from '../net/HostReplicator';
 import { DEFAULT_TABLE_PROPS, type TableProps } from '../scene/Table';
 import { RoomStateManager } from '../seats/RoomStateManager';
 import { RoomStateClient } from '../seats/RoomStateClient';
@@ -44,6 +45,8 @@ export function Room({ roomId, isHost }: Props) {
   const [tableProps,   setTableProps]   = useState<TableProps>(DEFAULT_TABLE_PROPS);
 
   const sendRef            = useRef<(msg: ChannelMessage) => void>(noop);
+  const sendToRef          = useRef<(peerId: string, msg: GameMessage) => void>(noop);
+  const getTargetsRef      = useRef<() => ReplicationTarget[]>(() => []);
   const onMsgRef           = useRef<(peerId: string, msg: ChannelMessage) => void>(noop);
   const onPeerLeftRef      = useRef<(peerId: string) => void>(noop);
   const spawnRef           = useRef<(type: SpawnableType) => void>(noop);
@@ -107,14 +110,25 @@ export function Room({ roomId, isHost }: Props) {
         }
       },
     );
-    sendRef.current = (msg) => mgr.send(msg);
+    sendRef.current     = (msg)         => mgr.send(msg);
+    sendToRef.current   = (peerId, msg) => mgr.sendTo(peerId, msg);
+    getTargetsRef.current = () => {
+      if (!manager) return [];
+      return mgr.getPeerIds().map(peerId => ({
+        peerId,
+        peerSeat: manager!.getSeat(peerId),
+        isHost:   manager!.isHost(peerId),
+      }));
+    };
 
     if (isHost) mgr.hostRoom(SIGNALING_URL, roomId);
     else        mgr.joinRoom(SIGNALING_URL, roomId);
 
     return () => {
       mgr.dispose();
-      sendRef.current = noop;
+      sendRef.current       = noop;
+      sendToRef.current     = noop;
+      getTargetsRef.current = () => [];
     };
   }, [roomId, isHost]);
 
@@ -154,6 +168,8 @@ export function Room({ roomId, isHost }: Props) {
       <ThreeCanvas
         isHost={isHost}
         sendRef={sendRef}
+        sendToRef={sendToRef}
+        getTargetsRef={getTargetsRef}
         onMsgRef={onMsgRef}
         onPeerLeftRef={onPeerLeftRef}
         spawnRef={spawnRef}

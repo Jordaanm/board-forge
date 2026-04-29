@@ -10,14 +10,16 @@ import { DragController } from './input/DragController';
 import { GuestDragController } from './input/GuestDragController';
 import { GuestInputHandler } from './input/GuestInputHandler';
 import { ContextMenuController, type ContextMenuRequest } from './input/ContextMenuController';
-import { HostReplicator } from './net/HostReplicator';
+import { HostReplicator, type ReplicationTarget } from './net/HostReplicator';
 import { GuestInterpolator } from './net/GuestInterpolator';
-import { type ChannelMessage, type SpawnableType } from './net/SceneState';
+import { type ChannelMessage, type GameMessage, type SpawnableType } from './net/SceneState';
 import { type ObjectSummary } from './components/EditorPanel';
 
 interface Props {
   isHost:              boolean;
   sendRef:             MutableRefObject<(msg: ChannelMessage) => void>;
+  sendToRef:           MutableRefObject<(peerId: string, msg: GameMessage) => void>;
+  getTargetsRef:       MutableRefObject<() => ReplicationTarget[]>;
   onMsgRef:            MutableRefObject<(peerId: string, msg: ChannelMessage) => void>;
   onPeerLeftRef:       MutableRefObject<(peerId: string) => void>;
   spawnRef:            MutableRefObject<(type: SpawnableType) => void>;
@@ -34,7 +36,7 @@ interface Props {
 }
 
 export function ThreeCanvas({
-  isHost, sendRef, onMsgRef, onPeerLeftRef, spawnRef, rollRef,
+  isHost, sendRef, sendToRef, getTargetsRef, onMsgRef, onPeerLeftRef, spawnRef, rollRef,
   onContextMenuRef, rollObjectRef, deleteObjectRef,
   updatePropRef, updateTablePropRef, freeCameraRef, onObjectsChangeRef,
   onSelectRef, setHighlightRef,
@@ -147,7 +149,10 @@ export function ThreeCanvas({
       physics    = new PhysicsWorld();
       dragCtrl   = new DragController(camera, renderer.domElement, graph, moveGizmo, selectCallback);
       guestInput = new GuestInputHandler();
-      hostRepl   = new HostReplicator((msg) => sendRef.current(msg));
+      hostRepl   = new HostReplicator({
+        getTargets: () => getTargetsRef.current(),
+        sendTo:     (peerId, msg) => sendToRef.current(peerId, msg),
+      });
 
       spawnRef.current = (type) => graph.spawn(type, scene, physics!);
 
@@ -326,7 +331,7 @@ export function ThreeCanvas({
       container.removeChild(renderer.domElement);
     };
   }, [
-    isHost, sendRef, onMsgRef, onPeerLeftRef, spawnRef, rollRef,
+    isHost, sendRef, sendToRef, getTargetsRef, onMsgRef, onPeerLeftRef, spawnRef, rollRef,
     onContextMenuRef, rollObjectRef, deleteObjectRef,
     updatePropRef, updateTablePropRef, freeCameraRef, onObjectsChangeRef,
     onSelectRef, setHighlightRef,

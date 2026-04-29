@@ -53,6 +53,12 @@ export class ConnectionManager {
   getPeerId(): string | null { return this.peerId; }
   getHostId(): string | null { return this.hostId; }
 
+  getPeerIds(): string[] {
+    const ids: string[] = [];
+    for (const [id, entry] of this.peers) if (entry.open) ids.push(id);
+    return ids;
+  }
+
   hostRoom(signalingUrl: string, roomId: string) {
     void this.connect(signalingUrl, roomId, 'host');
   }
