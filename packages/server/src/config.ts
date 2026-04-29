@@ -1,6 +1,6 @@
-// Maximum simultaneous peers per room, including the host.
-// Override with MAX_PEERS_PER_ROOM env var.
-export const MAX_PEERS_PER_ROOM = Number(process.env.MAX_PEERS_PER_ROOM ?? 8);
+// Hard cap on simultaneous peers per room (host + seated guests + spectators).
+// Override with MAX_ROOM_PEERS env var.
+export const maxRoomPeers = Number(process.env.MAX_ROOM_PEERS ?? 16);
 
 // ICE server configuration.
 // STUN_URLS: comma-separated stun: URLs. Defaults to Google's public STUN.

@@ -1,5 +1,5 @@
 import type { WebSocket } from 'ws';
-import { MAX_PEERS_PER_ROOM } from './config';
+import { maxRoomPeers } from './config';
 
 export type Role = 'host' | 'guest';
 
@@ -31,7 +31,7 @@ export function join(roomId: string, role: Role, ws: WebSocket): JoinResult | 'f
   }
 
   if (role === 'host' && room.hostId) return 'has-host';
-  if (room.members.size >= MAX_PEERS_PER_ROOM) return 'full';
+  if (room.members.size >= maxRoomPeers) return 'full';
 
   const peerId = crypto.randomUUID();
   room.members.set(peerId, { peerId, role, ws });
