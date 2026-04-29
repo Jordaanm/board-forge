@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { type SpawnableType } from '../net/SceneState';
 import { type ActionDef, OBJECT_TYPE_REGISTRY } from '../scene/objectTypes';
-import { type SceneGraph } from '../scene/SceneGraph';
+import { type ISceneSystem } from '../scene/SceneGraph';
 
 export type ContextMenuRequest = {
   x: number;
@@ -21,7 +21,7 @@ export class ContextMenuController {
   constructor(
     private readonly element: HTMLElement,
     private readonly camera:  THREE.PerspectiveCamera,
-    private readonly graph:   SceneGraph,
+    private readonly graph:   ISceneSystem,
     private readonly onOpen:  (req: ContextMenuRequest) => void,
     // When provided, the menu only opens if the hit object's id matches the
     // currently-selected id. Used on the guest path where a menu requires

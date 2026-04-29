@@ -1,8 +1,11 @@
 import { describe, test, expect, beforeEach } from 'vitest';
+import * as THREE from 'three';
 import { Scene, entityToSerialized, type EntitySerialized } from './Scene';
 import { Entity } from './Entity';
-import { EntityComponent } from './EntityComponent';
+import { EntityComponent, type SpawnContext } from './EntityComponent';
 import { ComponentRegistry } from './ComponentRegistry';
+
+const ctx: SpawnContext = { scene: new THREE.Scene(), physics: null };
 
 interface TransformState { x: number; y: number; z: number }
 class TransformComp extends EntityComponent<TransformState> {
@@ -81,7 +84,7 @@ describe('Scene.load — two-pass with cross-entity refs', () => {
         },
       },
     ];
-    const created = Scene.load(snapshots, {});
+    const created = Scene.load(snapshots, ctx);
     expect(created).toHaveLength(2);
     const b = Scene.getEntity('B')!;
     const link = b.getComponent(LinkComp)!;
@@ -99,7 +102,7 @@ describe('Scene.load — two-pass with cross-entity refs', () => {
         },
       },
     ];
-    Scene.load(snapshots, {});
+    Scene.load(snapshots, ctx);
     const x = Scene.getEntity('X')!;
     const t = x.getComponent(TransformComp)!;
     const m = x.getComponent(MeshComp)!;
@@ -127,7 +130,7 @@ describe('Scene.load — two-pass with cross-entity refs', () => {
       // Drop the parentId reference — the parent entity isn't in this snapshot
       // and the field is just data, not a ref to resolve at load time.
       parentId: 'parent',
-    }], {});
+    }], ctx);
 
     const restored = Scene.getEntity('rt')!;
     expect(restored.id).toBe('rt');
@@ -148,6 +151,6 @@ describe('Scene.load — two-pass with cross-entity refs', () => {
       parentId: null, children: [],
       components: { unknown: {} },
     }];
-    expect(() => Scene.load(snapshots, {})).toThrow(/Unknown component typeId/);
+    expect(() => Scene.load(snapshots, ctx)).toThrow(/Unknown component typeId/);
   });
 });

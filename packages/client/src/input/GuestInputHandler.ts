@@ -1,4 +1,4 @@
-import { type SceneGraph } from '../scene/SceneGraph';
+import { type ISceneSystem } from '../scene/SceneGraph';
 import { type GuestInputMessage } from '../net/SceneState';
 
 interface PeerHold {
@@ -13,7 +13,7 @@ interface PeerHold {
 export class GuestInputHandler {
   private peers = new Map<string, PeerHold>();
 
-  handleMessage(peerId: string, msg: GuestInputMessage, graph: SceneGraph) {
+  handleMessage(peerId: string, msg: GuestInputMessage, graph: ISceneSystem) {
     const peer = this.getOrCreate(peerId);
 
     if (msg.type === 'guest-drag-start') {
@@ -34,7 +34,7 @@ export class GuestInputHandler {
   }
 
   // Call each frame after physics.step() to hold all carried objects in place.
-  update(graph: SceneGraph) {
+  update(graph: ISceneSystem) {
     for (const peer of this.peers.values()) {
       if (!peer.heldObjectId) continue;
       const entry = graph.getEntry(peer.heldObjectId);
@@ -47,7 +47,7 @@ export class GuestInputHandler {
   }
 
   // Wake the body so it falls naturally rather than freezing mid-air.
-  releasePeer(peerId: string, graph: SceneGraph) {
+  releasePeer(peerId: string, graph: ISceneSystem) {
     const peer = this.peers.get(peerId);
     if (!peer) return;
     if (peer.heldObjectId) {

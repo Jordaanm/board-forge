@@ -2,9 +2,10 @@
 // ad-hoc cross-entity lookups instead of carrying explicit references.
 // Slice #1 of planning/issues/issues--scene-graph.md.
 
-import { Entity } from './Entity';
+import { Entity, defaultEntityName } from './Entity';
 import { type SpawnContext } from './EntityComponent';
 import { componentRegistry, type ComponentRegistry } from './ComponentRegistry';
+import { getSpawnable } from './SpawnableRegistry';
 import { type SeatIndex } from '../seats/SeatLayout';
 
 // Per-entity snapshot — also the save-format leaf (PRD § Save / Load).
@@ -100,6 +101,80 @@ class SceneImpl {
 
     return created;
   }
+
+  // PRD § Spawnables — spawn flow.
+  //   1. Look up SpawnableDef by type.
+  //   2. Construct Entity with new UUID, type, default tags.
+  //   3. Instantiate each component class via registry; call fromJSON(state).
+  //   4. Call onSpawn(ctx) per component in topological order.
+  spawn(type: string, ctx: SpawnContext, opts: { id?: string } = {}): Entity {
+    const def = getSpawnable(type);
+    if (!def) throw new Error(`Unknown spawnable type: ${type}`);
+
+    const id = opts.id ?? newGuid();
+    const entity = new Entity({
+      id,
+      type:  def.type,
+      name:  defaultEntityName(def.label, id),
+      tags:  def.defaultTags,
+    });
+
+    for (const init of def.components) {
+      const cls = this.registry.get(init.typeId);
+      if (!cls) throw new Error(`Spawnable ${type}: unknown component ${init.typeId}`);
+      const comp = new cls();
+      comp.fromJSON(init.state);
+      entity.attachComponent(comp);
+    }
+
+    this.add(entity);
+
+    const order = this.registry.getSpawnOrder(def.components.map(c => c.typeId));
+    for (const cls of order) {
+      entity.components.get(cls.typeId)!.onSpawn(ctx);
+    }
+
+    return entity;
+  }
+
+  // PRD § Despawn — recursive depth-first descent; reverse-topological
+  // onDespawn per entity; remove from scene + parent.children.
+  despawn(id: string, ctx: SpawnContext): string[] {
+    const removed: string[] = [];
+    this.cascadeDespawn(id, ctx, removed);
+    return removed;
+  }
+
+  private cascadeDespawn(id: string, ctx: SpawnContext, out: string[]): void {
+    const entity = this.entities.get(id);
+    if (!entity) return;
+    for (const childId of [...entity.children]) {
+      this.cascadeDespawn(childId, ctx, out);
+    }
+    const typeIds = [...entity.components.keys()];
+    const order   = this.registry.getSpawnOrder(typeIds);
+    for (let i = order.length - 1; i >= 0; i--) {
+      entity.components.get(order[i].typeId)!.onDespawn(ctx);
+    }
+    if (entity.parentId) {
+      const parent = this.entities.get(entity.parentId);
+      if (parent) parent.children = parent.children.filter(c => c !== id);
+    }
+    this.entities.delete(id);
+    out.push(id);
+  }
+}
+
+function newGuid(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  // Fallback for older runtimes (test envs without crypto.randomUUID).
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (ch) => {
+    const r = (Math.random() * 16) | 0;
+    const v = ch === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
 }
 
 // Singleton. Tests can call `Scene.clear()` between runs.

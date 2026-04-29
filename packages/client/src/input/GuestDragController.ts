@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { CARRY_LIFT_HEIGHT, THROW_VELOCITY_WINDOW_MS } from '../config/dragConfig';
-import { type SceneEntry, type SceneGraph } from '../scene/SceneGraph';
+import { type SceneEntry, type ISceneSystem } from '../scene/SceneGraph';
 import { type ChannelMessage } from '../net/SceneState';
 import { type MoveGizmo, type GizmoAxis } from '../scene/MoveGizmo';
 import { projectRayOntoAxis } from './axisDrag';
@@ -42,7 +42,7 @@ export class GuestDragController {
   constructor(
     private readonly camera:   THREE.PerspectiveCamera,
     private readonly element:  HTMLElement,
-    private readonly graph:    SceneGraph,
+    private readonly graph:    ISceneSystem,
     private readonly gizmo:    MoveGizmo,
     private readonly send:     (msg: ChannelMessage) => void,
     private readonly onSelect: (id: string | null) => void,

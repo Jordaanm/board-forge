@@ -13,7 +13,8 @@
       "Bash(pkill -f \"vite --port 5173\")",
       "Bash(npm test *)",
       "Bash(npx vitest *)",
-      "Bash(npm --prefix packages/client run typecheck)"
+      "Bash(npm --prefix packages/client run typecheck)",
+      "Bash(grep -n \"Scene.load\\(\\\\[\\\\]\\\\|Scene.load\\(snap\\\\|, {}\\)\" packages/client/src/entity/Scene.test.ts)"
     ]
   }
 }

@@ -5,13 +5,19 @@
 // artefacts (THREE.Object3D, CANNON.Body). `toJSON`/`fromJSON` walk only `state`;
 // view is rebuilt from state in `onSpawn`.
 
+import * as THREE from 'three';
 import { type Entity } from './Entity';
 import { type SeatIndex } from '../seats/SeatLayout';
+import { type PhysicsWorld } from '../physics/PhysicsWorld';
 
 export type ReplicationChannel = 'reliable' | 'unreliable';
 
-// Filled out in slice #3 (port primitives) — scene root, physics world, etc.
-export interface SpawnContext {}
+// Carried into every onSpawn / onDespawn call. Components own their view
+// artefacts and need the scene root + physics world to attach / detach them.
+export interface SpawnContext {
+  scene:    THREE.Scene;
+  physics:  PhysicsWorld | null;  // null on guests — they don't simulate.
+}
 
 export interface MenuContext {
   recipientSeat: SeatIndex | null;

@@ -40,3 +40,27 @@ export type {
 export { HostReplicatorV2 } from './HostReplicatorV2';
 export { applySceneMessage } from './GuestReceiver';
 export type { GuestReceiveContext } from './GuestReceiver';
+
+export { TransformComponent } from './components/TransformComponent';
+export type { TransformState } from './components/TransformComponent';
+
+export { MeshComponent } from './components/MeshComponent';
+export type { MeshState, MeshSize } from './components/MeshComponent';
+
+export { PhysicsComponent } from './components/PhysicsComponent';
+export type { PhysicsState, Vec3Like } from './components/PhysicsComponent';
+
+export { ValueComponent } from './components/ValueComponent';
+export type { ValueState } from './components/ValueComponent';
+
+export {
+  registerSpawnable,
+  getSpawnable,
+  listSpawnables,
+  clearSpawnables,
+} from './SpawnableRegistry';
+export type { SpawnableDef, ComponentInit } from './SpawnableRegistry';
+
+export { registerCorePrimitives } from './spawnables';
+export { SceneSystemV2 } from './SceneSystemV2';
+export { isSceneV2Enabled, readSceneV2Flag } from './featureFlag';

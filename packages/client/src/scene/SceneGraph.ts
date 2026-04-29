@@ -24,7 +24,25 @@ export interface SceneEntry {
   restPose: RestPose | null;
 }
 
-export class SceneGraph {
+// Common surface shared with the v2 entity-component adapter (SceneSystemV2).
+// Slice #4 deletes this once the legacy implementation goes away.
+export interface ISceneSystem {
+  subscribe(fn: () => void):                                                       () => void;
+  spawn(type: SpawnableType, scene: THREE.Scene, physics: PhysicsWorld):           SceneEntry;
+  ensureObjects(states: ObjectState[], scene: THREE.Scene):                        void;
+  getAll():                                                                        SceneEntry[];
+  getEntry(id: string):                                                            SceneEntry | undefined;
+  findEntry(hit: THREE.Object3D):                                                  SceneEntry | undefined;
+  getPhysicsStates():                                                              ObjectState[];
+  enforceTableBounds():                                                            void;
+  syncFromPhysics():                                                               void;
+  remove(id: string, scene: THREE.Scene, physics: PhysicsWorld | null):            void;
+  applyStates(states: ObjectState[]):                                              void;
+  updateProp(id: string, key: string, value: unknown):                             void;
+  applyProps(id: string, props: Record<string, unknown>):                          void;
+}
+
+export class SceneGraph implements ISceneSystem {
   private entries = new Map<string, SceneEntry>();
   private nextId   = 0;
   private listeners: Array<() => void> = [];

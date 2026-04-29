@@ -3,6 +3,8 @@ import * as THREE from 'three';
 import { createTable, applyTableProp, type TableProps } from './scene/Table';
 import { SceneGraph } from './scene/SceneGraph';
 import { getDieFace } from './scene/objectTypes';
+import { SceneSystemV2 } from './entity/SceneSystemV2';
+import { isSceneV2Enabled } from './entity/featureFlag';
 import { MoveGizmo } from './scene/MoveGizmo';
 import { CameraController } from './camera/CameraController';
 import { PhysicsWorld } from './physics/PhysicsWorld';
@@ -89,7 +91,9 @@ export function ThreeCanvas({
     scene.add(tableMesh);
 
     const camController = new CameraController(camera, renderer.domElement);
-    const graph         = new SceneGraph();
+    const graph: SceneGraph | SceneSystemV2 = isSceneV2Enabled()
+      ? new SceneSystemV2()
+      : new SceneGraph();
 
     freeCameraRef.current = (on) => camController.setRestricted(on);
 
