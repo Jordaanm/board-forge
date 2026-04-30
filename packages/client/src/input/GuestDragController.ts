@@ -5,6 +5,7 @@ import { type Entity } from '../entity/Entity';
 import { TransformComponent } from '../entity/components/TransformComponent';
 import { type ChannelMessage } from '../net/SceneState';
 import { type SeatIndex } from '../seats/SeatLayout';
+import { canManipulate } from '../seats/OwnershipPolicy';
 import { type MoveGizmo, type GizmoAxis } from '../scene/MoveGizmo';
 import { projectRayOntoAxis } from './axisDrag';
 
@@ -65,6 +66,12 @@ export class GuestDragController {
     this.element.removeEventListener('pointerup',   this.onUp);
   }
 
+  // Per slice #6: drag start gated by OwnershipPolicy. Spectators (peerSeat
+  // === null) and non-owner seated peers are refused — no hold-claim sent.
+  canStartDrag(entity: Entity): boolean {
+    return canManipulate({ peerSeat: this.getSelfSeat(), isHost: false }, entity.owner);
+  }
+
   // Per-frame: promote a pending claim to dragging once the host's accept
   // echoes back (entity.heldBy === self seat). Drag UI is deferred until
   // this transition fires, matching the slice's "defers UI feedback" rule.
@@ -103,7 +110,7 @@ export class GuestDragController {
     if (axisName) {
       const target = this.gizmo.getTarget();
       const entity = target ? findEntityByObject3D(target) : undefined;
-      if (entity && entity.type !== 'board') {
+      if (entity && entity.type !== 'board' && this.canStartDrag(entity)) {
         this.beginAxisDrag(entity, axisName);
         this.element.setPointerCapture(e.pointerId);
         return;
@@ -125,6 +132,7 @@ export class GuestDragController {
 
     const entity = findEntityByObject3D(hits[0].object);
     if (!entity) return;
+    if (!this.canStartDrag(entity)) return;
 
     this.pending = {
       entity,
@@ -214,6 +222,7 @@ export class GuestDragController {
     this.pending = null;
     if (p.entity.type === 'board') return; // guests cannot drag boards
     if (p.entity.heldBy !== null)   return; // already held by someone
+    if (!this.canStartDrag(p.entity)) return; // ownership refused
 
     const seat = this.getSelfSeat();
     if (seat === null) return;
@@ -254,6 +263,7 @@ export class GuestDragController {
     const seat = this.getSelfSeat();
     if (seat === null) return;
     if (entity.heldBy !== null) return;
+    if (!this.canStartDrag(entity)) return;
 
     const t = entity.getComponent(TransformComponent);
     const origin = t ? t.object3d.position.clone() : new THREE.Vector3();

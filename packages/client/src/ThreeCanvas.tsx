@@ -8,6 +8,7 @@ import { applySceneMessage } from './entity/GuestReceiver';
 import { EntityComponent } from './entity/EntityComponent';
 import { Scene, entityToSerialized } from './entity/Scene';
 import { HoldService } from './entity/HoldService';
+import { HostInputDispatcher } from './entity/HostInputDispatcher';
 import { MoveGizmo } from './scene/MoveGizmo';
 import { CameraController } from './camera/CameraController';
 import { PhysicsWorld } from './physics/PhysicsWorld';
@@ -16,7 +17,9 @@ import { GuestDragController } from './input/GuestDragController';
 import { GuestInputHandler } from './input/GuestInputHandler';
 import { ContextMenuController, type ContextMenuRequest } from './input/ContextMenuController';
 import { type ChannelMessage, type SpawnableType } from './net/SceneState';
+import { type SceneMessage } from './entity/wire';
 import { type SeatIndex } from './seats/SeatLayout';
+import { EMPTY_PRIVATE_FIELD_REGISTRY, scrubSceneMessage } from './seats/PrivacyScrubber';
 import { type ObjectSummary } from './components/EditorPanel';
 
 export interface ReplicationTarget {
@@ -154,19 +157,27 @@ export function ThreeCanvas({
     let guestInput:  GuestInputHandler   | null = null;
     let hostRepl:    HostReplicatorV2    | null = null;
     let holdSvc:     HoldService         | null = null;
+    let hostInput:   HostInputDispatcher | null = null;
     let contextCtrl: ContextMenuController | null = null;
     let guestDrag:   GuestDragController | null = null;
 
-    const broadcast = (msgs: ChannelMessage[]) => {
+    const broadcast = (msgs: SceneMessage[]) => {
       if (msgs.length === 0) return;
       const targets = getTargetsRef.current();
-      for (const t of targets) for (const m of msgs) sendToRef.current(t.peerId, m);
+      for (const t of targets) {
+        const ctx = { peerSeat: t.peerSeat, isHost: t.isHost };
+        for (const m of msgs) {
+          const scrubbed = scrubSceneMessage(ctx, m, EMPTY_PRIVATE_FIELD_REGISTRY);
+          sendToRef.current(t.peerId, scrubbed);
+        }
+      }
     };
 
     if (isHost) {
       physics    = new PhysicsWorld();
       hostRepl   = new HostReplicatorV2();
       holdSvc    = new HoldService(hostRepl);
+      hostInput  = new HostInputDispatcher(holdSvc, (peerId) => getPeerSeatRef.current(peerId));
       EntityComponent.setHostReplicator(hostRepl);
       graph.setReplicator(hostRepl);
       dragCtrl   = new DragController(
@@ -214,33 +225,10 @@ export function ThreeCanvas({
       );
 
       onMsgRef.current = (peerId, msg) => {
-        if (msg.type === 'guest-drag-move') {
-          guestInput!.handleMessage(peerId, msg);
-          return;
-        }
-        if (msg.type === 'hold-claim') {
-          const entity = Scene.getEntity(msg.entityId);
-          if (entity) holdSvc!.tryClaim(entity, msg.seat);
-          return;
-        }
-        if (msg.type === 'hold-release') {
-          const entity = Scene.getEntity(msg.entityId);
-          if (!entity) return;
-          const senderSeat = getPeerSeatRef.current(peerId);
-          if (senderSeat === null || entity.heldBy !== senderSeat) return;
-          const vel = (msg.vx !== undefined || msg.vy !== undefined || msg.vz !== undefined)
-            ? { vx: msg.vx ?? 0, vy: msg.vy ?? 0, vz: msg.vz ?? 0 }
-            : undefined;
-          holdSvc!.release(entity, vel);
-          return;
-        }
-        if (msg.type === 'request-update') {
-          const entity = Scene.getEntity(msg.entityId);
-          if (!entity) return;
-          const comp = entity.components.get(msg.typeId);
-          if (!comp) return;
-          comp.setState(msg.partial);
-        }
+        if (msg.type === 'guest-drag-move')   { guestInput!.handleMessage(peerId, msg); return; }
+        if (msg.type === 'hold-claim')        { hostInput!.handleHoldClaim(peerId, msg); return; }
+        if (msg.type === 'hold-release')      { hostInput!.handleHoldRelease(peerId, msg); return; }
+        if (msg.type === 'request-update')    { hostInput!.handleRequestUpdate(peerId, msg); return; }
       };
 
       onPeerLeftRef.current = (peerId) => {
@@ -301,8 +289,8 @@ export function ThreeCanvas({
         dragCtrl.update();
         graph.syncFromPhysics();
 
-        broadcast(hostRepl.flushUnreliable() as ChannelMessage[]);
-        broadcast(hostRepl.flushReliable()   as ChannelMessage[]);
+        broadcast(hostRepl.flushUnreliable());
+        broadcast(hostRepl.flushReliable());
 
         const dieFaces: string[] = [];
         for (const e of graph.getAll()) {

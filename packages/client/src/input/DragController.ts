@@ -5,6 +5,7 @@ import { TransformComponent } from '../entity/components/TransformComponent';
 import { PhysicsComponent } from '../entity/components/PhysicsComponent';
 import { type HoldService } from '../entity/HoldService';
 import { type SeatIndex } from '../seats/SeatLayout';
+import { canManipulate } from '../seats/OwnershipPolicy';
 import { CARRY_LIFT_HEIGHT, THROW_VELOCITY_WINDOW_MS } from '../config/dragConfig';
 import { type MoveGizmo, type GizmoAxis } from '../scene/MoveGizmo';
 import { projectRayOntoAxis } from './axisDrag';
@@ -66,6 +67,14 @@ export class DragController {
     this.element.removeEventListener('pointerup',   this.onUp);
   }
 
+  // Per slice #6: host's drag is gated by OwnershipPolicy so the local UX
+  // matches what the host's hold-claim handler would accept. Host context
+  // (`isHost: true`) means canManipulate always returns true here — the
+  // method exists for parity with GuestDragController and for tests.
+  canStartDrag(entity: Entity): boolean {
+    return canManipulate({ peerSeat: this.getSelfSeat(), isHost: true }, entity.owner);
+  }
+
   update() {
     if (this.axisDrag) {
       const a    = this.axisDrag;
@@ -107,6 +116,7 @@ export class DragController {
       const entity = target ? findEntityByObject3D(target) : undefined;
       const body   = entity?.getComponent(PhysicsComponent)?.body;
       if (entity && body) {
+        if (!this.canStartDrag(entity)) return;
         if (this.tryHold(entity)) {
           this.beginAxisDrag(entity, axisName);
           this.element.setPointerCapture(e.pointerId);
@@ -130,6 +140,7 @@ export class DragController {
 
     const entity = findEntityByObject3D(hits[0].object);
     if (!entity) return;
+    if (!this.canStartDrag(entity)) return;
 
     this.pending = {
       entity,

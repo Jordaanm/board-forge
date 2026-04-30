@@ -129,6 +129,7 @@ Rewrite `DragController` and `GuestDragController` against the Entity + Componen
 
 ## 6. Seat integrations: `owner` gating + `privateToSeat` field
 
+**Status:** Completed (typecheck + 153 unit tests pass)
 **Type:** AFK
 **Blocked by:** #5
 
