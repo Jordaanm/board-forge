@@ -106,6 +106,7 @@ Promote v2 to default and delete the flag, `SceneGraph.ts`, `objectTypes.ts`, th
 
 ## 5. Drag rewrite + `heldBy` lifecycle
 
+**Status:** Completed (typecheck + 134 unit tests pass; manual two-tab smoke pending)
 **Type:** AFK
 **Blocked by:** #4
 

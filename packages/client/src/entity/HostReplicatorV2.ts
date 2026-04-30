@@ -77,7 +77,11 @@ export class HostReplicatorV2 {
   }
 
   enqueueHoldRelease(msg: Omit<HoldRelease, 'type'>): void {
-    this.reliableMessages.push({ type: 'hold-release', ...msg });
+    const out: HoldRelease = { type: 'hold-release', entityId: msg.entityId };
+    if (msg.vx !== undefined) out.vx = msg.vx;
+    if (msg.vy !== undefined) out.vy = msg.vy;
+    if (msg.vz !== undefined) out.vz = msg.vz;
+    this.reliableMessages.push(out);
   }
 
   // Drains the unreliable buffer. Called per physics step. Returns at most

@@ -1,7 +1,10 @@
 import * as THREE from 'three';
 import { CARRY_LIFT_HEIGHT, THROW_VELOCITY_WINDOW_MS } from '../config/dragConfig';
-import { type SceneEntry, type ISceneSystem } from '../scene/SceneSystem';
+import { Scene, findEntityByObject3D } from '../entity/Scene';
+import { type Entity } from '../entity/Entity';
+import { TransformComponent } from '../entity/components/TransformComponent';
 import { type ChannelMessage } from '../net/SceneState';
+import { type SeatIndex } from '../seats/SeatLayout';
 import { type MoveGizmo, type GizmoAxis } from '../scene/MoveGizmo';
 import { projectRayOntoAxis } from './axisDrag';
 
@@ -10,7 +13,7 @@ const HOLD_MS = 150;
 const MOVE_PX = 5;
 
 type Pending = {
-  entry:     SceneEntry;
+  entity:    Entity;
   startX:    number;
   startY:    number;
   startT:    number;
@@ -18,17 +21,21 @@ type Pending = {
 };
 
 type AxisDrag = {
-  objectId:  string;
+  entity:    Entity;
   axis:      THREE.Vector3;
   origin:    THREE.Vector3;
   grabAxisT: number;
 };
 
+type State = 'idle' | 'pendingClaim' | 'dragging';
+
 export class GuestDragController {
-  private pending: Pending | null = null;
-  private pendingEmpty: { pointerId: number } | null = null;
-  private heldId:      string | null = null;
-  private axisDrag:    AxisDrag | null = null;
+  private state:         State = 'idle';
+  private pending:       Pending | null = null;
+  private pendingClaim:  Entity | null = null;
+  private heldEntity:    Entity | null = null;
+  private pendingEmpty:  { pointerId: number } | null = null;
+  private axisDrag:      AxisDrag | null = null;
   private holdOffsetX = 0;
   private holdOffsetZ = 0;
   private holdY       = 0;
@@ -40,12 +47,12 @@ export class GuestDragController {
   private readonly velHistory:   { pos: THREE.Vector3; t: number }[] = [];
 
   constructor(
-    private readonly camera:   THREE.PerspectiveCamera,
-    private readonly element:  HTMLElement,
-    private readonly graph:    ISceneSystem,
-    private readonly gizmo:    MoveGizmo,
-    private readonly send:     (msg: ChannelMessage) => void,
-    private readonly onSelect: (id: string | null) => void,
+    private readonly camera:      THREE.PerspectiveCamera,
+    private readonly element:     HTMLElement,
+    private readonly gizmo:       MoveGizmo,
+    private readonly send:        (msg: ChannelMessage) => void,
+    private readonly getSelfSeat: () => SeatIndex | null,
+    private readonly onSelect:    (id: string | null) => void,
   ) {
     element.addEventListener('pointerdown', this.onDown);
     element.addEventListener('pointermove', this.onMove);
@@ -58,9 +65,18 @@ export class GuestDragController {
     this.element.removeEventListener('pointerup',   this.onUp);
   }
 
+  // Per-frame: promote a pending claim to dragging once the host's accept
+  // echoes back (entity.heldBy === self seat). Drag UI is deferred until
+  // this transition fires, matching the slice's "defers UI feedback" rule.
   update() {
     if (this.pending && performance.now() - this.pending.startT >= HOLD_MS) {
       this.beginDrag(this.pending);
+    }
+    if (this.state === 'pendingClaim' && this.pendingClaim) {
+      const seat = this.getSelfSeat();
+      if (seat !== null && this.pendingClaim.heldBy === seat) {
+        this.activateDrag(this.pendingClaim);
+      }
     }
   }
 
@@ -78,7 +94,7 @@ export class GuestDragController {
   }
 
   private onDown = (e: PointerEvent) => {
-    if (e.button !== 0 || this.heldId || this.axisDrag || this.pending || this.pendingEmpty) return;
+    if (e.button !== 0 || this.state !== 'idle' || this.axisDrag || this.pending || this.pendingEmpty) return;
     this.setPointer(e);
     this.raycaster.setFromCamera(this.pointer, this.camera);
 
@@ -86,16 +102,20 @@ export class GuestDragController {
     const axisName = this.gizmo.pickAxis(this.raycaster);
     if (axisName) {
       const target = this.gizmo.getTarget();
-      const entry  = target ? this.graph.findEntry(target) : undefined;
-      if (entry && entry.objectType !== 'board') {
-        this.beginAxisDrag(entry, axisName);
+      const entity = target ? findEntityByObject3D(target) : undefined;
+      if (entity && entity.type !== 'board') {
+        this.beginAxisDrag(entity, axisName);
         this.element.setPointerCapture(e.pointerId);
         return;
       }
     }
 
-    const all  = this.graph.getAll();
-    const hits = this.raycaster.intersectObjects(all.map(en => en.mesh), true);
+    const meshes: THREE.Object3D[] = [];
+    for (const ent of Scene.all()) {
+      const t = ent.getComponent(TransformComponent);
+      if (t?.object3d) meshes.push(t.object3d);
+    }
+    const hits = this.raycaster.intersectObjects(meshes, true);
 
     if (hits.length === 0) {
       this.pendingEmpty = { pointerId: e.pointerId };
@@ -103,11 +123,11 @@ export class GuestDragController {
       return;
     }
 
-    const entry = this.graph.findEntry(hits[0].object);
-    if (!entry) return;
+    const entity = findEntityByObject3D(hits[0].object);
+    if (!entity) return;
 
     this.pending = {
-      entry,
+      entity,
       startX:    e.clientX,
       startY:    e.clientY,
       startT:    performance.now(),
@@ -127,7 +147,7 @@ export class GuestDragController {
       const px = a.origin.x + a.axis.x * delta;
       const py = a.origin.y + a.axis.y * delta;
       const pz = a.origin.z + a.axis.z * delta;
-      this.send({ type: 'guest-drag-move', objectId: a.objectId, px, py, pz });
+      this.send({ type: 'guest-drag-move', objectId: a.entity.id, px, py, pz });
       return;
     }
 
@@ -136,7 +156,7 @@ export class GuestDragController {
       const dy = e.clientY - this.pending.startY;
       if (dx * dx + dy * dy > MOVE_PX * MOVE_PX) this.beginDrag(this.pending);
     }
-    if (!this.heldId) return;
+    if (this.state !== 'dragging' || !this.heldEntity) return;
     this.setPointer(e);
     this.raycaster.setFromCamera(this.pointer, this.camera);
     const pt = this.castToCarryPlane();
@@ -144,7 +164,7 @@ export class GuestDragController {
     this.carryTarget.set(pt.x + this.holdOffsetX, this.holdY, pt.z + this.holdOffsetZ);
     this.velHistory.push({ pos: pt.clone(), t: performance.now() });
     if (this.velHistory.length > VELOCITY_SAMPLES) this.velHistory.shift();
-    this.send({ type: 'guest-drag-move', objectId: this.heldId,
+    this.send({ type: 'guest-drag-move', objectId: this.heldEntity.id,
                 px: this.carryTarget.x, py: this.holdY, pz: this.carryTarget.z });
   };
 
@@ -152,21 +172,34 @@ export class GuestDragController {
     if (e.button !== 0) return;
 
     if (this.axisDrag) {
-      this.send({ type: 'guest-drag-end', objectId: this.axisDrag.objectId, vx: 0, vy: 0, vz: 0 });
+      this.send({ type: 'hold-release', entityId: this.axisDrag.entity.id });
       this.axisDrag = null;
       return;
     }
 
-    if (this.heldId) {
+    if (this.state === 'dragging' && this.heldEntity) {
       const vel = this.computeThrowVelocity();
-      this.send({ type: 'guest-drag-end', objectId: this.heldId, vx: vel.x, vy: 0, vz: vel.z });
-      this.heldId = null;
+      this.send({
+        type: 'hold-release', entityId: this.heldEntity.id,
+        vx: vel.x, vy: 0, vz: vel.z,
+      });
+      this.heldEntity = null;
       this.velHistory.length = 0;
+      this.state = 'idle';
+      return;
+    }
+
+    if (this.state === 'pendingClaim' && this.pendingClaim) {
+      // Host may have accepted but the echo hasn't arrived; release defensively
+      // (idempotent on host — if heldBy was never us, the call no-ops).
+      this.send({ type: 'hold-release', entityId: this.pendingClaim.id });
+      this.pendingClaim = null;
+      this.state = 'idle';
       return;
     }
 
     if (this.pending) {
-      this.onSelect(this.pending.entry.id);
+      this.onSelect(this.pending.entity.id);
       this.pending = null;
       return;
     }
@@ -179,21 +212,37 @@ export class GuestDragController {
 
   private beginDrag(p: Pending) {
     this.pending = null;
-    // Guests cannot drag boards; stays un-selected. Tap-to-select requires pointerup.
-    if (p.entry.objectType === 'board') return;
-    this.heldId = p.entry.id;
+    if (p.entity.type === 'board') return; // guests cannot drag boards
+    if (p.entity.heldBy !== null)   return; // already held by someone
+
+    const seat = this.getSelfSeat();
+    if (seat === null) return;
+
+    this.state = 'pendingClaim';
+    this.pendingClaim = p.entity;
+    this.send({ type: 'hold-claim', entityId: p.entity.id, seat });
+  }
+
+  // Drag UI activates only after the host's hold-claim echo confirms the
+  // entity's heldBy === self seat.
+  private activateDrag(entity: Entity) {
+    this.state = 'dragging';
+    this.heldEntity = entity;
+    this.pendingClaim = null;
     this.velHistory.length = 0;
-    this.send({ type: 'guest-drag-start', objectId: p.entry.id });
-    this.holdY = p.entry.mesh.position.y + CARRY_LIFT_HEIGHT;
+    const t = entity.getComponent(TransformComponent);
+    const meshY = t?.object3d.position.y ?? 0;
+    this.holdY = meshY + CARRY_LIFT_HEIGHT;
     this.carryPlane.constant = -this.holdY;
     const pt = this.castToCarryPlane();
     if (pt) {
-      this.holdOffsetX = p.entry.mesh.position.x - pt.x;
-      this.holdOffsetZ = p.entry.mesh.position.z - pt.z;
+      const meshX = t?.object3d.position.x ?? 0;
+      const meshZ = t?.object3d.position.z ?? 0;
+      this.holdOffsetX = meshX - pt.x;
+      this.holdOffsetZ = meshZ - pt.z;
       this.carryTarget.set(pt.x + this.holdOffsetX, this.holdY, pt.z + this.holdOffsetZ);
       this.velHistory.push({ pos: pt.clone(), t: performance.now() });
-      // Send initial position so host's GuestInputHandler does not snap the body to (0,_,0).
-      this.send({ type: 'guest-drag-move', objectId: p.entry.id,
+      this.send({ type: 'guest-drag-move', objectId: entity.id,
                   px: this.carryTarget.x, py: this.holdY, pz: this.carryTarget.z });
     } else {
       this.holdOffsetX = 0;
@@ -201,22 +250,21 @@ export class GuestDragController {
     }
   }
 
-  private beginAxisDrag(entry: SceneEntry, axisName: GizmoAxis) {
+  private beginAxisDrag(entity: Entity, axisName: GizmoAxis) {
+    const seat = this.getSelfSeat();
+    if (seat === null) return;
+    if (entity.heldBy !== null) return;
+
+    const t = entity.getComponent(TransformComponent);
+    const origin = t ? t.object3d.position.clone() : new THREE.Vector3();
     const axis = axisName === 'x' ? new THREE.Vector3(1, 0, 0)
               :  axisName === 'y' ? new THREE.Vector3(0, 1, 0)
               :                     new THREE.Vector3(0, 0, 1);
-    const origin = entry.mesh.position.clone();
-    const t = projectRayOntoAxis(this.raycaster.ray, origin, axis, this.camera.position);
-    this.axisDrag = {
-      objectId:  entry.id,
-      axis,
-      origin,
-      grabAxisT: t ?? 0,
-    };
-    this.send({ type: 'guest-drag-start', objectId: entry.id });
-    // Seed position so host's GuestInputHandler doesn't snap to (0,_,0) before
-    // the first pointermove arrives.
-    this.send({ type: 'guest-drag-move',  objectId: entry.id,
+    const grabT = projectRayOntoAxis(this.raycaster.ray, origin, axis, this.camera.position);
+
+    this.axisDrag = { entity, axis, origin, grabAxisT: grabT ?? 0 };
+    this.send({ type: 'hold-claim', entityId: entity.id, seat });
+    this.send({ type: 'guest-drag-move', objectId: entity.id,
                 px: origin.x, py: origin.y, pz: origin.z });
   }
 

@@ -5,6 +5,7 @@ import { EditorPanel, type ObjectSummary } from '../components/EditorPanel';
 import { ContextMenu } from '../components/ContextMenu';
 import { type ContextMenuRequest } from '../input/ContextMenuController';
 import { type ChannelMessage, type SpawnableType } from '../net/SceneState';
+import { type SeatIndex } from '../seats/SeatLayout';
 import { DEFAULT_TABLE_PROPS, type TableProps } from '../scene/Table';
 import { RoomStateManager } from '../seats/RoomStateManager';
 import { RoomStateClient } from '../seats/RoomStateClient';
@@ -46,6 +47,8 @@ export function Room({ roomId, isHost }: Props) {
   const sendRef            = useRef<(msg: ChannelMessage) => void>(noop);
   const sendToRef          = useRef<(peerId: string, msg: ChannelMessage) => void>(noop);
   const getTargetsRef      = useRef<() => ReplicationTarget[]>(() => []);
+  const getSelfSeatRef     = useRef<() => SeatIndex | null>(() => null);
+  const getPeerSeatRef     = useRef<(peerId: string) => SeatIndex | null>(() => null);
   const onMsgRef           = useRef<(peerId: string, msg: ChannelMessage) => void>(noop);
   const onPeerLeftRef      = useRef<(peerId: string) => void>(noop);
   const onPeerJoinedRef    = useRef<(peerId: string) => void>(noop);
@@ -121,15 +124,22 @@ export function Room({ roomId, isHost }: Props) {
         isHost:   manager!.isHost(peerId),
       }));
     };
+    getSelfSeatRef.current = () => {
+      if (manager) return manager.getSeat(mgr.getPeerId() ?? '');
+      return client?.getMySeat() ?? null;
+    };
+    getPeerSeatRef.current = (peerId) => manager?.getSeat(peerId) ?? null;
 
     if (isHost) mgr.hostRoom(SIGNALING_URL, roomId);
     else        mgr.joinRoom(SIGNALING_URL, roomId);
 
     return () => {
       mgr.dispose();
-      sendRef.current       = noop;
-      sendToRef.current     = noop;
-      getTargetsRef.current = () => [];
+      sendRef.current        = noop;
+      sendToRef.current      = noop;
+      getTargetsRef.current  = () => [];
+      getSelfSeatRef.current = () => null;
+      getPeerSeatRef.current = () => null;
     };
   }, [roomId, isHost]);
 
@@ -171,6 +181,8 @@ export function Room({ roomId, isHost }: Props) {
         sendRef={sendRef}
         sendToRef={sendToRef}
         getTargetsRef={getTargetsRef}
+        getSelfSeatRef={getSelfSeatRef}
+        getPeerSeatRef={getPeerSeatRef}
         onMsgRef={onMsgRef}
         onPeerLeftRef={onPeerLeftRef}
         onPeerJoinedRef={onPeerJoinedRef}

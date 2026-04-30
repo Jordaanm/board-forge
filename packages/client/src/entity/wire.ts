@@ -71,6 +71,12 @@ export interface HoldClaim {
 export interface HoldRelease {
   type:     'hold-release';
   entityId: string;
+  // End-of-drag velocity (PRD § Drag rewrite — slice #5). Optional because
+  // some releases drop the body where it sits (peer disconnect, axis drag,
+  // pending-claim timeout) without imparting motion.
+  vx?:      number;
+  vy?:      number;
+  vz?:      number;
 }
 
 export interface RequestUpdate {

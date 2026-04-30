@@ -24,7 +24,8 @@
       "PowerShell(Get-NetTCPConnection *)",
       "Bash(curl -sf http://localhost:3001/health)",
       "PowerShell(Get-Process *)",
-      "PowerShell(Test-Path *)"
+      "PowerShell(Test-Path *)",
+      "Bash(echo \"EXIT: $?\")"
     ]
   }
 }

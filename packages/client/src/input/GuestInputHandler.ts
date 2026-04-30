@@ -1,68 +1,37 @@
-import { type ISceneSystem } from '../scene/SceneSystem';
+// Host-side handler for drag input streamed from guests. Slice #5 reworks
+// this around the v2 entity model: ownership is `entity.heldBy`, set by
+// HoldService. drag-move messages only take effect while the sender's seat
+// matches the entity's heldBy.
+
+import { Scene } from '../entity/Scene';
+import { PhysicsComponent } from '../entity/components/PhysicsComponent';
 import { type GuestInputMessage } from '../net/SceneState';
+import { type SeatIndex } from '../seats/SeatLayout';
+import { type HoldService } from '../entity/HoldService';
 
-interface PeerHold {
-  heldObjectId: string | null;
-  carryX:       number;
-  carryY:       number;
-  carryZ:       number;
-}
-
-// Applied on the host to handle drag inputs sent from guests. State is tracked
-// per-peer so multiple guests can drag different objects simultaneously.
 export class GuestInputHandler {
-  private peers = new Map<string, PeerHold>();
+  constructor(
+    private readonly hold: HoldService,
+    private readonly getPeerSeat: (peerId: string) => SeatIndex | null,
+  ) {}
 
-  handleMessage(peerId: string, msg: GuestInputMessage, graph: ISceneSystem) {
-    const peer = this.getOrCreate(peerId);
-
-    if (msg.type === 'guest-drag-start') {
-      peer.heldObjectId = msg.objectId;
-    } else if (msg.type === 'guest-drag-move') {
-      peer.carryX = msg.px;
-      peer.carryY = msg.py;
-      peer.carryZ = msg.pz;
-    } else if (msg.type === 'guest-drag-end') {
-      const entry = graph.getEntry(msg.objectId);
-      if (entry?.body) {
-        entry.body.velocity.set(msg.vx, msg.vy, msg.vz);
-        entry.body.angularVelocity.setZero();
-        entry.body.wakeUp();
-      }
-      peer.heldObjectId = null;
-    }
+  handleMessage(peerId: string, msg: GuestInputMessage) {
+    if (msg.type !== 'guest-drag-move') return;
+    const seat = this.getPeerSeat(peerId);
+    if (seat === null) return;
+    const entity = Scene.getEntity(msg.objectId);
+    if (!entity || entity.heldBy !== seat) return;
+    const body = entity.getComponent(PhysicsComponent)?.body;
+    if (!body) return;
+    body.position.set(msg.px, msg.py, msg.pz);
+    body.velocity.setZero();
+    body.angularVelocity.setZero();
   }
 
-  // Call each frame after physics.step() to hold all carried objects in place.
-  update(graph: ISceneSystem) {
-    for (const peer of this.peers.values()) {
-      if (!peer.heldObjectId) continue;
-      const entry = graph.getEntry(peer.heldObjectId);
-      if (!entry?.body) continue;
-      entry.body.wakeUp();
-      entry.body.position.set(peer.carryX, peer.carryY, peer.carryZ);
-      entry.body.velocity.setZero();
-      entry.body.angularVelocity.setZero();
-    }
-  }
-
-  // Wake the body so it falls naturally rather than freezing mid-air.
-  releasePeer(peerId: string, graph: ISceneSystem) {
-    const peer = this.peers.get(peerId);
-    if (!peer) return;
-    if (peer.heldObjectId) {
-      const entry = graph.getEntry(peer.heldObjectId);
-      if (entry?.body) entry.body.wakeUp();
-    }
-    this.peers.delete(peerId);
-  }
-
-  private getOrCreate(peerId: string): PeerHold {
-    let peer = this.peers.get(peerId);
-    if (!peer) {
-      peer = { heldObjectId: null, carryX: 0, carryY: 0, carryZ: 0 };
-      this.peers.set(peerId, peer);
-    }
-    return peer;
+  // Peer disconnect: drop every hold owned by the leaving seat.
+  releasePeer(peerId: string) {
+    const seat = this.getPeerSeat(peerId);
+    if (seat === null) return;
+    this.hold.releaseAllForSeat(seat);
   }
 }

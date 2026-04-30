@@ -21,7 +21,7 @@ export {
   topoSortComponents,
 } from './ComponentRegistry';
 
-export { Scene, entityToSerialized } from './Scene';
+export { Scene, entityToSerialized, findEntityByObject3D } from './Scene';
 export type { EntitySerialized } from './Scene';
 
 export type {
@@ -41,6 +41,8 @@ export type {
 export { HostReplicatorV2 } from './HostReplicatorV2';
 export { applySceneMessage } from './GuestReceiver';
 export type { GuestReceiveContext } from './GuestReceiver';
+export { HoldService } from './HoldService';
+export type { ReleaseVelocity } from './HoldService';
 
 export { TransformComponent } from './components/TransformComponent';
 export type { TransformState } from './components/TransformComponent';

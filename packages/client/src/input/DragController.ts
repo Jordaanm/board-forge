@@ -1,19 +1,21 @@
 import * as THREE from 'three';
-import * as CANNON from 'cannon-es';
-import { type SceneEntry, type ISceneSystem } from '../scene/SceneSystem';
+import { type Entity } from '../entity/Entity';
+import { Scene, findEntityByObject3D } from '../entity/Scene';
+import { TransformComponent } from '../entity/components/TransformComponent';
+import { PhysicsComponent } from '../entity/components/PhysicsComponent';
+import { type HoldService } from '../entity/HoldService';
+import { type SeatIndex } from '../seats/SeatLayout';
 import { CARRY_LIFT_HEIGHT, THROW_VELOCITY_WINDOW_MS } from '../config/dragConfig';
 import { type MoveGizmo, type GizmoAxis } from '../scene/MoveGizmo';
 import { projectRayOntoAxis } from './axisDrag';
 
 const VELOCITY_SAMPLES = 20;
 
-// A tap must finish in under HOLD_MS with pointer moving less than MOVE_PX
-// for it to count as a select; otherwise the interaction becomes a drag.
 const HOLD_MS = 150;
 const MOVE_PX = 5;
 
 type Pending = {
-  entry:     SceneEntry;
+  entity:    Entity;
   startX:    number;
   startY:    number;
   startT:    number;
@@ -21,7 +23,7 @@ type Pending = {
 };
 
 type AxisDrag = {
-  body:      CANNON.Body;
+  entity:    Entity;
   axis:      THREE.Vector3;
   origin:    THREE.Vector3;
   grabAxisT: number;
@@ -33,7 +35,7 @@ type AxisDrag = {
 export class DragController {
   private pending: Pending | null = null;
   private pendingEmpty: { pointerId: number } | null = null;
-  private held:     { id: string; body: CANNON.Body } | null = null;
+  private held:     { entity: Entity } | null = null;
   private axisDrag: AxisDrag | null = null;
   private holdOffsetX = 0;
   private holdOffsetZ = 0;
@@ -46,11 +48,12 @@ export class DragController {
   private readonly velHistory:    { pos: THREE.Vector3; t: number }[] = [];
 
   constructor(
-    private readonly camera:   THREE.PerspectiveCamera,
-    private readonly element:  HTMLElement,
-    private readonly graph:    ISceneSystem,
-    private readonly gizmo:    MoveGizmo,
-    private readonly onSelect: (id: string | null) => void,
+    private readonly camera:       THREE.PerspectiveCamera,
+    private readonly element:      HTMLElement,
+    private readonly hold:         HoldService,
+    private readonly getSelfSeat:  () => SeatIndex | null,
+    private readonly gizmo:        MoveGizmo,
+    private readonly onSelect:     (id: string | null) => void,
   ) {
     element.addEventListener('pointerdown', this.onDown);
     element.addEventListener('pointermove', this.onMove);
@@ -65,22 +68,19 @@ export class DragController {
 
   update() {
     if (this.axisDrag) {
-      const a = this.axisDrag;
-      a.body.wakeUp();
-      a.body.position.set(a.currentX, a.currentY, a.currentZ);
-      a.body.velocity.setZero();
-      a.body.angularVelocity.setZero();
+      const a    = this.axisDrag;
+      const body = a.entity.getComponent(PhysicsComponent)?.body;
+      if (!body) return;
+      body.position.set(a.currentX, a.currentY, a.currentZ);
       return;
     }
     if (this.pending && performance.now() - this.pending.startT >= HOLD_MS) {
       this.beginDrag(this.pending);
     }
     if (!this.held) return;
-    const { body } = this.held;
-    body.wakeUp();
+    const body = this.held.entity.getComponent(PhysicsComponent)?.body;
+    if (!body) return;
     body.position.set(this.carryTarget.x, this.holdY, this.carryTarget.z);
-    body.velocity.setZero();
-    body.angularVelocity.setZero();
   }
 
   private setPointer(e: PointerEvent) {
@@ -101,20 +101,26 @@ export class DragController {
     this.setPointer(e);
     this.raycaster.setFromCamera(this.pointer, this.camera);
 
-    // Gizmo arms take priority over the object body.
     const axisName = this.gizmo.pickAxis(this.raycaster);
     if (axisName) {
       const target = this.gizmo.getTarget();
-      const entry  = target ? this.graph.findEntry(target) : undefined;
-      if (entry?.body) {
-        this.beginAxisDrag(entry.body, axisName);
-        this.element.setPointerCapture(e.pointerId);
+      const entity = target ? findEntityByObject3D(target) : undefined;
+      const body   = entity?.getComponent(PhysicsComponent)?.body;
+      if (entity && body) {
+        if (this.tryHold(entity)) {
+          this.beginAxisDrag(entity, axisName);
+          this.element.setPointerCapture(e.pointerId);
+        }
         return;
       }
     }
 
-    const all  = this.graph.getAll();
-    const hits = this.raycaster.intersectObjects(all.map(en => en.mesh), true);
+    const meshes: THREE.Object3D[] = [];
+    for (const entity of Scene.all()) {
+      const t = entity.getComponent(TransformComponent);
+      if (t?.object3d) meshes.push(t.object3d);
+    }
+    const hits = this.raycaster.intersectObjects(meshes, true);
 
     if (hits.length === 0) {
       this.pendingEmpty = { pointerId: e.pointerId };
@@ -122,11 +128,11 @@ export class DragController {
       return;
     }
 
-    const entry = this.graph.findEntry(hits[0].object);
-    if (!entry) return;
+    const entity = findEntityByObject3D(hits[0].object);
+    if (!entity) return;
 
     this.pending = {
-      entry,
+      entity,
       startX:    e.clientX,
       startY:    e.clientY,
       startT:    performance.now(),
@@ -168,26 +174,22 @@ export class DragController {
     if (e.button !== 0) return;
 
     if (this.axisDrag) {
-      const { body } = this.axisDrag;
-      body.velocity.setZero();
-      body.angularVelocity.setZero();
-      body.wakeUp();
+      const entity = this.axisDrag.entity;
       this.axisDrag = null;
+      this.hold.release(entity);
       return;
     }
 
     if (this.held) {
-      const { body } = this.held;
+      const entity = this.held.entity;
       this.held = null;
       const vel = this.computeThrowVelocity();
-      body.velocity.set(vel.x, 0, vel.z);
-      body.angularVelocity.setZero();
-      body.wakeUp();
+      this.hold.release(entity, { vx: vel.x, vy: 0, vz: vel.z });
       return;
     }
 
     if (this.pending) {
-      this.onSelect(this.pending.entry.id);
+      this.onSelect(this.pending.entity.id);
       this.pending = null;
       return;
     }
@@ -198,18 +200,26 @@ export class DragController {
     }
   };
 
+  private tryHold(entity: Entity): boolean {
+    const seat = this.getSelfSeat();
+    if (seat === null) return false;
+    return this.hold.tryClaim(entity, seat);
+  }
+
   private beginDrag(p: Pending) {
     this.pending = null;
-    if (!p.entry.body) return; // not draggable — stays un-selected; tap-to-select requires pointerup
-    this.held = { id: p.entry.id, body: p.entry.body };
+    const body = p.entity.getComponent(PhysicsComponent)?.body;
+    if (!body) return;
+    if (!this.tryHold(p.entity)) return;
+
+    this.held = { entity: p.entity };
     this.velHistory.length = 0;
-    p.entry.body.wakeUp();
-    this.holdY = p.entry.body.position.y + CARRY_LIFT_HEIGHT;
+    this.holdY = body.position.y + CARRY_LIFT_HEIGHT;
     this.carryPlane.constant = -this.holdY;
     const pt = this.castToCarryPlane();
     if (pt) {
-      this.holdOffsetX = p.entry.body.position.x - pt.x;
-      this.holdOffsetZ = p.entry.body.position.z - pt.z;
+      this.holdOffsetX = body.position.x - pt.x;
+      this.holdOffsetZ = body.position.z - pt.z;
       this.carryTarget.set(pt.x + this.holdOffsetX, this.holdY, pt.z + this.holdOffsetZ);
       this.velHistory.push({ pos: pt.clone(), t: performance.now() });
     } else {
@@ -218,17 +228,15 @@ export class DragController {
     }
   }
 
-  private beginAxisDrag(body: CANNON.Body, axisName: GizmoAxis) {
+  private beginAxisDrag(entity: Entity, axisName: GizmoAxis) {
+    const body = entity.getComponent(PhysicsComponent)!.body;
     const axis = axisName === 'x' ? new THREE.Vector3(1, 0, 0)
               :  axisName === 'y' ? new THREE.Vector3(0, 1, 0)
               :                     new THREE.Vector3(0, 0, 1);
     const origin = new THREE.Vector3(body.position.x, body.position.y, body.position.z);
     const t = projectRayOntoAxis(this.raycaster.ray, origin, axis, this.camera.position);
-    body.wakeUp();
-    body.velocity.setZero();
-    body.angularVelocity.setZero();
     this.axisDrag = {
-      body, axis, origin,
+      entity, axis, origin,
       grabAxisT: t ?? 0,
       currentX:  origin.x,
       currentY:  origin.y,

@@ -7,6 +7,7 @@ import { HostReplicatorV2 } from './entity/HostReplicatorV2';
 import { applySceneMessage } from './entity/GuestReceiver';
 import { EntityComponent } from './entity/EntityComponent';
 import { Scene, entityToSerialized } from './entity/Scene';
+import { HoldService } from './entity/HoldService';
 import { MoveGizmo } from './scene/MoveGizmo';
 import { CameraController } from './camera/CameraController';
 import { PhysicsWorld } from './physics/PhysicsWorld';
@@ -29,6 +30,8 @@ interface Props {
   sendRef:             MutableRefObject<(msg: ChannelMessage) => void>;
   sendToRef:           MutableRefObject<(peerId: string, msg: ChannelMessage) => void>;
   getTargetsRef:       MutableRefObject<() => ReplicationTarget[]>;
+  getSelfSeatRef:      MutableRefObject<() => SeatIndex | null>;
+  getPeerSeatRef:      MutableRefObject<(peerId: string) => SeatIndex | null>;
   onMsgRef:            MutableRefObject<(peerId: string, msg: ChannelMessage) => void>;
   onPeerLeftRef:       MutableRefObject<(peerId: string) => void>;
   onPeerJoinedRef:     MutableRefObject<(peerId: string) => void>;
@@ -46,7 +49,8 @@ interface Props {
 }
 
 export function ThreeCanvas({
-  isHost, sendRef, sendToRef, getTargetsRef, onMsgRef, onPeerLeftRef, onPeerJoinedRef,
+  isHost, sendRef, sendToRef, getTargetsRef, getSelfSeatRef, getPeerSeatRef,
+  onMsgRef, onPeerLeftRef, onPeerJoinedRef,
   spawnRef, rollRef, onContextMenuRef, rollObjectRef, deleteObjectRef,
   updatePropRef, updateTablePropRef, freeCameraRef, onObjectsChangeRef,
   onSelectRef, setHighlightRef,
@@ -149,6 +153,7 @@ export function ThreeCanvas({
     let dragCtrl:    DragController      | null = null;
     let guestInput:  GuestInputHandler   | null = null;
     let hostRepl:    HostReplicatorV2    | null = null;
+    let holdSvc:     HoldService         | null = null;
     let contextCtrl: ContextMenuController | null = null;
     let guestDrag:   GuestDragController | null = null;
 
@@ -161,10 +166,14 @@ export function ThreeCanvas({
     if (isHost) {
       physics    = new PhysicsWorld();
       hostRepl   = new HostReplicatorV2();
+      holdSvc    = new HoldService(hostRepl);
       EntityComponent.setHostReplicator(hostRepl);
       graph.setReplicator(hostRepl);
-      dragCtrl   = new DragController(camera, renderer.domElement, graph, moveGizmo, selectCallback);
-      guestInput = new GuestInputHandler();
+      dragCtrl   = new DragController(
+        camera, renderer.domElement, holdSvc,
+        () => getSelfSeatRef.current(), moveGizmo, selectCallback,
+      );
+      guestInput = new GuestInputHandler(holdSvc, (peerId) => getPeerSeatRef.current(peerId));
 
       spawnRef.current = (type) => graph.spawn(type, scene, physics!);
 
@@ -205,10 +214,24 @@ export function ThreeCanvas({
       );
 
       onMsgRef.current = (peerId, msg) => {
-        if (msg.type === 'guest-drag-start' ||
-            msg.type === 'guest-drag-move'  ||
-            msg.type === 'guest-drag-end') {
-          guestInput!.handleMessage(peerId, msg, graph);
+        if (msg.type === 'guest-drag-move') {
+          guestInput!.handleMessage(peerId, msg);
+          return;
+        }
+        if (msg.type === 'hold-claim') {
+          const entity = Scene.getEntity(msg.entityId);
+          if (entity) holdSvc!.tryClaim(entity, msg.seat);
+          return;
+        }
+        if (msg.type === 'hold-release') {
+          const entity = Scene.getEntity(msg.entityId);
+          if (!entity) return;
+          const senderSeat = getPeerSeatRef.current(peerId);
+          if (senderSeat === null || entity.heldBy !== senderSeat) return;
+          const vel = (msg.vx !== undefined || msg.vy !== undefined || msg.vz !== undefined)
+            ? { vx: msg.vx ?? 0, vy: msg.vy ?? 0, vz: msg.vz ?? 0 }
+            : undefined;
+          holdSvc!.release(entity, vel);
           return;
         }
         if (msg.type === 'request-update') {
@@ -221,7 +244,7 @@ export function ThreeCanvas({
       };
 
       onPeerLeftRef.current = (peerId) => {
-        guestInput!.releasePeer(peerId, graph);
+        guestInput!.releasePeer(peerId);
       };
 
       onPeerJoinedRef.current = (peerId) => {
@@ -234,8 +257,9 @@ export function ThreeCanvas({
       EntityComponent.setHostReplicator(null);
       graph.setReplicator(null);
       guestDrag   = new GuestDragController(
-        camera, renderer.domElement, graph, moveGizmo,
+        camera, renderer.domElement, moveGizmo,
         (msg) => sendRef.current(msg),
+        () => getSelfSeatRef.current(),
         selectCallback,
       );
 
@@ -267,7 +291,7 @@ export function ThreeCanvas({
     const animate = () => {
       animId = requestAnimationFrame(animate);
 
-      if (isHost && physics && dragCtrl && guestInput && hostRepl) {
+      if (isHost && physics && dragCtrl && hostRepl) {
         const now = performance.now();
         const dt  = Math.min((now - lastTime) / 1000, 0.05);
         lastTime  = now;
@@ -275,7 +299,6 @@ export function ThreeCanvas({
         physics.step(dt);
         graph.enforceTableBounds();
         dragCtrl.update();
-        guestInput.update(graph);
         graph.syncFromPhysics();
 
         broadcast(hostRepl.flushUnreliable() as ChannelMessage[]);
@@ -348,7 +371,8 @@ export function ThreeCanvas({
       container.removeChild(renderer.domElement);
     };
   }, [
-    isHost, sendRef, sendToRef, getTargetsRef, onMsgRef, onPeerLeftRef, onPeerJoinedRef,
+    isHost, sendRef, sendToRef, getTargetsRef, getSelfSeatRef, getPeerSeatRef,
+    onMsgRef, onPeerLeftRef, onPeerJoinedRef,
     spawnRef, rollRef, onContextMenuRef, rollObjectRef, deleteObjectRef,
     updatePropRef, updateTablePropRef, freeCameraRef, onObjectsChangeRef,
     onSelectRef, setHighlightRef,

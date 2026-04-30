@@ -180,6 +180,22 @@ function newGuid(): string {
 // Singleton. Tests can call `Scene.clear()` between runs.
 export const Scene = new SceneImpl();
 
+// Resolve a THREE.Object3D hit (typically from a raycast) back to its owning
+// entity by walking up the parent chain to find an object that matches some
+// entity's TransformComponent.object3d. Returns undefined if the hit isn't
+// rooted in an entity tree.
+export function findEntityByObject3D(hit: import('three').Object3D): Entity | undefined {
+  let obj: import('three').Object3D | null = hit;
+  while (obj) {
+    for (const entity of Scene.all()) {
+      const t = entity.components.get('transform') as { object3d?: import('three').Object3D } | undefined;
+      if (t?.object3d === obj) return entity;
+    }
+    obj = obj.parent;
+  }
+  return undefined;
+}
+
 // Walk an entity to its serialised snapshot. Mirrors the load() input shape so
 // the round-trip is symmetric.
 export function entityToSerialized(e: Entity): EntitySerialized {
