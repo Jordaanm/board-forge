@@ -20,6 +20,9 @@ import { type ChannelMessage, type SpawnableType } from './net/SceneState';
 import { type SceneMessage } from './entity/wire';
 import { type SeatIndex } from './seats/SeatLayout';
 import { EMPTY_PRIVATE_FIELD_REGISTRY, scrubSceneMessage } from './seats/PrivacyScrubber';
+import { CursorTracker } from './cursor/CursorTracker';
+import { CursorOverlay } from './cursor/CursorOverlay';
+import { TABLE_SURFACE_Y } from './scene/Table';
 import { type ObjectSummary } from './components/EditorPanel';
 
 export interface ReplicationTarget {
@@ -34,6 +37,7 @@ interface Props {
   sendToRef:           MutableRefObject<(peerId: string, msg: ChannelMessage) => void>;
   getTargetsRef:       MutableRefObject<() => ReplicationTarget[]>;
   getSelfSeatRef:      MutableRefObject<() => SeatIndex | null>;
+  getSelfPeerIdRef:    MutableRefObject<() => string | null>;
   getPeerSeatRef:      MutableRefObject<(peerId: string) => SeatIndex | null>;
   onMsgRef:            MutableRefObject<(peerId: string, msg: ChannelMessage) => void>;
   onPeerLeftRef:       MutableRefObject<(peerId: string) => void>;
@@ -52,7 +56,7 @@ interface Props {
 }
 
 export function ThreeCanvas({
-  isHost, sendRef, sendToRef, getTargetsRef, getSelfSeatRef, getPeerSeatRef,
+  isHost, sendRef, sendToRef, getTargetsRef, getSelfSeatRef, getSelfPeerIdRef, getPeerSeatRef,
   onMsgRef, onPeerLeftRef, onPeerJoinedRef,
   spawnRef, rollRef, onContextMenuRef, rollObjectRef, deleteObjectRef,
   updatePropRef, updateTablePropRef, freeCameraRef, onObjectsChangeRef,
@@ -107,6 +111,31 @@ export function ThreeCanvas({
 
     const camController = new CameraController(camera, renderer.domElement);
     const graph = new SceneSystemV2();
+
+    const cursorTracker = new CursorTracker();
+    const cursorOverlay = new CursorOverlay(scene);
+
+    // Local pointer state — raycast onto the table plane and broadcast at
+    // ~30Hz so peers see this user's cursor in real time.
+    const cursorRay      = new THREE.Raycaster();
+    const cursorPtrNDC   = new THREE.Vector2();
+    const cursorPlane    = new THREE.Plane(new THREE.Vector3(0, 1, 0), -TABLE_SURFACE_Y);
+    const cursorHit      = new THREE.Vector3();
+    let   cursorPending: { x: number; z: number } | null = null;
+    let   cursorLastSent = 0;
+    const CURSOR_INTERVAL_MS = 33;
+
+    const onCursorMove = (e: PointerEvent) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      cursorPtrNDC.set(
+        ((e.clientX - rect.left) / rect.width)  * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1,
+      );
+      cursorRay.setFromCamera(cursorPtrNDC, camera);
+      if (!cursorRay.ray.intersectPlane(cursorPlane, cursorHit)) return;
+      cursorPending = { x: cursorHit.x, z: cursorHit.z };
+    };
+    renderer.domElement.addEventListener('pointermove', onCursorMove);
 
     freeCameraRef.current = (on) => camController.setRestricted(on);
 
@@ -231,10 +260,21 @@ export function ThreeCanvas({
         if (msg.type === 'hold-release')      { hostInput!.handleHoldRelease(peerId, msg); return; }
         if (msg.type === 'request-update')    { hostInput!.handleRequestUpdate(peerId, msg); return; }
         if (msg.type === 'invoke-action')     { hostInput!.handleInvokeAction(peerId, msg); return; }
+        if (msg.type === 'cursor-position')   {
+          // Update local view, then relay to other peers so guests see each
+          // other (star topology — all guest traffic flows through the host).
+          cursorTracker.update(msg.peerId, msg.seat, msg.x, msg.z);
+          for (const t of getTargetsRef.current()) {
+            if (t.peerId === peerId) continue;
+            sendToRef.current(t.peerId, msg);
+          }
+          return;
+        }
       };
 
       onPeerLeftRef.current = (peerId) => {
         guestInput!.releasePeer(peerId);
+        cursorTracker.remove(peerId);
       };
 
       onPeerJoinedRef.current = (peerId) => {
@@ -271,7 +311,17 @@ export function ThreeCanvas({
             msg.type === 'request-update') {
           applySceneMessage(msg, { isHost: false, scene });
           graph.syncFromScene();
+          return;
         }
+        if (msg.type === 'cursor-position') {
+          if (msg.peerId === getSelfPeerIdRef.current()) return; // skip echo
+          cursorTracker.update(msg.peerId, msg.seat, msg.x, msg.z);
+          return;
+        }
+      };
+
+      onPeerLeftRef.current = (peerId) => {
+        cursorTracker.remove(peerId);
       };
     }
 
@@ -320,6 +370,24 @@ export function ThreeCanvas({
         if (overlayRef.current) overlayRef.current.textContent = dieFaces.join('  |  ');
       }
 
+      // ── Cursor: throttled send + render sync ───────────────────────────
+      const cursorNow = performance.now();
+      if (cursorPending && cursorNow - cursorLastSent >= CURSOR_INTERVAL_MS) {
+        const selfPeerId = getSelfPeerIdRef.current();
+        if (selfPeerId) {
+          sendRef.current({
+            type:   'cursor-position',
+            peerId: selfPeerId,
+            seat:   getSelfSeatRef.current(),
+            x:      cursorPending.x,
+            z:      cursorPending.z,
+          });
+        }
+        cursorLastSent = cursorNow;
+        cursorPending  = null;
+      }
+      cursorOverlay.sync(cursorTracker.all());
+
       if (highlightHelper) highlightHelper.update();
       moveGizmo.update();
 
@@ -338,6 +406,9 @@ export function ThreeCanvas({
     return () => {
       cancelAnimationFrame(animId);
       window.removeEventListener('resize', onResize);
+      renderer.domElement.removeEventListener('pointermove', onCursorMove);
+      cursorOverlay.dispose();
+      cursorTracker.clear();
       unsubscribe();
       clearHighlight();
       moveGizmo.dispose();
@@ -362,7 +433,7 @@ export function ThreeCanvas({
       container.removeChild(renderer.domElement);
     };
   }, [
-    isHost, sendRef, sendToRef, getTargetsRef, getSelfSeatRef, getPeerSeatRef,
+    isHost, sendRef, sendToRef, getTargetsRef, getSelfSeatRef, getSelfPeerIdRef, getPeerSeatRef,
     onMsgRef, onPeerLeftRef, onPeerJoinedRef,
     spawnRef, rollRef, onContextMenuRef, rollObjectRef, deleteObjectRef,
     updatePropRef, updateTablePropRef, freeCameraRef, onObjectsChangeRef,

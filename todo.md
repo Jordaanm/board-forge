@@ -1,5 +1,9 @@
 ## TODO
 
+### Context menu cleanup (post-PRD-2)
+* Remove the transitional `__delete` / `__roll` host-local built-ins from `ContextMenuController.ts`.
+* Once PRD-2 ships a Die component, migrate Roll onto it via `onContextMenu` + `onAction`.
+* Decide whether Delete becomes a base-class action on every entity or moves into the editor panel UX. Either way, drop the special-cased ids in `dispatchMenuAction`.
 
 ### NEW LIST
 

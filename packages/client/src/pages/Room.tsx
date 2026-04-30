@@ -50,6 +50,7 @@ export function Room({ roomId, isHost }: Props) {
   const sendToRef          = useRef<(peerId: string, msg: ChannelMessage) => void>(noop);
   const getTargetsRef      = useRef<() => ReplicationTarget[]>(() => []);
   const getSelfSeatRef     = useRef<() => SeatIndex | null>(() => null);
+  const getSelfPeerIdRef   = useRef<() => string | null>(() => null);
   const getPeerSeatRef     = useRef<(peerId: string) => SeatIndex | null>(() => null);
   const onMsgRef           = useRef<(peerId: string, msg: ChannelMessage) => void>(noop);
   const onPeerLeftRef      = useRef<(peerId: string) => void>(noop);
@@ -130,6 +131,7 @@ export function Room({ roomId, isHost }: Props) {
       if (manager) return manager.getSeat(mgr.getPeerId() ?? '');
       return client?.getMySeat() ?? null;
     };
+    getSelfPeerIdRef.current = () => mgr.getPeerId();
     getPeerSeatRef.current = (peerId) => manager?.getSeat(peerId) ?? null;
 
     if (isHost) mgr.hostRoom(SIGNALING_URL, roomId);
@@ -137,11 +139,12 @@ export function Room({ roomId, isHost }: Props) {
 
     return () => {
       mgr.dispose();
-      sendRef.current        = noop;
-      sendToRef.current      = noop;
-      getTargetsRef.current  = () => [];
-      getSelfSeatRef.current = () => null;
-      getPeerSeatRef.current = () => null;
+      sendRef.current          = noop;
+      sendToRef.current        = noop;
+      getTargetsRef.current    = () => [];
+      getSelfSeatRef.current   = () => null;
+      getSelfPeerIdRef.current = () => null;
+      getPeerSeatRef.current   = () => null;
     };
   }, [roomId, isHost]);
 
@@ -196,6 +199,7 @@ export function Room({ roomId, isHost }: Props) {
         sendToRef={sendToRef}
         getTargetsRef={getTargetsRef}
         getSelfSeatRef={getSelfSeatRef}
+        getSelfPeerIdRef={getSelfPeerIdRef}
         getPeerSeatRef={getPeerSeatRef}
         onMsgRef={onMsgRef}
         onPeerLeftRef={onPeerLeftRef}
