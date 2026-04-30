@@ -16,6 +16,7 @@ import {
   type ComponentPatchesMessage,
   type EntityPatch,
   type EntityFieldsPartial,
+  type EntitySerialized,
   type DespawnBatch,
   type InvokeAction,
   type HoldClaim,
@@ -57,6 +58,10 @@ export class HostReplicatorV2 {
         partial:  { children: newParentChildren },
       });
     }
+  }
+
+  enqueueEntitySpawn(entity: EntitySerialized): void {
+    this.reliableMessages.push({ type: 'entity-spawn', entity });
   }
 
   enqueueDespawn(entityIds: string[]): void {

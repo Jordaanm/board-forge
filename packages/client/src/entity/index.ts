@@ -29,6 +29,7 @@ export type {
   ComponentPatchesMessage,
   EntityPatch,
   EntityFieldsPartial,
+  EntitySpawn,
   DespawnBatch,
   InvokeAction,
   HoldClaim,
@@ -63,4 +64,3 @@ export type { SpawnableDef, ComponentInit } from './SpawnableRegistry';
 
 export { registerCorePrimitives } from './spawnables';
 export { SceneSystemV2 } from './SceneSystemV2';
-export { isSceneV2Enabled, readSceneV2Flag } from './featureFlag';

@@ -1,21 +1,14 @@
-// Adapter exposing a SceneGraph-compatible facade backed by the v2 entity-
-// component model. Slice #3 of issues--scene-graph.md.
-//
-// The legacy DragController / ContextMenuController / HostReplicator /
-// GuestInputHandler all read SceneEntry-shaped records (id / objectType /
-// mesh / body / props). This adapter produces those records by reading from
-// the underlying entities + components, so the surrounding runtime keeps
-// working while v2 owns the storage + view-artefact lifecycle.
-//
-// Slice #4 deletes this adapter and the legacy SceneGraph entirely, cutting
-// the runtime over to the v2 wire shapes.
+// Host-side scene system backed by the v2 entity-component model. Implements
+// the legacy ISceneSystem facade so DragController / GuestInputHandler /
+// ContextMenuController keep working until slices #5 and #7 rewrite them
+// against the Entity model directly.
 
 import * as THREE from 'three';
-import { type SpawnableType, type ObjectState } from '../net/SceneState';
+import { type SpawnableType } from '../net/SceneState';
 import { type PhysicsWorld } from '../physics/PhysicsWorld';
 import { TABLE_SURFACE_Y, TABLE_WIDTH, TABLE_DEPTH } from '../scene/Table';
-import { type RestPose, type SceneEntry, type ISceneSystem } from '../scene/SceneGraph';
-import { Scene } from './Scene';
+import { type RestPose, type SceneEntry, type ISceneSystem } from '../scene/SceneSystem';
+import { Scene, entityToSerialized } from './Scene';
 import { type Entity } from './Entity';
 import { type SpawnContext } from './EntityComponent';
 import { TransformComponent } from './components/TransformComponent';
@@ -24,6 +17,7 @@ import { PhysicsComponent } from './components/PhysicsComponent';
 import { ValueComponent } from './components/ValueComponent';
 import { getSpawnable } from './SpawnableRegistry';
 import { registerCorePrimitives } from './spawnables';
+import { type HostReplicatorV2 } from './HostReplicatorV2';
 
 const REST_VEL_THRESHOLD = 0.05;
 const REST_Y_MAX         = TABLE_SURFACE_Y + 1.4;
@@ -37,9 +31,16 @@ interface AdapterEntry extends SceneEntry {
 export class SceneSystemV2 implements ISceneSystem {
   private entries   = new Map<string, AdapterEntry>();
   private listeners: Array<() => void> = [];
+  private replicator: HostReplicatorV2 | null = null;
 
   constructor() {
     registerCorePrimitives();
+  }
+
+  // Host wires its HostReplicatorV2 in so spawn / despawn / prop changes get
+  // pushed onto the wire. Guests leave it null.
+  setReplicator(r: HostReplicatorV2 | null): void {
+    this.replicator = r;
   }
 
   subscribe(fn: () => void): () => void {
@@ -59,11 +60,10 @@ export class SceneSystemV2 implements ISceneSystem {
 
     const transform = entity.getComponent(TransformComponent)!;
     const phys      = entity.getComponent(PhysicsComponent);
+    const mesh      = entity.getComponent(MeshComponent)!;
 
-    // Match the legacy spawn pose distribution + lift height.
     const x = (Math.random() - 0.5) * 6;
     const z = (Math.random() - 0.5) * 3;
-    const mesh = entity.getComponent(MeshComponent)!;
     const [, hy] = mesh.halfExtents();
     const y = TABLE_SURFACE_Y + hy + 0.5;
     transform.setState({ position: [x, y, z], rotation: transform.state.rotation, scale: transform.state.scale });
@@ -76,27 +76,32 @@ export class SceneSystemV2 implements ISceneSystem {
     const entry = this.materialise(entity, { px: x, py: y, pz: z, qx: 0, qy: 0, qz: 0, qw: 1 });
     this.entries.set(entity.id, entry);
     this.notify();
+
+    if (this.replicator) this.replicator.enqueueEntitySpawn(entityToSerialized(entity));
     return entry;
   }
 
-  // ── Guest: ensure entities exist for inbound IDs ─────────────────────────
-  ensureObjects(states: ObjectState[], scene: THREE.Scene): void {
+  // ── Host or Guest: rebuild SceneEntry views for entities that the Scene
+  // already knows about but this adapter hasn't materialised yet. Called on
+  // the guest after applySceneMessage processes an entity-spawn — the entity
+  // exists in Scene but has no SceneEntry view here.
+  syncFromScene(): void {
     let added = false;
-    for (const s of states) {
-      if (this.entries.has(s.id)) continue;
-      const ctx: SpawnContext = { scene, physics: null };
-      const entity = Scene.spawn(s.objectType, ctx, { id: s.id });
-      const transform = entity.getComponent(TransformComponent)!;
-      transform.setState({
-        position: [s.px, s.py, s.pz],
-        rotation: [s.qx, s.qy, s.qz, s.qw],
-        scale:    transform.state.scale,
-      });
-      const entry = this.materialise(entity, null);
-      this.entries.set(s.id, entry);
+    for (const entity of Scene.all()) {
+      if (this.entries.has(entity.id)) continue;
+      const transform = entity.getComponent(TransformComponent);
+      if (!transform || !transform.object3d) continue;
+      this.entries.set(entity.id, this.materialise(entity, null));
       added = true;
     }
-    if (added) this.notify();
+    let removed = false;
+    for (const id of [...this.entries.keys()]) {
+      if (!Scene.has(id)) {
+        this.entries.delete(id);
+        removed = true;
+      }
+    }
+    if (added || removed) this.notify();
   }
 
   // ── Lookups ──────────────────────────────────────────────────────────────
@@ -151,44 +156,20 @@ export class SceneSystemV2 implements ISceneSystem {
     }
   }
 
-  getPhysicsStates(): ObjectState[] {
-    const out: ObjectState[] = [];
-    for (const entry of this.entries.values()) {
-      if (!entry.body) continue;
-      out.push({
-        id:         entry.id,
-        objectType: entry.objectType,
-        px: entry.body.position.x,    py: entry.body.position.y,    pz: entry.body.position.z,
-        qx: entry.body.quaternion.x,  qy: entry.body.quaternion.y,
-        qz: entry.body.quaternion.z,  qw: entry.body.quaternion.w,
-      });
-    }
-    return out;
-  }
-
   // ── Despawn ──────────────────────────────────────────────────────────────
   remove(id: string, scene: THREE.Scene, physics: PhysicsWorld | null): void {
     const entry = this.entries.get(id);
     if (!entry) return;
-    Scene.despawn(entry.entityId, { scene, physics });
+    const removed = Scene.despawn(entry.entityId, { scene, physics });
     this.entries.delete(id);
     this.notify();
-  }
-
-  // ── Guest: apply replicated state ────────────────────────────────────────
-  applyStates(states: ObjectState[]): void {
-    for (const s of states) {
-      const entry = this.entries.get(s.id);
-      if (!entry) continue;
-      entry.mesh.position.set(s.px, s.py, s.pz);
-      entry.mesh.quaternion.set(s.qx, s.qy, s.qz, s.qw);
-    }
+    if (this.replicator && removed.length > 0) this.replicator.enqueueDespawn(removed);
   }
 
   // ── Property updates ─────────────────────────────────────────────────────
-  // Maps legacy `props` keys onto component state. PRD-2 will push these
-  // through the v2 wire shapes directly; until slice 4, the legacy shape
-  // remains the host-runtime contract.
+  // Maps legacy `props` keys (consumed by EditorPanel) onto component state +
+  // entity-level fields. Slice #7 collapses these into a single component-
+  // driven path via invoke-action; for now this is the editor's write surface.
   updateProp(id: string, key: string, value: unknown): void {
     const entry = this.entries.get(id);
     if (!entry) return;
@@ -214,6 +195,9 @@ export class SceneSystemV2 implements ISceneSystem {
   private applyPropToEntity(entity: Entity, key: string, value: unknown): void {
     if (key === 'name') {
       entity.name = String(value);
+      if (this.replicator) {
+        this.replicator.enqueueEntityPatch(entity.id, { name: entity.name });
+      }
       return;
     }
     const mesh = entity.getComponent(MeshComponent);
@@ -262,4 +246,3 @@ function derivePropsView(entity: Entity): Record<string, unknown> {
   }
   return props;
 }
-

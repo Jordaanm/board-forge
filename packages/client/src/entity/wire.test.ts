@@ -3,6 +3,7 @@ import {
   type ComponentPatch,
   type ComponentPatchesMessage,
   type EntityPatch,
+  type EntitySpawn,
   type DespawnBatch,
   type InvokeAction,
   type HoldClaim,
@@ -39,6 +40,18 @@ describe('wire encode/decode round-trip', () => {
       type: 'entity-patch',
       entityId: 'e1',
       partial: { name: 'X', tags: ['a'], owner: 2, privateToSeat: null, parentId: 'p', children: ['c'] },
+    };
+    expect(roundTrip(m)).toEqual(m);
+  });
+
+  test('EntitySpawn', () => {
+    const m: EntitySpawn = {
+      type:   'entity-spawn',
+      entity: {
+        id: 'e1', type: 'die', name: 'Die', tags: ['die'],
+        owner: null, privateToSeat: null, parentId: null, children: [],
+        components: { transform: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } },
+      },
     };
     expect(roundTrip(m)).toEqual(m);
   });
@@ -92,6 +105,11 @@ describe('wire encode/decode round-trip', () => {
   test('SceneMessage union accepts all message kinds', () => {
     const messages: SceneMessage[] = [
       { type: 'component-patches', channel: 'reliable', patches: [] },
+      { type: 'entity-spawn', entity: {
+        id: 'e', type: 't', name: 'n', tags: [],
+        owner: null, privateToSeat: null, parentId: null, children: [],
+        components: {},
+      } },
       { type: 'entity-patch', entityId: 'e', partial: {} },
       { type: 'despawn-batch', entityIds: [] },
       { type: 'invoke-action', entityId: 'e', componentTypeId: 't', actionId: 'a' },
@@ -99,6 +117,6 @@ describe('wire encode/decode round-trip', () => {
       { type: 'hold-release', entityId: 'e' },
       { type: 'request-update', entityId: 'e', typeId: 't', partial: {} },
     ];
-    expect(messages).toHaveLength(7);
+    expect(messages).toHaveLength(8);
   });
 });

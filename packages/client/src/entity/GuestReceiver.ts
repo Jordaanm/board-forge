@@ -5,17 +5,28 @@
 // state. Uses `applyRemoteState` for component patches so replication is not
 // re-queued. `invoke-action` is host-only logic and is dropped on the guest.
 
+import * as THREE from 'three';
 import { Scene } from './Scene';
 import { type EntityFieldsPartial, type SceneMessage } from './wire';
 import { type Entity } from './Entity';
+import { type SpawnContext } from './EntityComponent';
 
 export interface GuestReceiveContext {
   // True on the host (where this dispatcher should ignore guest-only paths).
   isHost?: boolean;
+  scene?: THREE.Scene;
 }
 
-export function applySceneMessage(msg: SceneMessage, _ctx: GuestReceiveContext = {}): void {
+export function applySceneMessage(msg: SceneMessage, ctx: GuestReceiveContext = {}): void {
   switch (msg.type) {
+    case 'entity-spawn': {
+      if (Scene.has(msg.entity.id)) return;
+      if (!ctx.scene) return;
+      const spawnCtx: SpawnContext = { scene: ctx.scene, physics: null };
+      Scene.load([msg.entity], spawnCtx);
+      return;
+    }
+
     case 'component-patches': {
       for (const p of msg.patches) {
         const entity = Scene.getEntity(p.entityId);
@@ -37,9 +48,11 @@ export function applySceneMessage(msg: SceneMessage, _ctx: GuestReceiveContext =
     case 'despawn-batch': {
       // Reverse-tree order from the host. We delete in the given order; any
       // residual references in surviving entities' `children` arrays are the
-      // host's job to fix up via accompanying entity-patches.
+      // host's job to fix up via accompanying entity-patches. Components run
+      // onDespawn so view artefacts get torn down.
+      const spawnCtx: SpawnContext = { scene: ctx.scene ?? new THREE.Scene(), physics: null };
       for (const id of msg.entityIds) {
-        Scene.removeEntity(id);
+        Scene.despawn(id, spawnCtx);
       }
       return;
     }

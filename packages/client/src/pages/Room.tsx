@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { ThreeCanvas } from '../ThreeCanvas';
+import { ThreeCanvas, type ReplicationTarget } from '../ThreeCanvas';
 import { ConnectionManager } from '../net/ConnectionManager';
 import { EditorPanel, type ObjectSummary } from '../components/EditorPanel';
 import { ContextMenu } from '../components/ContextMenu';
 import { type ContextMenuRequest } from '../input/ContextMenuController';
-import { type ChannelMessage, type SpawnableType, type GameMessage } from '../net/SceneState';
-import { type ReplicationTarget } from '../net/HostReplicator';
+import { type ChannelMessage, type SpawnableType } from '../net/SceneState';
 import { DEFAULT_TABLE_PROPS, type TableProps } from '../scene/Table';
 import { RoomStateManager } from '../seats/RoomStateManager';
 import { RoomStateClient } from '../seats/RoomStateClient';
@@ -45,10 +44,11 @@ export function Room({ roomId, isHost }: Props) {
   const [tableProps,   setTableProps]   = useState<TableProps>(DEFAULT_TABLE_PROPS);
 
   const sendRef            = useRef<(msg: ChannelMessage) => void>(noop);
-  const sendToRef          = useRef<(peerId: string, msg: GameMessage) => void>(noop);
+  const sendToRef          = useRef<(peerId: string, msg: ChannelMessage) => void>(noop);
   const getTargetsRef      = useRef<() => ReplicationTarget[]>(() => []);
   const onMsgRef           = useRef<(peerId: string, msg: ChannelMessage) => void>(noop);
   const onPeerLeftRef      = useRef<(peerId: string) => void>(noop);
+  const onPeerJoinedRef    = useRef<(peerId: string) => void>(noop);
   const spawnRef           = useRef<(type: SpawnableType) => void>(noop);
   const rollRef            = useRef<() => void>(noop);
   const onContextMenuRef   = useRef<(req: ContextMenuRequest) => void>(noop);
@@ -96,6 +96,7 @@ export function Room({ roomId, isHost }: Props) {
         manager.assignOnJoin(peerId);
         const snapshotMsg: RoomStateMessage = { type: 'room-state', snapshot: manager.snapshot() };
         mgr.sendTo(peerId, snapshotMsg);
+        onPeerJoinedRef.current(peerId);
       },
       (peerId) => {
         if (isHost) {
@@ -172,6 +173,7 @@ export function Room({ roomId, isHost }: Props) {
         getTargetsRef={getTargetsRef}
         onMsgRef={onMsgRef}
         onPeerLeftRef={onPeerLeftRef}
+        onPeerJoinedRef={onPeerJoinedRef}
         spawnRef={spawnRef}
         rollRef={rollRef}
         onContextMenuRef={onContextMenuRef}

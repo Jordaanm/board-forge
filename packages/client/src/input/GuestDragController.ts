@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { CARRY_LIFT_HEIGHT, THROW_VELOCITY_WINDOW_MS } from '../config/dragConfig';
-import { type SceneEntry, type ISceneSystem } from '../scene/SceneGraph';
+import { type SceneEntry, type ISceneSystem } from '../scene/SceneSystem';
 import { type ChannelMessage } from '../net/SceneState';
 import { type MoveGizmo, type GizmoAxis } from '../scene/MoveGizmo';
 import { projectRayOntoAxis } from './axisDrag';

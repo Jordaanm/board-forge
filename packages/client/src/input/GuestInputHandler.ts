@@ -1,4 +1,4 @@
-import { type ISceneSystem } from '../scene/SceneGraph';
+import { type ISceneSystem } from '../scene/SceneSystem';
 import { type GuestInputMessage } from '../net/SceneState';
 
 interface PeerHold {

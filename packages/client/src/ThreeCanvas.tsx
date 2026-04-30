@@ -1,10 +1,12 @@
 import { useEffect, useRef, type MutableRefObject } from 'react';
 import * as THREE from 'three';
 import { createTable, applyTableProp, type TableProps } from './scene/Table';
-import { SceneGraph } from './scene/SceneGraph';
-import { getDieFace } from './scene/objectTypes';
+import { getDieFace } from './scene/dieFace';
 import { SceneSystemV2 } from './entity/SceneSystemV2';
-import { isSceneV2Enabled } from './entity/featureFlag';
+import { HostReplicatorV2 } from './entity/HostReplicatorV2';
+import { applySceneMessage } from './entity/GuestReceiver';
+import { EntityComponent } from './entity/EntityComponent';
+import { Scene, entityToSerialized } from './entity/Scene';
 import { MoveGizmo } from './scene/MoveGizmo';
 import { CameraController } from './camera/CameraController';
 import { PhysicsWorld } from './physics/PhysicsWorld';
@@ -12,18 +14,24 @@ import { DragController } from './input/DragController';
 import { GuestDragController } from './input/GuestDragController';
 import { GuestInputHandler } from './input/GuestInputHandler';
 import { ContextMenuController, type ContextMenuRequest } from './input/ContextMenuController';
-import { HostReplicator, type ReplicationTarget } from './net/HostReplicator';
-import { GuestInterpolator } from './net/GuestInterpolator';
-import { type ChannelMessage, type GameMessage, type SpawnableType } from './net/SceneState';
+import { type ChannelMessage, type SpawnableType } from './net/SceneState';
+import { type SeatIndex } from './seats/SeatLayout';
 import { type ObjectSummary } from './components/EditorPanel';
+
+export interface ReplicationTarget {
+  peerId:   string;
+  peerSeat: SeatIndex | null;
+  isHost:   boolean;
+}
 
 interface Props {
   isHost:              boolean;
   sendRef:             MutableRefObject<(msg: ChannelMessage) => void>;
-  sendToRef:           MutableRefObject<(peerId: string, msg: GameMessage) => void>;
+  sendToRef:           MutableRefObject<(peerId: string, msg: ChannelMessage) => void>;
   getTargetsRef:       MutableRefObject<() => ReplicationTarget[]>;
   onMsgRef:            MutableRefObject<(peerId: string, msg: ChannelMessage) => void>;
   onPeerLeftRef:       MutableRefObject<(peerId: string) => void>;
+  onPeerJoinedRef:     MutableRefObject<(peerId: string) => void>;
   spawnRef:            MutableRefObject<(type: SpawnableType) => void>;
   rollRef:             MutableRefObject<() => void>;
   onContextMenuRef:    MutableRefObject<(req: ContextMenuRequest) => void>;
@@ -38,8 +46,8 @@ interface Props {
 }
 
 export function ThreeCanvas({
-  isHost, sendRef, sendToRef, getTargetsRef, onMsgRef, onPeerLeftRef, spawnRef, rollRef,
-  onContextMenuRef, rollObjectRef, deleteObjectRef,
+  isHost, sendRef, sendToRef, getTargetsRef, onMsgRef, onPeerLeftRef, onPeerJoinedRef,
+  spawnRef, rollRef, onContextMenuRef, rollObjectRef, deleteObjectRef,
   updatePropRef, updateTablePropRef, freeCameraRef, onObjectsChangeRef,
   onSelectRef, setHighlightRef,
 }: Props) {
@@ -91,9 +99,7 @@ export function ThreeCanvas({
     scene.add(tableMesh);
 
     const camController = new CameraController(camera, renderer.domElement);
-    const graph: SceneGraph | SceneSystemV2 = isSceneV2Enabled()
-      ? new SceneSystemV2()
-      : new SceneGraph();
+    const graph = new SceneSystemV2();
 
     freeCameraRef.current = (on) => camController.setRestricted(on);
 
@@ -128,8 +134,6 @@ export function ThreeCanvas({
 
     const selectCallback = (id: string | null) => onSelectRef.current(id);
 
-    // Push graph snapshots to React on every change. Also clean up a stale
-    // highlight if the selected entry was just removed.
     const unsubscribe = graph.subscribe(() => {
       if (highlightId && !graph.getEntry(highlightId)) {
         highlightId = null;
@@ -144,19 +148,23 @@ export function ThreeCanvas({
     let physics:     PhysicsWorld        | null = null;
     let dragCtrl:    DragController      | null = null;
     let guestInput:  GuestInputHandler   | null = null;
-    let hostRepl:    HostReplicator      | null = null;
+    let hostRepl:    HostReplicatorV2    | null = null;
     let contextCtrl: ContextMenuController | null = null;
-    let guestInterp: GuestInterpolator   | null = null;
     let guestDrag:   GuestDragController | null = null;
+
+    const broadcast = (msgs: ChannelMessage[]) => {
+      if (msgs.length === 0) return;
+      const targets = getTargetsRef.current();
+      for (const t of targets) for (const m of msgs) sendToRef.current(t.peerId, m);
+    };
 
     if (isHost) {
       physics    = new PhysicsWorld();
+      hostRepl   = new HostReplicatorV2();
+      EntityComponent.setHostReplicator(hostRepl);
+      graph.setReplicator(hostRepl);
       dragCtrl   = new DragController(camera, renderer.domElement, graph, moveGizmo, selectCallback);
       guestInput = new GuestInputHandler();
-      hostRepl   = new HostReplicator({
-        getTargets: () => getTargetsRef.current(),
-        sendTo:     (peerId, msg) => sendToRef.current(peerId, msg),
-      });
 
       spawnRef.current = (type) => graph.spawn(type, scene, physics!);
 
@@ -185,20 +193,11 @@ export function ThreeCanvas({
         e.body.velocity.set((Math.random() - 0.5) * 4, 3, (Math.random() - 0.5) * 4);
       };
 
-      deleteObjectRef.current = (id) => {
-        graph.remove(id, scene, physics);
-        sendRef.current({ type: 'delete', id });
-      };
+      deleteObjectRef.current = (id) => graph.remove(id, scene, physics);
 
-      updatePropRef.current = (id, key, value) => {
-        graph.updateProp(id, key, value);
-        sendRef.current({ type: 'update-props', id, props: { [key]: value } });
-      };
+      updatePropRef.current = (id, key, value) => graph.updateProp(id, key, value);
 
-      updateTablePropRef.current = (key, value) => {
-        applyTableProp(tableMesh, key, value);
-        sendRef.current({ type: 'table-update', props: { [key]: value } });
-      };
+      updateTablePropRef.current = (key, value) => applyTableProp(tableMesh, key, value);
 
       contextCtrl = new ContextMenuController(
         renderer.domElement, camera, graph,
@@ -210,6 +209,14 @@ export function ThreeCanvas({
             msg.type === 'guest-drag-move'  ||
             msg.type === 'guest-drag-end') {
           guestInput!.handleMessage(peerId, msg, graph);
+          return;
+        }
+        if (msg.type === 'request-update') {
+          const entity = Scene.getEntity(msg.entityId);
+          if (!entity) return;
+          const comp = entity.components.get(msg.typeId);
+          if (!comp) return;
+          comp.setState(msg.partial);
         }
       };
 
@@ -217,8 +224,15 @@ export function ThreeCanvas({
         guestInput!.releasePeer(peerId, graph);
       };
 
+      onPeerJoinedRef.current = (peerId) => {
+        for (const entity of Scene.all()) {
+          sendToRef.current(peerId, { type: 'entity-spawn', entity: entityToSerialized(entity) });
+        }
+      };
+
     } else {
-      guestInterp = new GuestInterpolator();
+      EntityComponent.setHostReplicator(null);
+      graph.setReplicator(null);
       guestDrag   = new GuestDragController(
         camera, renderer.domElement, graph, moveGizmo,
         (msg) => sendRef.current(msg),
@@ -232,19 +246,16 @@ export function ThreeCanvas({
       );
 
       onMsgRef.current = (_peerId, msg) => {
-        if (msg.type === 'snapshot' || msg.type === 'patch') {
-          guestInterp!.receive(msg);
-          const objects = msg.type === 'snapshot' ? msg.objects : msg.changed;
-          graph.ensureObjects(objects, scene);
-        } else if (msg.type === 'delete') {
-          guestInterp!.receive(msg);
-          graph.remove(msg.id, scene, null);
-        } else if (msg.type === 'update-props') {
-          graph.applyProps(msg.id, msg.props);
-        } else if (msg.type === 'table-update') {
-          for (const [k, v] of Object.entries(msg.props)) {
-            applyTableProp(tableMesh, k as keyof TableProps, v);
-          }
+        if (msg.type === 'entity-spawn'      ||
+            msg.type === 'entity-patch'      ||
+            msg.type === 'component-patches' ||
+            msg.type === 'despawn-batch'     ||
+            msg.type === 'invoke-action'     ||
+            msg.type === 'hold-claim'        ||
+            msg.type === 'hold-release'      ||
+            msg.type === 'request-update') {
+          applySceneMessage(msg, { isHost: false, scene });
+          graph.syncFromScene();
         }
       };
     }
@@ -266,9 +277,10 @@ export function ThreeCanvas({
         dragCtrl.update();
         guestInput.update(graph);
         graph.syncFromPhysics();
-        hostRepl.update(graph.getPhysicsStates());
 
-        // Die face overlay
+        broadcast(hostRepl.flushUnreliable() as ChannelMessage[]);
+        broadcast(hostRepl.flushReliable()   as ChannelMessage[]);
+
         const dieFaces: string[] = [];
         for (const e of graph.getAll()) {
           if (e.objectType !== 'die' || !e.body) continue;
@@ -282,16 +294,14 @@ export function ThreeCanvas({
         }
         if (overlayRef.current) overlayRef.current.textContent = dieFaces.join('  |  ');
 
-      } else if (!isHost && guestInterp) {
-        const states = guestInterp.update();
-        graph.applyStates(states);
+      } else if (!isHost) {
         guestDrag?.update();
 
         const dieFaces: string[] = [];
-        for (const s of states) {
-          if (s.objectType === 'die') {
-            dieFaces.push(`D6: ${getDieFace(s.qx, s.qy, s.qz, s.qw)}`);
-          }
+        for (const e of graph.getAll()) {
+          if (e.objectType !== 'die') continue;
+          const q = e.mesh.quaternion;
+          dieFaces.push(`D6: ${getDieFace(q.x, q.y, q.z, q.w)}`);
         }
         if (overlayRef.current) overlayRef.current.textContent = dieFaces.join('  |  ');
       }
@@ -321,8 +331,11 @@ export function ThreeCanvas({
       dragCtrl?.dispose();
       guestDrag?.dispose();
       contextCtrl?.dispose();
+      EntityComponent.setHostReplicator(null);
+      Scene.clear();
       if (!isHost) onMsgRef.current = () => {};
       onPeerLeftRef.current   = () => {};
+      onPeerJoinedRef.current = () => {};
       spawnRef.current        = () => {};
       rollRef.current         = () => {};
       rollObjectRef.current   = () => {};
@@ -335,8 +348,8 @@ export function ThreeCanvas({
       container.removeChild(renderer.domElement);
     };
   }, [
-    isHost, sendRef, sendToRef, getTargetsRef, onMsgRef, onPeerLeftRef, spawnRef, rollRef,
-    onContextMenuRef, rollObjectRef, deleteObjectRef,
+    isHost, sendRef, sendToRef, getTargetsRef, onMsgRef, onPeerLeftRef, onPeerJoinedRef,
+    spawnRef, rollRef, onContextMenuRef, rollObjectRef, deleteObjectRef,
     updatePropRef, updateTablePropRef, freeCameraRef, onObjectsChangeRef,
     onSelectRef, setHighlightRef,
   ]);

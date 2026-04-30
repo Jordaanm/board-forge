@@ -26,7 +26,12 @@ describe('HostReplicatorV2 channel separation', () => {
     ]);
   });
 
-  test('entity-patch / despawn / invoke / hold-* always go to reliable', () => {
+  test('entity-spawn / entity-patch / despawn / invoke / hold-* always go to reliable', () => {
+    r.enqueueEntitySpawn({
+      id: 'e', type: 'die', name: 'D', tags: [],
+      owner: null, privateToSeat: null, parentId: null, children: [],
+      components: { value: { v: 6 } },
+    });
     r.enqueueEntityPatch('e', { name: 'X' });
     r.enqueueDespawn(['c1', 'p']);
     r.enqueueInvokeAction({ entityId: 'e', componentTypeId: 'die', actionId: 'roll' });
@@ -36,7 +41,7 @@ describe('HostReplicatorV2 channel separation', () => {
     expect(r.flushUnreliable()).toEqual([]);
     const reliable = r.flushReliable();
     expect(reliable.map(m => m.type)).toEqual([
-      'entity-patch', 'despawn-batch', 'invoke-action', 'hold-claim', 'hold-release',
+      'entity-spawn', 'entity-patch', 'despawn-batch', 'invoke-action', 'hold-claim', 'hold-release',
     ]);
   });
 });

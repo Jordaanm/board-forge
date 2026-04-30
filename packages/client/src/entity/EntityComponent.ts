@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { type Entity } from './Entity';
 import { type SeatIndex } from '../seats/SeatLayout';
 import { type PhysicsWorld } from '../physics/PhysicsWorld';
+import { type HostReplicatorV2 } from './HostReplicatorV2';
 
 export type ReplicationChannel = 'reliable' | 'unreliable';
 
@@ -56,6 +57,15 @@ export abstract class EntityComponent<TState extends object> {
   static requires: readonly string[]  = [];
   static channel:  ReplicationChannel = 'reliable';
 
+  // Host-only — set at host runtime startup so setState pushes patches onto
+  // the wire. Stays null on the guest (where setState is never called by the
+  // engine; guests use applyRemoteState).
+  static hostReplicator: HostReplicatorV2 | null = null;
+
+  static setHostReplicator(r: HostReplicatorV2 | null): void {
+    EntityComponent.hostReplicator = r;
+  }
+
   state!:  TState;
   entity!: Entity;
 
@@ -69,11 +79,19 @@ export abstract class EntityComponent<TState extends object> {
   onOwnerChanged  (_newOwner: SeatIndex | null, _oldOwner: SeatIndex | null):            void { }
   onAction        (_actionId: string, _args: object | undefined, _ctx: ActionContext):   void { }
 
-  // Host-only at runtime. Merges into `state`, fires `onPropertiesChanged`.
-  // Slice #2 (replication) extends this to queue a per-component patch.
+  // Host-only at runtime. Merges into `state`, fires `onPropertiesChanged`,
+  // and queues a ComponentPatch on the host replicator (if registered).
   setState(patch: Partial<TState>): void {
     Object.assign(this.state as object, patch);
     this.onPropertiesChanged(patch);
+    const r = EntityComponent.hostReplicator;
+    if (r && this.entity) {
+      const ctor = this.constructor as ComponentClass;
+      r.enqueueComponentPatch(
+        { entityId: this.entity.id, typeId: ctor.typeId, partial: patch as Record<string, unknown> },
+        ctor.channel,
+      );
+    }
   }
 
   // Inbound network path. Same merge + hook, never re-queues replication.

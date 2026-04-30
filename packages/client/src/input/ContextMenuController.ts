@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { type SpawnableType } from '../net/SceneState';
-import { type ActionDef, OBJECT_TYPE_REGISTRY } from '../scene/objectTypes';
-import { type ISceneSystem } from '../scene/SceneGraph';
+import { type ActionDef, OBJECT_META } from '../scene/objectMeta';
+import { type ISceneSystem } from '../scene/SceneSystem';
 
 export type ContextMenuRequest = {
   x: number;
@@ -56,7 +56,7 @@ export class ContextMenuController {
 
     if (this.requireSelectedId && this.requireSelectedId() !== entry.id) return;
 
-    const def       = OBJECT_TYPE_REGISTRY[entry.objectType];
+    const def       = OBJECT_META[entry.objectType];
     const itemCount = def.actions.length + 1; // +1 for Delete
     const menuH     = MENU_HEADER_H + itemCount * MENU_ITEM_H + MENU_PADDING;
     const nameProp  = entry.props['name'];

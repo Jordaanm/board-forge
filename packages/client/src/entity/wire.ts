@@ -41,6 +41,13 @@ export interface EntityPatch {
   partial:  EntityFieldsPartial;
 }
 
+// Per-entity spawn — carries the full EntitySerialized snapshot so the guest
+// can construct the entity locally. Always reliable.
+export interface EntitySpawn {
+  type:   'entity-spawn';
+  entity: EntitySerialized;
+}
+
 // Reverse-tree order of entity ids to delete. Always reliable.
 export interface DespawnBatch {
   type:      'despawn-batch';
@@ -76,6 +83,7 @@ export interface RequestUpdate {
 // Discriminated union of every wire message that flows over a scene channel.
 export type SceneMessage =
   | ComponentPatchesMessage
+  | EntitySpawn
   | EntityPatch
   | DespawnBatch
   | InvokeAction

@@ -1,52 +1,16 @@
+// Wire types for room + scene channels. Slice #4 of issues--scene-graph.md
+// stripped the legacy ObjectState / snapshot / patch / update-props /
+// table-update messages — scene replication now flows through the v2 wire
+// shapes in `entity/wire.ts`.
+
+import type { RoomStateMessage } from '../seats/RoomState';
+import type { SceneMessage } from '../entity/wire';
+
 export type SpawnableType = 'board' | 'die' | 'token';
-
-export type ObjectState = {
-  id: string;
-  objectType: SpawnableType;
-  px: number; py: number; pz: number;
-  qx: number; qy: number; qz: number; qw: number;
-};
-
-export type GameMessage =
-  | { type: 'snapshot';      ts: number; objects: ObjectState[] }
-  | { type: 'patch';         ts: number; changed: ObjectState[] }
-  | { type: 'delete';        id: string }
-  | { type: 'update-props';  id: string; props: Record<string, unknown> }
-  | { type: 'table-update';  props: Record<string, unknown> };
 
 export type GuestInputMessage =
   | { type: 'guest-drag-start'; objectId: string }
   | { type: 'guest-drag-move';  objectId: string; px: number; py: number; pz: number }
   | { type: 'guest-drag-end';   objectId: string; vx: number; vy: number; vz: number };
 
-import type { RoomStateMessage } from '../seats/RoomState';
-
-export type ChannelMessage = GameMessage | GuestInputMessage | RoomStateMessage;
-
-const DEFAULT_THRESHOLD = 0.0001;
-
-export function diffObjects(prev: ObjectState[], curr: ObjectState[], threshold = DEFAULT_THRESHOLD): ObjectState[] {
-  const prevMap = new Map(prev.map(o => [o.id, o]));
-  return curr.filter(c => {
-    const p = prevMap.get(c.id);
-    if (!p) return true;
-    return (
-      Math.abs(c.px - p.px) > threshold ||
-      Math.abs(c.py - p.py) > threshold ||
-      Math.abs(c.pz - p.pz) > threshold ||
-      Math.abs(c.qx - p.qx) > threshold ||
-      Math.abs(c.qy - p.qy) > threshold ||
-      Math.abs(c.qz - p.qz) > threshold ||
-      Math.abs(c.qw - p.qw) > threshold
-    );
-  });
-}
-
-export function applyPatch(base: ObjectState[], changed: ObjectState[]): ObjectState[] {
-  const patchMap = new Map(changed.map(o => [o.id, o]));
-  const result = base.map(o => patchMap.get(o.id) ?? o);
-  for (const o of changed) {
-    if (!base.some(b => b.id === o.id)) result.push(o);
-  }
-  return result;
-}
+export type ChannelMessage = SceneMessage | GuestInputMessage | RoomStateMessage;

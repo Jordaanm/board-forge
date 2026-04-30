@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { type SpawnableType } from '../net/SceneState';
-import { OBJECT_TYPE_REGISTRY, type PropertyDef } from '../scene/objectTypes';
+import { OBJECT_META, type PropertyDef } from '../scene/objectMeta';
 import { type TableProps } from '../scene/Table';
 
 export interface ObjectSummary {
@@ -188,7 +188,7 @@ function SceneGraphList({
             onClick={() => onSelect(isSel ? null : o.id)}
           >
             <span>{o.id}</span>
-            <span style={{ color: '#888' }}>{OBJECT_TYPE_REGISTRY[o.objectType].label}</span>
+            <span style={{ color: '#888' }}>{OBJECT_META[o.objectType].label}</span>
           </div>
         );
       })}
@@ -208,7 +208,7 @@ function PropertyEditor({
     );
   }
 
-  const def = OBJECT_TYPE_REGISTRY[selected.objectType];
+  const def = OBJECT_META[selected.objectType];
   return (
     <div style={SECTION}>
       <div style={SECTION_LABEL}>Properties — {selected.id}</div>
@@ -271,7 +271,7 @@ function SpawnSection({
       <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
         {SPAWN_TYPES.map(t => (
           <button key={t} style={SPAWN_BTN} onClick={() => onSpawn(t)}>
-            + {OBJECT_TYPE_REGISTRY[t].label}
+            + {OBJECT_META[t].label}
           </button>
         ))}
       </div>
