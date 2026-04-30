@@ -34,7 +34,7 @@ function handleJoin(ws: WebSocket, msg: Msg) {
   if (!roomId || (role !== 'host' && role !== 'guest')) return;
 
   const result = join(roomId, role, ws);
-  if (result === 'full' || result === 'has-host') {
+  if (result === 'full') {
     send(ws, { type: 'room-full' });
     return;
   }

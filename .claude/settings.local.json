@@ -14,7 +14,17 @@
       "Bash(npm test *)",
       "Bash(npx vitest *)",
       "Bash(npm --prefix packages/client run typecheck)",
-      "Bash(grep -n \"Scene.load\\(\\\\[\\\\]\\\\|Scene.load\\(snap\\\\|, {}\\)\" packages/client/src/entity/Scene.test.ts)"
+      "Bash(grep -n \"Scene.load\\(\\\\[\\\\]\\\\|Scene.load\\(snap\\\\|, {}\\)\" packages/client/src/entity/Scene.test.ts)",
+      "Bash(npm ls *)",
+      "Read(//c/Users/jorda/AppData/Roaming/npm//**)",
+      "Read(//c/Users/jorda/.npm/_cacache/content-v2/sha512/**)",
+      "Bash(xargs ls *)",
+      "Bash(kill %1)",
+      "Bash(netstat -ano)",
+      "PowerShell(Get-NetTCPConnection *)",
+      "Bash(curl -sf http://localhost:3001/health)",
+      "PowerShell(Get-Process *)",
+      "PowerShell(Test-Path *)"
     ]
   }
 }

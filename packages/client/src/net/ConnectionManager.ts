@@ -55,7 +55,9 @@ export class ConnectionManager {
 
   getPeerIds(): string[] {
     const ids: string[] = [];
-    for (const [id, entry] of this.peers) if (entry.open) ids.push(id);
+    for (const [id, entry] of this.peers) {
+      if (entry.channel?.readyState === 'open') ids.push(id);
+    }
     return ids;
   }
 

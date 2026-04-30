@@ -23,14 +23,25 @@ export interface JoinResult {
 const rooms        = new Map<string, Room>();
 const clientLookup = new Map<WebSocket, { roomId: string; peerId: string }>();
 
-export function join(roomId: string, role: Role, ws: WebSocket): JoinResult | 'full' | 'has-host' {
+export function join(roomId: string, role: Role, ws: WebSocket): JoinResult | 'full' {
   let room = rooms.get(roomId);
   if (!room) {
     room = { hostId: null, members: new Map() };
     rooms.set(roomId, room);
   }
 
-  if (role === 'host' && room.hostId) return 'has-host';
+  // Host re-claim: evict any stale host whose WS hasn't been cleaned up yet
+  // (covers React StrictMode rapid mount/cleanup/mount, page reload, reconnect).
+  if (role === 'host' && room.hostId) {
+    const stale = room.members.get(room.hostId);
+    if (stale) {
+      try { stale.ws.close(); } catch { /* ignore */ }
+      clientLookup.delete(stale.ws);
+      room.members.delete(room.hostId);
+    }
+    room.hostId = null;
+  }
+
   if (room.members.size >= maxRoomPeers) return 'full';
 
   const peerId = crypto.randomUUID();

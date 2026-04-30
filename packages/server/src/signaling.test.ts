@@ -69,16 +69,23 @@ describe('room join', () => {
     guest.close();
   });
 
-  test('second host attempt rejected with room-full', async () => {
+  test('second host attempt evicts existing host and takes over', async () => {
     const host1 = await connect();
     const host2 = await connect();
-    await joinRoom(host1, 'room-c', 'host');
+    const host1Joined = await joinRoom(host1, 'room-c', 'host');
+    const host1Id = host1Joined.peerId as string;
 
-    const reject = nextMsg(host2);
-    send(host2, { type: 'join', roomId: 'room-c', role: 'host' });
-    expect((await reject).type).toBe('room-full');
+    const host1Closed = new Promise<void>((r) => host1.once('close', () => r()));
 
-    host1.close();
+    const host2Joined = await joinRoom(host2, 'room-c', 'host');
+    expect(host2Joined.type).toBe('joined');
+    expect(host2Joined.role).toBe('host');
+    expect(host2Joined.peerId).not.toBe(host1Id);
+    expect(host2Joined.hostId).toBe(host2Joined.peerId);
+
+    // Old host's WS should be closed by the server.
+    await host1Closed;
+
     host2.close();
   });
 
