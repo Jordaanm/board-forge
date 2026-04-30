@@ -220,7 +220,8 @@ export function ThreeCanvas({
       updateTablePropRef.current = (key, value) => applyTableProp(tableMesh, key, value);
 
       contextCtrl = new ContextMenuController(
-        renderer.domElement, camera, graph,
+        renderer.domElement, camera, true,
+        () => getSelfSeatRef.current(),
         (req) => onContextMenuRef.current(req),
       );
 
@@ -229,6 +230,7 @@ export function ThreeCanvas({
         if (msg.type === 'hold-claim')        { hostInput!.handleHoldClaim(peerId, msg); return; }
         if (msg.type === 'hold-release')      { hostInput!.handleHoldRelease(peerId, msg); return; }
         if (msg.type === 'request-update')    { hostInput!.handleRequestUpdate(peerId, msg); return; }
+        if (msg.type === 'invoke-action')     { hostInput!.handleInvokeAction(peerId, msg); return; }
       };
 
       onPeerLeftRef.current = (peerId) => {
@@ -252,7 +254,8 @@ export function ThreeCanvas({
       );
 
       contextCtrl = new ContextMenuController(
-        renderer.domElement, camera, graph,
+        renderer.domElement, camera, false,
+        () => getSelfSeatRef.current(),
         (req) => onContextMenuRef.current(req),
         () => highlightId,
       );

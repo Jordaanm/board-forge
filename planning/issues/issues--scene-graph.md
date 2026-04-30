@@ -151,6 +151,7 @@ Wire the seat layer into the new entity model. `OwnershipPolicy.canManipulate` g
 
 ## 7. Context menu refactor (component-driven `onContextMenu`)
 
+**Status:** Completed (typecheck + 168 unit tests pass)
 **Type:** AFK
 **Blocked by:** #6
 

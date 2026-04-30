@@ -12,8 +12,12 @@ interface ValueState { v: number }
 class ValueComp extends EntityComponent<ValueState> {
   static typeId = 'value';
   applied: Partial<ValueState>[] = [];
+  invocations: Array<{ actionId: string; args?: object }> = [];
   onSpawn() {}
   onPropertiesChanged(p: Partial<ValueState>) { this.applied.push(p); }
+  onAction(actionId: string, args: object | undefined) {
+    this.invocations.push({ actionId, args });
+  }
 }
 
 let r: HostReplicatorV2;
@@ -115,6 +119,55 @@ describe('HostInputDispatcher.handleRequestUpdate — OwnershipPolicy gating', (
     PEERS.set('p1', 1);
     expect(dispatcher.handleRequestUpdate('p1', {
       type: 'request-update', entityId: 'a', typeId: 'nope', partial: {},
+    })).toBe(false);
+  });
+});
+
+describe('HostInputDispatcher.handleInvokeAction — slice #7', () => {
+  test('owner-seated guest invocation is applied', () => {
+    const e = spawn('a', 1);
+    PEERS.set('p1', 1);
+    expect(dispatcher.handleInvokeAction('p1', {
+      type: 'invoke-action', entityId: 'a', componentTypeId: 'value',
+      actionId: 'roll', args: { count: 2 },
+    })).toBe(true);
+    const tracker = e.components.get('value') as ValueComp;
+    expect(tracker.invocations).toEqual([{ actionId: 'roll', args: { count: 2 } }]);
+  });
+
+  test('non-owner invocation is refused', () => {
+    const e = spawn('a', 1);
+    PEERS.set('p2', 2);
+    expect(dispatcher.handleInvokeAction('p2', {
+      type: 'invoke-action', entityId: 'a', componentTypeId: 'value',
+      actionId: 'roll',
+    })).toBe(false);
+    const tracker = e.components.get('value') as ValueComp;
+    expect(tracker.invocations).toEqual([]);
+  });
+
+  test('spectator invocation is refused', () => {
+    const e = spawn('a', null);
+    PEERS.set('p3', null);
+    expect(dispatcher.handleInvokeAction('p3', {
+      type: 'invoke-action', entityId: 'a', componentTypeId: 'value', actionId: 'roll',
+    })).toBe(false);
+    const tracker = e.components.get('value') as ValueComp;
+    expect(tracker.invocations).toEqual([]);
+  });
+
+  test('unknown component → refused', () => {
+    spawn('a', 1);
+    PEERS.set('p1', 1);
+    expect(dispatcher.handleInvokeAction('p1', {
+      type: 'invoke-action', entityId: 'a', componentTypeId: 'nope', actionId: 'roll',
+    })).toBe(false);
+  });
+
+  test('unknown entity → refused', () => {
+    PEERS.set('p1', 1);
+    expect(dispatcher.handleInvokeAction('p1', {
+      type: 'invoke-action', entityId: 'missing', componentTypeId: 'value', actionId: 'roll',
     })).toBe(false);
   });
 });

@@ -44,6 +44,7 @@ export type { GuestReceiveContext } from './GuestReceiver';
 export { HoldService } from './HoldService';
 export type { ReleaseVelocity } from './HoldService';
 export { HostInputDispatcher } from './HostInputDispatcher';
+export { aggregateContextMenu } from './contextMenu';
 
 export { TransformComponent } from './components/TransformComponent';
 export type { TransformState } from './components/TransformComponent';

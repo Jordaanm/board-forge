@@ -3,7 +3,9 @@ import { ThreeCanvas, type ReplicationTarget } from '../ThreeCanvas';
 import { ConnectionManager } from '../net/ConnectionManager';
 import { EditorPanel, type ObjectSummary } from '../components/EditorPanel';
 import { ContextMenu } from '../components/ContextMenu';
-import { type ContextMenuRequest } from '../input/ContextMenuController';
+import { type ContextMenuRequest, dispatchMenuAction } from '../input/ContextMenuController';
+import { Scene } from '../entity/Scene';
+import { type MenuItem } from '../entity/EntityComponent';
 import { type ChannelMessage, type SpawnableType } from '../net/SceneState';
 import { type SeatIndex } from '../seats/SeatLayout';
 import { DEFAULT_TABLE_PROPS, type TableProps } from '../scene/Table';
@@ -153,9 +155,21 @@ export function Room({ roomId, isHost }: Props) {
     setHighlightRef.current(selectedId);
   }, [selectedId]);
 
-  const handleContextAction = (actionId: string, objectId: string) => {
-    if (actionId === 'roll')   rollObjectRef.current(objectId);
-    if (actionId === 'delete') deleteObjectRef.current(objectId);
+  const handleContextAction = (
+    item: MenuItem & { kind: 'action' },
+    args: object | undefined,
+  ) => {
+    if (!contextMenu) return;
+    dispatchMenuAction(item, args, contextMenu.entityId, {
+      isHost,
+      entity:   Scene.getEntity(contextMenu.entityId),
+      send:     (msg) => sendRef.current(msg),
+      hostLocal: {
+        delete: (id) => deleteObjectRef.current(id),
+        roll:   (id) => rollObjectRef.current(id),
+      },
+      selfSeat: getSelfSeatRef.current(),
+    });
   };
 
   const handleToggleFreeCamera = (on: boolean) => {
@@ -242,7 +256,6 @@ export function Room({ roomId, isHost }: Props) {
       {contextMenu && (
         <ContextMenu
           menu={contextMenu}
-          isHost={isHost}
           onAction={handleContextAction}
           onDismiss={() => setContextMenu(null)}
         />

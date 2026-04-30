@@ -13,7 +13,8 @@ import { Scene } from './Scene';
 import { type SeatIndex } from '../seats/SeatLayout';
 import { canManipulate } from '../seats/OwnershipPolicy';
 import { type HoldService } from './HoldService';
-import { type HoldClaim, type HoldRelease, type RequestUpdate } from './wire';
+import { type HoldClaim, type HoldRelease, type InvokeAction, type RequestUpdate } from './wire';
+import { type ActionContext } from './EntityComponent';
 
 export class HostInputDispatcher {
   constructor(
@@ -50,6 +51,20 @@ export class HostInputDispatcher {
     const comp = entity.components.get(msg.typeId);
     if (!comp) return false;
     comp.setState(msg.partial);
+    return true;
+  }
+
+  // Slice #7 — guest clicks an entity's context-menu action. Host validates
+  // ownership, looks up the targeted component, runs `onAction(...)` on it.
+  handleInvokeAction(peerId: string, msg: InvokeAction): boolean {
+    const entity = Scene.getEntity(msg.entityId);
+    if (!entity) return false;
+    const senderSeat = this.getPeerSeat(peerId);
+    if (!canManipulate({ peerSeat: senderSeat, isHost: false }, entity.owner)) return false;
+    const comp = entity.components.get(msg.componentTypeId);
+    if (!comp) return false;
+    const ctx: ActionContext = { recipientSeat: senderSeat, isHost: false, entity };
+    comp.onAction(msg.actionId, msg.args, ctx);
     return true;
   }
 }

@@ -27,9 +27,11 @@ export interface MenuContext {
 }
 
 // Slice #7 (context-menu refactor) is the consumer; defined here so the hook
-// signature on the base class is concrete.
+// signature on the base class is concrete. `componentTypeId` is filled in by
+// the aggregator after each component returns its items — components do not
+// set it themselves.
 export type MenuItem =
-  | { kind: 'action';    id: string; label: string; disabled?: boolean }
+  | { kind: 'action';    id: string; label: string; componentTypeId?: string; disabled?: boolean }
   | { kind: 'submenu';   label: string; items: MenuItem[] }
   | { kind: 'heading';   label: string }
   | { kind: 'separator' };
