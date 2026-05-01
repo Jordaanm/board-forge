@@ -25,7 +25,8 @@
       "Bash(curl -sf http://localhost:3001/health)",
       "PowerShell(Get-Process *)",
       "PowerShell(Test-Path *)",
-      "Bash(echo \"EXIT: $?\")"
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(bun run *)"
     ]
   }
 }
