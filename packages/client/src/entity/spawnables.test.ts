@@ -133,7 +133,7 @@ describe('spawnables — serialised snapshot shape', () => {
     expect(Object.keys(snap.components).sort()).toEqual(['mesh', 'physics', 'transform', 'value']);
     expect(snap.components.value).toEqual({ value: '6', isNumeric: true });
     expect(snap.components.physics).toEqual({ mass: 0.2, friction: 0.5, restitution: 0.5 });
-    expect(snap.components.mesh).toMatchObject({ meshRef: 'prim:cube', size: 0.7 });
+    expect(snap.components.mesh).toMatchObject({ meshRef: 'prim:d6', size: 0.7 });
   });
 
   test('snapshot round-trips JSON without loss', () => {

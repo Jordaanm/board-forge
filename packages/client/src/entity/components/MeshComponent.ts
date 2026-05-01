@@ -10,6 +10,7 @@
 // round-trip without introducing a token-specific component.
 
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { EntityComponent, type SpawnContext, type MenuContext, type MenuItem, type ActionContext } from '../EntityComponent';
 import { TransformComponent } from './TransformComponent';
 
@@ -55,7 +56,8 @@ export class MeshComponent extends EntityComponent<MeshState> {
   }
 
   meshKind(): 'cube' | 'meeple' | 'unknown' {
-    if (this.state.meshRef === 'prim:cube')   return 'cube';
+    if (this.state.meshRef === 'prim:cube') return 'cube';
+    if (this.state.meshRef === 'prim:d6')   return 'cube';
     if (this.state.meshRef === 'prim:meeple') return 'meeple';
     return 'unknown';
   }
@@ -84,6 +86,8 @@ export class MeshComponent extends EntityComponent<MeshState> {
     const url  = this.state.textureRef || '';
     this.group.traverse((child) => {
       if (!(child instanceof THREE.Mesh)) return;
+      // Pip overlays own their own material — tint/texture only apply to the body.
+      if (child.userData.skipTint) return;
       const mat = child.material as THREE.MeshLambertMaterial;
       mat.color.set(new THREE.Color(tint));
       if (url) {
@@ -110,6 +114,7 @@ function buildMesh(meshRef: string, size: MeshSize): THREE.Object3D {
     mesh.receiveShadow = true;
     return mesh;
   }
+  if (meshRef === 'prim:d6') return buildD6(size);
   if (meshRef === 'prim:meeple') {
     const r = (typeof size === 'number' ? size : size[0]) * 0.5;
     const totalH = (typeof size === 'number' ? size : size[1]);
@@ -133,7 +138,7 @@ function sizeToBox(size: MeshSize): [number, number, number] {
 }
 
 function halfExtentsFor(meshRef: string, size: MeshSize): [number, number, number] {
-  if (meshRef === 'prim:cube') {
+  if (meshRef === 'prim:cube' || meshRef === 'prim:d6') {
     const [w, h, d] = sizeToBox(size);
     return [w / 2, h / 2, d / 2];
   }
@@ -144,6 +149,88 @@ function halfExtentsFor(meshRef: string, size: MeshSize): [number, number, numbe
   }
   const [w, h, d] = sizeToBox(size);
   return [w / 2, h / 2, d / 2];
+}
+
+// D6 = chamfered cube body (RoundedBoxGeometry) plus six transparent pip
+// overlays. The body picks up tint via applyMaterialAttributes; pip planes
+// carry `userData.skipTint` so tint changes don't recolour the dots.
+function buildD6(size: MeshSize): THREE.Object3D {
+  const s      = typeof size === 'number' ? size : size[0];
+  const radius = s * 0.08;
+
+  const group = new THREE.Group();
+  const body  = new THREE.Mesh(
+    new RoundedBoxGeometry(s, s, s, 4, radius),
+    new THREE.MeshLambertMaterial({ color: 0xffffff }),
+  );
+  body.castShadow    = true;
+  body.receiveShadow = true;
+  group.add(body);
+
+  const half   = s / 2;
+  const offset = half + 0.001; // sub-mm outset to dodge z-fighting
+  // [pip count, position, rotation] — opposite faces sum to 7
+  const faces: ReadonlyArray<readonly [number, [number, number, number], [number, number, number]]> = [
+    [1, [0,  offset, 0], [-Math.PI / 2, 0, 0]],
+    [6, [0, -offset, 0], [ Math.PI / 2, 0, 0]],
+    [2, [0, 0,  offset], [0, 0, 0]],
+    [5, [0, 0, -offset], [0, Math.PI, 0]],
+    [3, [ offset, 0, 0], [0,  Math.PI / 2, 0]],
+    [4, [-offset, 0, 0], [0, -Math.PI / 2, 0]],
+  ];
+
+  const planeSize = s * 0.85;
+  for (const [count, pos, rot] of faces) {
+    const tex = pipTextureFor(count);
+    if (!tex) continue;
+    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true });
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(planeSize, planeSize), mat);
+    plane.position.set(pos[0], pos[1], pos[2]);
+    plane.rotation.set(rot[0], rot[1], rot[2]);
+    plane.userData.skipTint = true;
+    group.add(plane);
+  }
+
+  return group;
+}
+
+const PIP_POSITIONS: Record<number, ReadonlyArray<readonly [number, number]>> = {
+  1: [[0.5, 0.5]],
+  2: [[0.28, 0.28], [0.72, 0.72]],
+  3: [[0.28, 0.28], [0.5, 0.5], [0.72, 0.72]],
+  4: [[0.28, 0.28], [0.72, 0.28], [0.28, 0.72], [0.72, 0.72]],
+  5: [[0.28, 0.28], [0.72, 0.28], [0.5, 0.5], [0.28, 0.72], [0.72, 0.72]],
+  6: [[0.28, 0.25], [0.72, 0.25], [0.28, 0.5], [0.72, 0.5], [0.28, 0.75], [0.72, 0.75]],
+};
+
+const pipTextureCache = new Map<number, THREE.Texture>();
+
+function pipTextureFor(count: number): THREE.Texture | null {
+  // Tests run in node — no DOM, no canvas. Skip the overlay; physics + body
+  // still build correctly so spawn/round-trip tests are unaffected.
+  if (typeof document === 'undefined') return null;
+  const cached = pipTextureCache.get(count);
+  if (cached) return cached;
+
+  const SIZE = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = SIZE;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  ctx.clearRect(0, 0, SIZE, SIZE);
+  ctx.fillStyle = '#1a1a1a';
+  const r = SIZE * 0.08;
+  for (const [x, y] of PIP_POSITIONS[count]) {
+    ctx.beginPath();
+    ctx.arc(x * SIZE, y * SIZE, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  pipTextureCache.set(count, tex);
+  return tex;
 }
 
 function disposeGroup(group: THREE.Object3D | undefined): void {
