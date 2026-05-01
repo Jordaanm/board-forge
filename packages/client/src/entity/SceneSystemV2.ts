@@ -200,6 +200,13 @@ export class SceneSystemV2 implements ISceneSystem {
       }
       return;
     }
+    if (key === 'tags') {
+      entity.tags = normaliseTags(value);
+      if (this.replicator) {
+        this.replicator.enqueueEntityPatch(entity.id, { tags: [...entity.tags] });
+      }
+      return;
+    }
     const mesh = entity.getComponent(MeshComponent);
     if (!mesh) return;
 
@@ -227,6 +234,21 @@ export class SceneSystemV2 implements ISceneSystem {
       restPose,
     };
   }
+}
+
+// Tags are unique and case-insensitive (todo.md). Lowercase + dedupe on
+// every write so equality and persistence are deterministic.
+function normaliseTags(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const v of value) {
+    const s = String(v).trim().toLowerCase();
+    if (!s || seen.has(s)) continue;
+    seen.add(s);
+    out.push(s);
+  }
+  return out;
 }
 
 function derivePropsView(entity: Entity): Record<string, unknown> {

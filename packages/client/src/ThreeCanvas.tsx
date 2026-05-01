@@ -174,9 +174,15 @@ export function ThreeCanvas({
         highlightId = null;
         clearHighlight();
       }
-      onObjectsChangeRef.current(graph.getAll().map(e => ({
-        id: e.id, objectType: e.objectType, props: { ...e.props },
-      })));
+      onObjectsChangeRef.current(graph.getAll().map(e => {
+        const ent = Scene.getEntity(e.id);
+        return {
+          id:         e.id,
+          objectType: e.objectType,
+          tags:       ent ? [...ent.tags] : [],
+          props:      { ...e.props },
+        };
+      }));
     });
 
     // ── Host ─────────────────────────────────────────────────────────────

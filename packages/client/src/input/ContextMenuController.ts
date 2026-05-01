@@ -13,6 +13,7 @@ export interface ContextMenuRequest {
   y:          number;
   entityId:   string;
   entityName: string;
+  entityTags: string[];
   items:      MenuItem[];
 }
 
@@ -85,6 +86,7 @@ export class ContextMenuController {
       y:          Math.min(e.clientY, window.innerHeight - menuH),
       entityId:   entity.id,
       entityName: entity.name,
+      entityTags: [...entity.tags],
       items,
     });
   };

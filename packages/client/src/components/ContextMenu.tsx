@@ -31,6 +31,12 @@ const HEADING_STYLE: React.CSSProperties = {
   fontFamily: 'sans-serif', userSelect: 'none',
 };
 
+const TAG_STYLE: React.CSSProperties = {
+  background: 'rgba(255,255,255,0.08)', color: '#bdbdbd',
+  padding: '1px 6px', borderRadius: 3, fontSize: 10,
+  fontFamily: 'sans-serif', userSelect: 'none',
+};
+
 export function ContextMenu({ menu, onAction, onDismiss }: Props) {
   return (
     <>
@@ -55,6 +61,13 @@ export function ContextMenu({ menu, onAction, onDismiss }: Props) {
           <div style={{ color: '#888', fontSize: 11, fontFamily: 'monospace' }}>
             {menu.entityId}
           </div>
+          {menu.entityTags.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+              {menu.entityTags.map(t => (
+                <span key={t} style={TAG_STYLE}>{t}</span>
+              ))}
+            </div>
+          )}
         </div>
         <MenuList
           items={menu.items}

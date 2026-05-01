@@ -6,6 +6,7 @@ import { type TableProps } from '../scene/Table';
 export interface ObjectSummary {
   id: string;
   objectType: SpawnableType;
+  tags: string[];
   props: Record<string, unknown>;
 }
 
@@ -91,6 +92,27 @@ const INPUT: React.CSSProperties = {
   fontSize:     12,
   fontFamily:   'sans-serif',
   boxSizing:    'border-box',
+};
+
+const CHIP: React.CSSProperties = {
+  display:      'inline-flex',
+  alignItems:   'center',
+  gap:          4,
+  background:   'rgba(255,255,255,0.08)',
+  color:        '#bdbdbd',
+  padding:      '2px 4px 2px 8px',
+  borderRadius: 3,
+  fontSize:     11,
+};
+
+const CHIP_X: React.CSSProperties = {
+  background:   'none',
+  border:       'none',
+  color:        '#888',
+  cursor:       'pointer',
+  fontSize:     14,
+  lineHeight:   1,
+  padding:      '0 2px',
 };
 
 export function EditorPanel({
@@ -212,9 +234,6 @@ function PropertyEditor({
   return (
     <div style={SECTION}>
       <div style={SECTION_LABEL}>Properties — {selected.id}</div>
-      {def.propertySchema.length === 0 && (
-        <div style={{ color: '#666', fontSize: 12 }}>No editable properties</div>
-      )}
       {def.propertySchema.map(p => (
         <PropertyRow
           key={p.key}
@@ -223,6 +242,56 @@ function PropertyEditor({
           onChange={(v) => onUpdateProp(selected.id, p.key, v)}
         />
       ))}
+      <TagsRow
+        tags={selected.tags}
+        onChange={(next) => onUpdateProp(selected.id, 'tags', next)}
+      />
+    </div>
+  );
+}
+
+function TagsRow({
+  tags, onChange,
+}: { tags: string[]; onChange: (next: string[]) => void }) {
+  const [draft, setDraft] = useState('');
+
+  const commit = () => {
+    const t = draft.trim().toLowerCase();
+    setDraft('');
+    if (!t || tags.includes(t)) return;
+    onChange([...tags, t]);
+  };
+  const remove = (t: string) => onChange(tags.filter(x => x !== t));
+
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <label style={{ display: 'block', color: '#aaa', fontSize: 11, marginBottom: 3 }}>Tags</label>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 4 }}>
+        {tags.map(t => (
+          <span key={t} style={CHIP}>
+            {t}
+            <button
+              onClick={() => remove(t)}
+              style={CHIP_X}
+              title="Remove tag"
+            >×</button>
+          </span>
+        ))}
+      </div>
+      <input
+        type="text"
+        style={INPUT}
+        placeholder="Add tag…"
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); commit(); }
+          else if (e.key === 'Backspace' && draft === '' && tags.length > 0) {
+            remove(tags[tags.length - 1]);
+          }
+        }}
+        onBlur={commit}
+      />
     </div>
   );
 }
