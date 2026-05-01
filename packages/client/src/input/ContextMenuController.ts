@@ -32,9 +32,6 @@ export class ContextMenuController {
     private readonly isHost:      boolean,
     private readonly getSelfSeat: () => SeatIndex | null,
     private readonly onOpen:      (req: ContextMenuRequest) => void,
-    // When provided, the menu only opens if the hit object's id matches the
-    // currently-selected id. Used on the guest path.
-    private readonly requireSelectedId?: () => string | null,
   ) {
     element.addEventListener('contextmenu', this.onContextMenu);
   }
@@ -64,8 +61,6 @@ export class ContextMenuController {
 
     const entity = findEntityByObject3D(hits[0].object);
     if (!entity) return;
-
-    if (this.requireSelectedId && this.requireSelectedId() !== entity.id) return;
 
     const seat = this.getSelfSeat();
     const ctx: MenuContext = { recipientSeat: seat, isHost: this.isHost, entity };

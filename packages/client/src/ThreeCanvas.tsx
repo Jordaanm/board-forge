@@ -284,7 +284,6 @@ export function ThreeCanvas({
         renderer.domElement, camera, false,
         () => getSelfSeatRef.current(),
         (req) => onContextMenuRef.current(req),
-        () => highlightId,
       );
 
       onMsgRef.current = (_peerId, msg) => {
