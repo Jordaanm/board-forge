@@ -45,7 +45,6 @@ interface Props {
   spawnRef:            MutableRefObject<(type: SpawnableType) => void>;
   rollRef:             MutableRefObject<() => void>;
   onContextMenuRef:    MutableRefObject<(req: ContextMenuRequest) => void>;
-  rollObjectRef:       MutableRefObject<(id: string) => void>;
   deleteObjectRef:     MutableRefObject<(id: string) => void>;
   updatePropRef:       MutableRefObject<(id: string, key: string, value: unknown) => void>;
   updateTablePropRef:  MutableRefObject<(key: keyof TableProps, value: unknown) => void>;
@@ -58,7 +57,7 @@ interface Props {
 export function ThreeCanvas({
   isHost, sendRef, sendToRef, getTargetsRef, getSelfSeatRef, getSelfPeerIdRef, getPeerSeatRef,
   onMsgRef, onPeerLeftRef, onPeerJoinedRef,
-  spawnRef, rollRef, onContextMenuRef, rollObjectRef, deleteObjectRef,
+  spawnRef, rollRef, onContextMenuRef, deleteObjectRef,
   updatePropRef, updateTablePropRef, freeCameraRef, onObjectsChangeRef,
   onSelectRef, setHighlightRef,
 }: Props) {
@@ -228,18 +227,6 @@ export function ThreeCanvas({
           );
           e.body.velocity.set((Math.random() - 0.5) * 4, 3, (Math.random() - 0.5) * 4);
         }
-      };
-
-      rollObjectRef.current = (id) => {
-        const e = graph.getEntry(id);
-        if (e?.objectType !== 'die' || !e.body) return;
-        e.body.wakeUp();
-        e.body.angularVelocity.set(
-          (Math.random() - 0.5) * 40,
-          (Math.random() - 0.5) * 40,
-          (Math.random() - 0.5) * 40,
-        );
-        e.body.velocity.set((Math.random() - 0.5) * 4, 3, (Math.random() - 0.5) * 4);
       };
 
       deleteObjectRef.current = (id) => graph.remove(id, scene, physics);
@@ -423,7 +410,6 @@ export function ThreeCanvas({
       onPeerJoinedRef.current = () => {};
       spawnRef.current        = () => {};
       rollRef.current         = () => {};
-      rollObjectRef.current   = () => {};
       deleteObjectRef.current = () => {};
       updatePropRef.current      = () => {};
       updateTablePropRef.current = () => {};
@@ -435,7 +421,7 @@ export function ThreeCanvas({
   }, [
     isHost, sendRef, sendToRef, getTargetsRef, getSelfSeatRef, getSelfPeerIdRef, getPeerSeatRef,
     onMsgRef, onPeerLeftRef, onPeerJoinedRef,
-    spawnRef, rollRef, onContextMenuRef, rollObjectRef, deleteObjectRef,
+    spawnRef, rollRef, onContextMenuRef, deleteObjectRef,
     updatePropRef, updateTablePropRef, freeCameraRef, onObjectsChangeRef,
     onSelectRef, setHighlightRef,
   ]);

@@ -21,11 +21,9 @@ const MENU_ITEM_H   = 36;
 const MENU_HEADER_H = 44;
 const MENU_PADDING  = 12;
 
-// Built-in host-only actions appended after the component-driven items.
-// Slice #7 keeps these as transitional host-locals — PRD-2 may migrate them
-// onto specific components (e.g. a Die's Roll).
+// Transitional host-only built-in. Roll has migrated onto ValueComponent;
+// Delete is still pending a home (see todo.md — base class vs. editor panel).
 const BUILTIN_DELETE: MenuItem = { kind: 'action', id: '__delete', label: 'Delete' };
-const BUILTIN_ROLL:   MenuItem = { kind: 'action', id: '__roll',   label: 'Roll' };
 
 export class ContextMenuController {
   constructor(
@@ -97,11 +95,8 @@ export class ContextMenuController {
   };
 }
 
-function builtinHostActions(entity: Entity): MenuItem[] {
-  const out: MenuItem[] = [];
-  if (entity.type === 'die') out.push(BUILTIN_ROLL);
-  out.push(BUILTIN_DELETE);
-  return out;
+function builtinHostActions(_entity: Entity): MenuItem[] {
+  return [BUILTIN_DELETE];
 }
 
 function countLeafItems(items: MenuItem[]): number {
@@ -124,7 +119,6 @@ export interface MenuActionDeps {
   send:          (msg: ChannelMessage) => void;
   hostLocal: {
     delete:      (entityId: string) => void;
-    roll:        (entityId: string) => void;
   };
   selfSeat:      SeatIndex | null;
 }
@@ -135,9 +129,8 @@ export function dispatchMenuAction(
   entityId: string,
   deps:    MenuActionDeps,
 ): void {
-  // Built-in host-only actions short-circuit straight to the host runtime.
+  // Built-in host-only action short-circuits straight to the host runtime.
   if (item.id === '__delete') { if (deps.isHost) deps.hostLocal.delete(entityId); return; }
-  if (item.id === '__roll')   { if (deps.isHost) deps.hostLocal.roll(entityId);   return; }
 
   if (!item.componentTypeId) return; // unknown action — drop
   if (deps.isHost && deps.entity) {

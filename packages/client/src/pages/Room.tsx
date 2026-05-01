@@ -58,7 +58,6 @@ export function Room({ roomId, isHost }: Props) {
   const spawnRef           = useRef<(type: SpawnableType) => void>(noop);
   const rollRef            = useRef<() => void>(noop);
   const onContextMenuRef   = useRef<(req: ContextMenuRequest) => void>(noop);
-  const rollObjectRef      = useRef<(id: string) => void>(noop);
   const deleteObjectRef    = useRef<(id: string) => void>(noop);
   const updatePropRef      = useRef<(id: string, key: string, value: unknown) => void>(noop);
   const updateTablePropRef = useRef<(key: keyof TableProps, value: unknown) => void>(noop);
@@ -169,7 +168,6 @@ export function Room({ roomId, isHost }: Props) {
       send:     (msg) => sendRef.current(msg),
       hostLocal: {
         delete: (id) => deleteObjectRef.current(id),
-        roll:   (id) => rollObjectRef.current(id),
       },
       selfSeat: getSelfSeatRef.current(),
     });
@@ -207,7 +205,6 @@ export function Room({ roomId, isHost }: Props) {
         spawnRef={spawnRef}
         rollRef={rollRef}
         onContextMenuRef={onContextMenuRef}
-        rollObjectRef={rollObjectRef}
         deleteObjectRef={deleteObjectRef}
         updatePropRef={updatePropRef}
         updateTablePropRef={updateTablePropRef}
