@@ -121,13 +121,16 @@ export interface MenuActionDeps {
 }
 
 export function dispatchMenuAction(
-  item:    MenuItem & { kind: 'action' },
+  item:    MenuItem & { kind: 'action' | 'colorpicker' },
   args:    object | undefined,
   entityId: string,
   deps:    MenuActionDeps,
 ): void {
   // Built-in host-only action short-circuits straight to the host runtime.
-  if (item.id === '__delete') { if (deps.isHost) deps.hostLocal.delete(entityId); return; }
+  if (item.kind === 'action' && item.id === '__delete') {
+    if (deps.isHost) deps.hostLocal.delete(entityId);
+    return;
+  }
 
   if (!item.componentTypeId) return; // unknown action — drop
   if (deps.isHost && deps.entity) {

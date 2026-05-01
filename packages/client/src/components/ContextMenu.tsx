@@ -4,7 +4,7 @@ import { type MenuItem } from '../entity/EntityComponent';
 
 interface Props {
   menu:      ContextMenuRequest;
-  onAction:  (item: MenuItem & { kind: 'action' }, args: object | undefined) => void;
+  onAction:  (item: MenuItem & { kind: 'action' | 'colorpicker' }, args: object | undefined) => void;
   onDismiss: () => void;
 }
 
@@ -82,15 +82,16 @@ function MenuList({
   items, onAction,
 }: {
   items: MenuItem[];
-  onAction: (item: MenuItem & { kind: 'action' }, args: object | undefined) => void;
+  onAction: (item: MenuItem & { kind: 'action' | 'colorpicker' }, args: object | undefined) => void;
 }) {
   return (
     <>
       {items.map((item, i) => {
         if (item.kind === 'separator') return <div key={`sep-${i}`} style={SEPARATOR} />;
         if (item.kind === 'heading')   return <div key={`hd-${i}`}  style={HEADING_STYLE}>{item.label}</div>;
-        if (item.kind === 'action')    return <ActionRow key={`act-${item.id}-${i}`} item={item} onAction={onAction} />;
-        if (item.kind === 'submenu')   return <SubmenuRow key={`sub-${item.label}-${i}`} item={item} onAction={onAction} />;
+        if (item.kind === 'action')      return <ActionRow      key={`act-${item.id}-${i}`}   item={item} onAction={onAction} />;
+        if (item.kind === 'colorpicker') return <ColorPickerRow key={`color-${item.id}-${i}`} item={item} onAction={onAction} />;
+        if (item.kind === 'submenu')     return <SubmenuRow     key={`sub-${item.label}-${i}`} item={item} onAction={onAction} />;
         return null;
       })}
     </>
@@ -101,7 +102,7 @@ function ActionRow({
   item, onAction,
 }: {
   item: MenuItem & { kind: 'action' };
-  onAction: (item: MenuItem & { kind: 'action' }, args: object | undefined) => void;
+  onAction: (item: MenuItem & { kind: 'action' | 'colorpicker' }, args: object | undefined) => void;
 }) {
   const isDestructive = item.id === '__delete';
   return (
@@ -128,11 +129,34 @@ function ActionRow({
   );
 }
 
+function ColorPickerRow({
+  item, onAction,
+}: {
+  item: MenuItem & { kind: 'colorpicker' };
+  onAction: (item: MenuItem & { kind: 'action' | 'colorpicker' }, args: object | undefined) => void;
+}) {
+  return (
+    <label
+      style={{ ...ITEM, color: '#e8e8e8', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')}
+      onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+    >
+      <span>{item.label}</span>
+      <input
+        type="color"
+        value={item.value || '#ffffff'}
+        onChange={e => onAction(item, { value: e.target.value })}
+        style={{ width: 28, height: 18, border: 'none', background: 'none', padding: 0, cursor: 'pointer' }}
+      />
+    </label>
+  );
+}
+
 function SubmenuRow({
   item, onAction,
 }: {
   item: MenuItem & { kind: 'submenu' };
-  onAction: (item: MenuItem & { kind: 'action' }, args: object | undefined) => void;
+  onAction: (item: MenuItem & { kind: 'action' | 'colorpicker' }, args: object | undefined) => void;
 }) {
   const [open, setOpen] = useState(false);
   return (

@@ -31,9 +31,10 @@ export interface MenuContext {
 // the aggregator after each component returns its items — components do not
 // set it themselves.
 export type MenuItem =
-  | { kind: 'action';    id: string; label: string; componentTypeId?: string; disabled?: boolean }
-  | { kind: 'submenu';   label: string; items: MenuItem[] }
-  | { kind: 'heading';   label: string }
+  | { kind: 'action';      id: string; label: string; componentTypeId?: string; disabled?: boolean }
+  | { kind: 'colorpicker'; id: string; label: string; value: string; componentTypeId?: string }
+  | { kind: 'submenu';     label: string; items: MenuItem[] }
+  | { kind: 'heading';     label: string }
   | { kind: 'separator' };
 
 // Slice #5 (drag rewrite) wires this up; opaque for slice #1.

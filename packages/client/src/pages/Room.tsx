@@ -158,7 +158,7 @@ export function Room({ roomId, isHost }: Props) {
   }, [selectedId]);
 
   const handleContextAction = (
-    item: MenuItem & { kind: 'action' },
+    item: MenuItem & { kind: 'action' | 'colorpicker' },
     args: object | undefined,
   ) => {
     if (!contextMenu) return;

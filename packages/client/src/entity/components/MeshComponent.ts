@@ -10,7 +10,7 @@
 // round-trip without introducing a token-specific component.
 
 import * as THREE from 'three';
-import { EntityComponent, type SpawnContext } from '../EntityComponent';
+import { EntityComponent, type SpawnContext, type MenuContext, type MenuItem, type ActionContext } from '../EntityComponent';
 import { TransformComponent } from './TransformComponent';
 
 export type MeshSize = number | [number, number, number];
@@ -58,6 +58,17 @@ export class MeshComponent extends EntityComponent<MeshState> {
     if (this.state.meshRef === 'prim:cube')   return 'cube';
     if (this.state.meshRef === 'prim:meeple') return 'meeple';
     return 'unknown';
+  }
+
+  onContextMenu(_ctx: MenuContext): MenuItem[] {
+    return [{ kind: 'colorpicker', id: 'set-tint', label: 'Tint', value: this.state.tint || '#ffffff' }];
+  }
+
+  onAction(actionId: string, args: object | undefined, _ctx: ActionContext): void {
+    if (actionId !== 'set-tint') return;
+    const value = (args as { value?: unknown } | undefined)?.value;
+    if (typeof value !== 'string') return;
+    this.setState({ tint: value });
   }
 
   private rebuild(): void {
