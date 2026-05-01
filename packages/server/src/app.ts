@@ -3,6 +3,7 @@ import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import { onMessage, onClose } from './signaling';
 import { getIceServers } from './config';
+import { listRooms } from './rooms';
 
 const app = express();
 
@@ -18,6 +19,10 @@ app.get('/health', (_req, res) => {
 
 app.get('/ice-config', (_req, res) => {
   res.json({ iceServers: getIceServers() });
+});
+
+app.get('/rooms', (_req, res) => {
+  res.json({ rooms: listRooms() });
 });
 
 export const server = createServer(app);

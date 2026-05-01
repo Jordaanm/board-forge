@@ -41,6 +41,7 @@ export class ConnectionManager {
   private hostId:     string | null = null;
   private peers       = new Map<string, PeerEntry>();
   private iceServers: RTCIceServer[] = FALLBACK_ICE_SERVERS;
+  private disposed    = false;
 
   constructor(
     private readonly onMsg:           MsgHandler,
@@ -84,6 +85,7 @@ export class ConnectionManager {
   }
 
   dispose() {
+    this.disposed = true;
     this.ws?.close();
     for (const entry of this.peers.values()) entry.pc.close();
     this.peers.clear();
@@ -94,6 +96,7 @@ export class ConnectionManager {
     this.onStatus('connecting');
 
     this.iceServers = await fetchIceServers(url);
+    if (this.disposed) return;
 
     const ws = new WebSocket(url);
     this.ws = ws;

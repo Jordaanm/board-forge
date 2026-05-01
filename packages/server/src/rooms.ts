@@ -65,6 +65,18 @@ export function getRoomMembers(roomId: string): Member[] {
   return room ? Array.from(room.members.values()) : [];
 }
 
+export interface RoomInfo {
+  roomId:    string;
+  occupancy: number;
+}
+
+export function listRooms(): RoomInfo[] {
+  return Array.from(rooms.entries()).map(([roomId, room]) => ({
+    roomId,
+    occupancy: room.members.size,
+  }));
+}
+
 export function lookup(ws: WebSocket): { roomId: string; peerId: string } | null {
   return clientLookup.get(ws) ?? null;
 }
