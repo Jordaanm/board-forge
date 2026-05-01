@@ -1,0 +1,96 @@
+.landing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  background: #1a1a2e;
+  color: #e8e8e8;
+  font-family: sans-serif;
+}
+
+.landing__card {
+  text-align: center;
+  min-width: 420px;
+}
+
+.landing__title {
+  font-size: 36px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  letter-spacing: 1px;
+}
+
+.landing__subtitle {
+  font-size: 14px;
+  color: #888;
+  margin-bottom: 32px;
+}
+
+.landing__create-btn {
+  padding: 12px 32px;
+  font-size: 16px;
+  font-weight: 600;
+  background: #5c7cfa;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.landing__rooms {
+  margin-top: 40px;
+  text-align: left;
+}
+
+.landing__rooms-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #aaa;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.landing__muted {
+  color: #666;
+  font-size: 14px;
+  text-align: center;
+}
+
+.landing__list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.landing__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: #252538;
+  border-radius: 6px;
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+
+.landing__room-id {
+  font-family: monospace;
+  color: #e8e8e8;
+}
+
+.landing__occupancy {
+  color: #aaa;
+  font-size: 13px;
+}
+
+.landing__join-btn {
+  padding: 6px 14px;
+  background: #5c7cfa;
+  color: #fff;
+  border-radius: 4px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 13px;
+}

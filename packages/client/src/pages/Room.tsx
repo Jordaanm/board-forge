@@ -12,6 +12,7 @@ import { DEFAULT_TABLE_PROPS, type TableProps } from '../scene/Table';
 import { RoomStateManager } from '../seats/RoomStateManager';
 import { RoomStateClient } from '../seats/RoomStateClient';
 import type { RoomStateMessage } from '../seats/RoomState';
+import './Room.css';
 
 type Status = 'connecting' | 'connected' | 'disconnected' | 'room-full';
 
@@ -22,13 +23,6 @@ const STATUS_LABEL: Record<Status, string> = {
   connected:    'Connected',
   disconnected: 'Disconnected',
   'room-full':  'Room is full',
-};
-
-const STATUS_COLOR: Record<Status, string> = {
-  connecting:   '#aaa',
-  connected:    '#4caf50',
-  disconnected: '#f44336',
-  'room-full':  '#f44336',
 };
 
 interface Props {
@@ -190,7 +184,7 @@ export function Room({ roomId, isHost }: Props) {
   })();
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+    <div className="room">
       <ThreeCanvas
         isHost={isHost}
         sendRef={sendRef}
@@ -214,12 +208,7 @@ export function Room({ roomId, isHost }: Props) {
         setHighlightRef={setHighlightRef}
       />
 
-      <div style={{
-        position: 'absolute', top: 12, right: 12,
-        background: 'rgba(0,0,0,0.65)', color: STATUS_COLOR[status],
-        padding: '6px 14px', borderRadius: 6, fontSize: 13,
-        fontFamily: 'sans-serif', fontWeight: 600,
-      }}>
+      <div className={`room__status room__status--${status}`}>
         {STATUS_LABEL[status]}
       </div>
 
@@ -239,18 +228,9 @@ export function Room({ roomId, isHost }: Props) {
       )}
 
       {isHost && status === 'connecting' && (
-        <div style={{
-          position: 'absolute', bottom: 72, left: '50%', transform: 'translateX(-50%)',
-          background: 'rgba(0,0,0,0.8)', color: '#e8e8e8',
-          padding: '14px 22px', borderRadius: 8, fontFamily: 'sans-serif',
-          textAlign: 'center', maxWidth: 480,
-        }}>
-          <div style={{ fontSize: 13, marginBottom: 8, color: '#aaa' }}>
-            Share this link with your guest:
-          </div>
-          <div style={{ fontFamily: 'monospace', fontSize: 12, wordBreak: 'break-all', color: '#5c7cfa' }}>
-            {shareUrl}
-          </div>
+        <div className="room__share">
+          <div className="room__share-label">Share this link with your guest:</div>
+          <div className="room__share-url">{shareUrl}</div>
         </div>
       )}
 
