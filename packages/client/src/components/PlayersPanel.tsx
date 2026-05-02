@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { type RoomStateSnapshot, type SeatEntry } from '../seats/RoomState';
 import { type SeatIndex } from '../seats/SeatLayout';
+import { useFlipPosition } from './useFlipPosition';
 import './PlayersPanel.css';
 
 interface Props {
@@ -265,6 +266,7 @@ function MoveToSeatSubmenu({
   seats, onClaim,
 }: { seats: SeatEntry[]; onClaim: (seatIndex: SeatIndex) => void }) {
   const [open, setOpen] = useState(false);
+  const { ref, style } = useFlipPosition(open);
   return (
     <div
       style={{ position: 'relative' }}
@@ -275,7 +277,7 @@ function MoveToSeatSubmenu({
         <span>Move to seat</span><span style={{ color: '#888' }}>▸</span>
       </div>
       {open && (
-        <div role="menu" style={{ ...MENU_STYLE, position: 'absolute', left: '100%', top: 0, minWidth: 140 }}>
+        <div ref={ref} role="menu" style={{ ...MENU_STYLE, position: 'absolute', ...style, minWidth: 140 }}>
           {seats.map(s => (
             <button
               key={s.index}

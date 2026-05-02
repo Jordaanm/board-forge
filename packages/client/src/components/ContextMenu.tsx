@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { type ContextMenuRequest } from '../input/ContextMenuController';
 import { type MenuItem } from '../entity/EntityComponent';
+import { useFlipPosition } from './useFlipPosition';
 
 interface Props {
   menu:      ContextMenuRequest;
@@ -159,6 +160,7 @@ function SubmenuRow({
   onAction: (item: MenuItem & { kind: 'action' | 'colorpicker' }, args: object | undefined) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const { ref, style } = useFlipPosition(open);
   return (
     <div
       style={{ position: 'relative' }}
@@ -170,9 +172,10 @@ function SubmenuRow({
       </div>
       {open && (
         <div
+          ref={ref}
           role="menu"
           style={{
-            position: 'absolute', left: '100%', top: 0,
+            position: 'absolute', ...style,
             background: '#1e1e2e', border: '1px solid rgba(255,255,255,0.15)',
             borderRadius: 6, padding: '4px 0', minWidth: 140,
             boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
