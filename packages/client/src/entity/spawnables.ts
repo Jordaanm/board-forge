@@ -10,6 +10,7 @@ import { MeshComponent } from './components/MeshComponent';
 import { PhysicsComponent } from './components/PhysicsComponent';
 import { ValueComponent } from './components/ValueComponent';
 import { DiceComponent } from './components/DiceComponent';
+import { FlatViewComponent } from './components/FlatViewComponent';
 import { D6_FACE_MAP } from '../dice/d6';
 
 export function registerCorePrimitives(): void {
@@ -18,6 +19,7 @@ export function registerCorePrimitives(): void {
   if (!componentRegistry.has('physics'))   componentRegistry.register(PhysicsComponent);
   if (!componentRegistry.has('value'))     componentRegistry.register(ValueComponent);
   if (!componentRegistry.has('dice'))      componentRegistry.register(DiceComponent);
+  if (!componentRegistry.has('flatview'))  componentRegistry.register(FlatViewComponent);
 
   if (!getSpawnable('board')) registerSpawnable({
     type:        'board',
