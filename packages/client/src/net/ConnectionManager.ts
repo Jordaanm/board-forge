@@ -84,6 +84,11 @@ export class ConnectionManager {
     if (entry?.channel?.readyState === 'open') entry.channel.send(JSON.stringify(data));
   }
 
+  // Forcibly disconnect a peer. Used by the host for kick / ban.
+  kickPeer(peerId: string) {
+    this.tearDownPeer(peerId);
+  }
+
   dispose() {
     this.disposed = true;
     this.ws?.close();

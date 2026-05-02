@@ -1,0 +1,121 @@
+.players-panel {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 240px;
+  background: rgba(20, 20, 32, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  color: #e8e8e8;
+  font-family: sans-serif;
+  font-size: 13px;
+  z-index: 100;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.players-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.players-panel--collapsed .players-panel__header {
+  border-bottom: none;
+}
+
+.players-panel:not(.players-panel--collapsed) .players-panel__header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.players-panel__title {
+  font-weight: 600;
+}
+
+.players-panel__chevron {
+  color: #aaa;
+  font-size: 12px;
+}
+
+.players-panel__list {
+  padding: 6px 0;
+}
+
+.players-panel__empty {
+  padding: 8px 12px;
+  color: #666;
+  font-size: 12px;
+}
+
+.players-panel__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  cursor: context-menu;
+}
+
+.players-panel__row:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.players-panel__row--self {
+  background: rgba(80, 140, 220, 0.15);
+}
+
+.players-panel__row--self:hover {
+  background: rgba(80, 140, 220, 0.22);
+}
+
+.players-panel__swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 1px solid rgba(0, 0, 0, 0.4);
+}
+
+.players-panel__swatch--empty {
+  background: transparent;
+  border-style: dashed;
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.players-panel__name {
+  flex: 1;
+  font-family: monospace;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.players-panel__name--placeholder {
+  font-style: italic;
+  color: #666;
+}
+
+.players-panel__badge {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #888;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+.players-panel__badge--host {
+  color: #ffd740;
+  background: rgba(255, 215, 64, 0.12);
+}
+
+.players-panel__section-label {
+  padding: 6px 12px 2px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #888;
+}

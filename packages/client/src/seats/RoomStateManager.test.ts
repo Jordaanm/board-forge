@@ -197,6 +197,64 @@ describe('RoomStateManager — change events', () => {
   });
 });
 
+describe('RoomStateManager — claimSeat', () => {
+  test('moves a spectator into an empty seat and removes them from spectators', () => {
+    const m = new RoomStateManager(HOST);
+    for (let i = 1; i <= 7; i++) m.assignOnJoin(`p${i}`);
+    m.assignOnJoin('spec');
+    expect(m.snapshot().spectators).toContain('spec');
+    m.removePeer('p3');                  // free seat 3
+    expect(m.claimSeat('spec', 3)).toBe(true);
+    expect(m.getSeat('spec')).toBe(3);
+    expect(m.snapshot().spectators).not.toContain('spec');
+  });
+
+  test('moves a seated peer to a different empty seat, freeing the old one', () => {
+    const m = new RoomStateManager(HOST);
+    m.assignOnJoin('p1');                // → seat 1
+    expect(m.claimSeat('p1', 5)).toBe(true);
+    expect(m.getSeat('p1')).toBe(5);
+    expect(m.snapshot().seats[1].peerId).toBeNull();
+  });
+
+  test('refuses to claim an occupied seat', () => {
+    const m = new RoomStateManager(HOST);
+    m.assignOnJoin('p1');                // → seat 1
+    m.assignOnJoin('p2');                // → seat 2
+    expect(m.claimSeat('p2', 1)).toBe(false);
+    expect(m.getSeat('p2')).toBe(2);
+  });
+
+  test('emits a single change with both source and target seat patches', () => {
+    const m = new RoomStateManager(HOST);
+    m.assignOnJoin('p1');
+    const events: Array<{ patch: { seats?: unknown[] } }> = [];
+    m.onChange(c => events.push(c as { patch: { seats?: unknown[] } }));
+    m.claimSeat('p1', 5);
+    expect(events).toHaveLength(1);
+    expect(events[0].patch.seats).toHaveLength(2);
+  });
+});
+
+describe('RoomStateManager — banPeer', () => {
+  test('removes the peer and prevents re-assignment', () => {
+    const m = new RoomStateManager(HOST);
+    m.assignOnJoin('p1');
+    m.banPeer('p1');
+    expect(m.getSeat('p1')).toBeNull();
+    expect(m.isBanned('p1')).toBe(true);
+    m.assignOnJoin('p1');
+    expect(m.getSeat('p1')).toBeNull();
+    expect(m.snapshot().spectators).not.toContain('p1');
+  });
+
+  test('claimSeat refuses banned peers', () => {
+    const m = new RoomStateManager(HOST);
+    m.banPeer('p1');
+    expect(m.claimSeat('p1', 3)).toBe(false);
+  });
+});
+
 describe('RoomStateManager — snapshot stability', () => {
   test('two snapshots across a no-op are deep-equal', () => {
     const m = new RoomStateManager(HOST);

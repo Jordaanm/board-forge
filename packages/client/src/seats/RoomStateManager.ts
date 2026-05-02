@@ -23,6 +23,7 @@ export class RoomStateManager {
   private readonly hostPeerId: string;
   private readonly seats: SeatEntry[] = makeEmptySeats();
   private readonly spectators: string[] = [];
+  private readonly banned: Set<string> = new Set();
   private readonly listeners: Listener[] = [];
 
   constructor(hostPeerId: string) {
@@ -31,6 +32,7 @@ export class RoomStateManager {
   }
 
   assignOnJoin(peerId: string): void {
+    if (this.banned.has(peerId)) return;
     if (this.locate(peerId)) return;
 
     const empty = this.seats.find(s => s.peerId === null);
@@ -56,6 +58,43 @@ export class RoomStateManager {
     if (idx === -1) return;
     this.spectators.splice(idx, 1);
     this.emit({ spectatorsRemoved: [peerId] });
+  }
+
+  // Move peerId to seatIndex if it is empty. Returns false if the seat is
+  // already occupied or the peer is unknown / banned.
+  claimSeat(peerId: string, seatIndex: SeatIndex): boolean {
+    if (this.banned.has(peerId))         return false;
+    const target = this.seats[seatIndex];
+    if (!target || target.peerId !== null) return false;
+
+    const fromSeat = this.seats.find(s => s.peerId === peerId);
+    if (fromSeat) {
+      fromSeat.peerId = null;
+      target.peerId   = peerId;
+      this.emit({ seats: [{ ...fromSeat }, { ...target }] });
+      return true;
+    }
+
+    const specIdx = this.spectators.indexOf(peerId);
+    if (specIdx !== -1) {
+      this.spectators.splice(specIdx, 1);
+      target.peerId = peerId;
+      this.emit({ seats: [{ ...target }], spectatorsRemoved: [peerId] });
+      return true;
+    }
+
+    target.peerId = peerId;
+    this.emit({ seats: [{ ...target }] });
+    return true;
+  }
+
+  banPeer(peerId: string): void {
+    this.banned.add(peerId);
+    this.removePeer(peerId);
+  }
+
+  isBanned(peerId: string): boolean {
+    return this.banned.has(peerId);
   }
 
   getSeat(peerId: string): SeatIndex | null {

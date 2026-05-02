@@ -3,6 +3,7 @@ import { ThreeCanvas, type ReplicationTarget } from '../ThreeCanvas';
 import { ConnectionManager } from '../net/ConnectionManager';
 import { EditorPanel, type ObjectSummary } from '../components/EditorPanel';
 import { ContextMenu } from '../components/ContextMenu';
+import { PlayersPanel } from '../components/PlayersPanel';
 import { type ContextMenuRequest, dispatchMenuAction } from '../input/ContextMenuController';
 import { Scene } from '../entity/Scene';
 import { type MenuItem } from '../entity/EntityComponent';
@@ -11,7 +12,7 @@ import { type SeatIndex } from '../seats/SeatLayout';
 import { DEFAULT_TABLE_PROPS, type TableProps } from '../scene/Table';
 import { RoomStateManager } from '../seats/RoomStateManager';
 import { RoomStateClient } from '../seats/RoomStateClient';
-import type { RoomStateMessage } from '../seats/RoomState';
+import type { RoomStateMessage, RoomStateSnapshot } from '../seats/RoomState';
 import './Room.css';
 
 type Status = 'connecting' | 'connected' | 'disconnected' | 'room-full';
@@ -39,6 +40,8 @@ export function Room({ roomId, isHost }: Props) {
   const [selectedId,   setSelectedId]   = useState<string | null>(null);
   const [isFreeCamera, setIsFreeCamera] = useState(false);
   const [tableProps,   setTableProps]   = useState<TableProps>(DEFAULT_TABLE_PROPS);
+  const [roomSnapshot, setRoomSnapshot] = useState<RoomStateSnapshot | null>(null);
+  const [selfPeerId,   setSelfPeerId]   = useState<string | null>(null);
 
   const sendRef            = useRef<(msg: ChannelMessage) => void>(noop);
   const sendToRef          = useRef<(peerId: string, msg: ChannelMessage) => void>(noop);
@@ -59,6 +62,9 @@ export function Room({ roomId, isHost }: Props) {
   const onObjectsChangeRef = useRef<(objs: ObjectSummary[]) => void>(noop);
   const onSelectRef        = useRef<(id: string | null) => void>(noop);
   const setHighlightRef    = useRef<(id: string | null) => void>(noop);
+  const claimSeatRef       = useRef<(seatIndex: SeatIndex) => void>(noop);
+  const kickPeerRef        = useRef<(peerId: string) => void>(noop);
+  const banPeerRef         = useRef<(peerId: string) => void>(noop);
 
   // Set every render — fine, it's just a ref assignment.
   onContextMenuRef.current   = (req) => setContextMenu(req);
@@ -83,6 +89,18 @@ export function Room({ roomId, isHost }: Props) {
           if (client) console.log('[RoomState] my seat:', client.getMySeat());
           return;
         }
+        if (m.type === 'seat-claim-request') {
+          if (manager) {
+            manager.claimSeat(peerId, m.seatIndex);
+            // No reply: the resulting patch (if any) broadcasts to all peers via
+            // the manager's onChange listener.
+          }
+          return;
+        }
+        if (m.type === 'kicked') {
+          setStatus('disconnected');
+          return;
+        }
         onMsgRef.current(peerId, m);
       },
       (s) => setStatus(s as Status),
@@ -92,21 +110,30 @@ export function Room({ roomId, isHost }: Props) {
       },
       (peerId) => {
         if (!manager) return;
+        if (manager.isBanned(peerId)) {
+          mgr.sendTo(peerId, { type: 'kicked', reason: 'ban' } satisfies RoomStateMessage);
+          mgr.kickPeer(peerId);
+          return;
+        }
         manager.assignOnJoin(peerId);
         const snapshotMsg: RoomStateMessage = { type: 'room-state', snapshot: manager.snapshot() };
         mgr.sendTo(peerId, snapshotMsg);
         onPeerJoinedRef.current(peerId);
       },
       (peerId) => {
+        setSelfPeerId(peerId);
         if (isHost) {
           manager = new RoomStateManager(peerId);
           manager.onChange((change) => {
             const patchMsg: RoomStateMessage = { type: 'room-state-patch', patch: change.patch };
             mgr.send(patchMsg);
+            setRoomSnapshot(change.snapshot);
           });
+          setRoomSnapshot(manager.snapshot());
           console.log('[RoomState] my seat:', manager.getSeat(peerId));
         } else {
           client = new RoomStateClient(peerId);
+          client.onChange(snap => setRoomSnapshot(snap));
         }
       },
     );
@@ -127,6 +154,29 @@ export function Room({ roomId, isHost }: Props) {
     getSelfPeerIdRef.current = () => mgr.getPeerId();
     getPeerSeatRef.current = (peerId) => manager?.getSeat(peerId) ?? null;
 
+    claimSeatRef.current = (seatIndex) => {
+      if (manager) {
+        const self = mgr.getPeerId();
+        if (self) manager.claimSeat(self, seatIndex);
+        return;
+      }
+      mgr.send({ type: 'seat-claim-request', seatIndex } satisfies RoomStateMessage);
+    };
+
+    kickPeerRef.current = (peerId) => {
+      if (!manager) return;
+      mgr.sendTo(peerId, { type: 'kicked', reason: 'kick' } satisfies RoomStateMessage);
+      manager.removePeer(peerId);
+      mgr.kickPeer(peerId);
+    };
+
+    banPeerRef.current = (peerId) => {
+      if (!manager) return;
+      mgr.sendTo(peerId, { type: 'kicked', reason: 'ban' } satisfies RoomStateMessage);
+      manager.banPeer(peerId);
+      mgr.kickPeer(peerId);
+    };
+
     if (isHost) mgr.hostRoom(SIGNALING_URL, roomId);
     else        mgr.joinRoom(SIGNALING_URL, roomId);
 
@@ -138,6 +188,11 @@ export function Room({ roomId, isHost }: Props) {
       getSelfSeatRef.current   = () => null;
       getSelfPeerIdRef.current = () => null;
       getPeerSeatRef.current   = () => null;
+      claimSeatRef.current     = noop;
+      kickPeerRef.current      = noop;
+      banPeerRef.current       = noop;
+      setRoomSnapshot(null);
+      setSelfPeerId(null);
     };
   }, [roomId, isHost]);
 
@@ -226,6 +281,15 @@ export function Room({ roomId, isHost }: Props) {
           onToggleFreeCamera={handleToggleFreeCamera}
         />
       )}
+
+      <PlayersPanel
+        snapshot={roomSnapshot}
+        selfPeerId={selfPeerId}
+        isHost={isHost}
+        onClaimSeat={(idx) => claimSeatRef.current(idx)}
+        onKick={(id) => kickPeerRef.current(id)}
+        onBan={(id) => banPeerRef.current(id)}
+      />
 
       {isHost && status === 'connecting' && (
         <div className="room__share">

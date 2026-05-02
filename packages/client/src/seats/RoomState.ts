@@ -22,8 +22,10 @@ export interface RoomStatePatch {
 }
 
 export type RoomStateMessage =
-  | { type: 'room-state';       snapshot: RoomStateSnapshot }
-  | { type: 'room-state-patch'; patch:    RoomStatePatch    };
+  | { type: 'room-state';         snapshot: RoomStateSnapshot }
+  | { type: 'room-state-patch';   patch:    RoomStatePatch    }
+  | { type: 'seat-claim-request'; seatIndex: SeatIndex        }
+  | { type: 'kicked';             reason: 'kick' | 'ban'      };
 
 export const SEAT_COUNT = 8;
 
