@@ -9,12 +9,15 @@ import { TransformComponent } from './components/TransformComponent';
 import { MeshComponent } from './components/MeshComponent';
 import { PhysicsComponent } from './components/PhysicsComponent';
 import { ValueComponent } from './components/ValueComponent';
+import { DiceComponent } from './components/DiceComponent';
+import { D6_FACE_MAP } from '../dice/d6';
 
 export function registerCorePrimitives(): void {
   if (!componentRegistry.has('transform')) componentRegistry.register(TransformComponent);
   if (!componentRegistry.has('mesh'))      componentRegistry.register(MeshComponent);
   if (!componentRegistry.has('physics'))   componentRegistry.register(PhysicsComponent);
   if (!componentRegistry.has('value'))     componentRegistry.register(ValueComponent);
+  if (!componentRegistry.has('dice'))      componentRegistry.register(DiceComponent);
 
   if (!getSpawnable('board')) registerSpawnable({
     type:        'board',
@@ -36,6 +39,7 @@ export function registerCorePrimitives(): void {
       { typeId: 'mesh',      state: { meshRef: 'prim:d6', textureRef: '', tint: '#fafafa', size: 0.7 } },
       { typeId: 'physics',   state: { mass: 0.2, friction: 0.5, restitution: 0.5 } },
       { typeId: 'value',     state: { value: '6', isNumeric: true } },
+      { typeId: 'dice',      state: { maxValue: 6, faceMap: D6_FACE_MAP } },
     ],
   });
 

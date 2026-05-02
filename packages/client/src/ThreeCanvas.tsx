@@ -1,12 +1,12 @@
 import { useEffect, useRef, type MutableRefObject } from 'react';
 import * as THREE from 'three';
 import { createTable, applyTableProp, type TableProps } from './scene/Table';
-import { getDieFace } from './scene/dieFace';
 import { SceneSystemV2 } from './entity/SceneSystemV2';
 import { HostReplicatorV2 } from './entity/HostReplicatorV2';
 import { applySceneMessage } from './entity/GuestReceiver';
 import { EntityComponent } from './entity/EntityComponent';
 import { Scene, entityToSerialized } from './entity/Scene';
+import { DiceComponent } from './entity/components/DiceComponent';
 import { HoldService } from './entity/HoldService';
 import { HostInputDispatcher } from './entity/HostInputDispatcher';
 import { MoveGizmo } from './scene/MoveGizmo';
@@ -62,7 +62,6 @@ export function ThreeCanvas({
   onSelectRef, setHighlightRef,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const overlayRef   = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -223,15 +222,8 @@ export function ThreeCanvas({
       spawnRef.current = (type) => graph.spawn(type, scene, physics!);
 
       rollRef.current = () => {
-        for (const e of graph.getAll()) {
-          if (e.objectType !== 'die' || !e.body) continue;
-          e.body.wakeUp();
-          e.body.angularVelocity.set(
-            (Math.random() - 0.5) * 40,
-            (Math.random() - 0.5) * 40,
-            (Math.random() - 0.5) * 40,
-          );
-          e.body.velocity.set((Math.random() - 0.5) * 4, 3, (Math.random() - 0.5) * 4);
+        for (const entity of Scene.all()) {
+          entity.getComponent(DiceComponent)?.roll();
         }
       };
 
@@ -337,29 +329,8 @@ export function ThreeCanvas({
         broadcast(hostRepl.flushUnreliable());
         broadcast(hostRepl.flushReliable());
 
-        const dieFaces: string[] = [];
-        for (const e of graph.getAll()) {
-          if (e.objectType !== 'die' || !e.body) continue;
-          const speed = e.body.velocity.length() + e.body.angularVelocity.length();
-          if (speed < 0.1) {
-            dieFaces.push(`D6: ${getDieFace(
-              e.body.quaternion.x, e.body.quaternion.y,
-              e.body.quaternion.z, e.body.quaternion.w,
-            )}`);
-          }
-        }
-        if (overlayRef.current) overlayRef.current.textContent = dieFaces.join('  |  ');
-
       } else if (!isHost) {
         guestDrag?.update();
-
-        const dieFaces: string[] = [];
-        for (const e of graph.getAll()) {
-          if (e.objectType !== 'die') continue;
-          const q = e.mesh.quaternion;
-          dieFaces.push(`D6: ${getDieFace(q.x, q.y, q.z, q.w)}`);
-        }
-        if (overlayRef.current) overlayRef.current.textContent = dieFaces.join('  |  ');
       }
 
       // ── Cursor: throttled send + render sync ───────────────────────────
@@ -434,15 +405,6 @@ export function ThreeCanvas({
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
-      <div
-        ref={overlayRef}
-        style={{
-          position: 'absolute', top: 8, left: 8,
-          color: '#ffd740', fontSize: 14, fontFamily: 'monospace',
-          background: 'rgba(0,0,0,0.55)', padding: '3px 10px', borderRadius: 4,
-          pointerEvents: 'none',
-        }}
-      />
     </div>
   );
 }

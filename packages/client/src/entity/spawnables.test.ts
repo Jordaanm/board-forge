@@ -6,7 +6,9 @@ import { TransformComponent } from './components/TransformComponent';
 import { MeshComponent } from './components/MeshComponent';
 import { PhysicsComponent } from './components/PhysicsComponent';
 import { ValueComponent } from './components/ValueComponent';
+import { DiceComponent } from './components/DiceComponent';
 import { registerCorePrimitives } from './spawnables';
+import { D6_FACE_MAP } from '../dice/d6';
 import { PhysicsWorld } from '../physics/PhysicsWorld';
 
 let ctx: SpawnContext;
@@ -18,7 +20,7 @@ beforeEach(() => {
 });
 
 describe('spawnables — board / die / token spawn', () => {
-  test('die spawns with transform/mesh/physics/value components', () => {
+  test('die spawns with transform/mesh/physics/value/dice components', () => {
     const e = Scene.spawn('die', ctx);
     expect(e.type).toBe('die');
     expect(e.tags).toEqual(['die']);
@@ -26,6 +28,10 @@ describe('spawnables — board / die / token spawn', () => {
     expect(e.getComponent(MeshComponent)).toBeDefined();
     expect(e.getComponent(PhysicsComponent)).toBeDefined();
     expect(e.getComponent(ValueComponent)).toBeDefined();
+    const dice = e.getComponent(DiceComponent);
+    expect(dice).toBeDefined();
+    expect(dice!.state.maxValue).toBe(6);
+    expect(dice!.state.faceMap).toEqual(D6_FACE_MAP);
   });
 
   test('board spawns with transform/mesh/physics; no value', () => {
@@ -130,10 +136,11 @@ describe('spawnables — serialised snapshot shape', () => {
     expect(snap.privateToSeat).toBeNull();
     expect(snap.parentId).toBeNull();
     expect(snap.children).toEqual([]);
-    expect(Object.keys(snap.components).sort()).toEqual(['mesh', 'physics', 'transform', 'value']);
+    expect(Object.keys(snap.components).sort()).toEqual(['dice', 'mesh', 'physics', 'transform', 'value']);
     expect(snap.components.value).toEqual({ value: '6', isNumeric: true });
     expect(snap.components.physics).toEqual({ mass: 0.2, friction: 0.5, restitution: 0.5 });
     expect(snap.components.mesh).toMatchObject({ meshRef: 'prim:d6', size: 0.7 });
+    expect(snap.components.dice).toEqual({ maxValue: 6, faceMap: D6_FACE_MAP });
   });
 
   test('snapshot round-trips JSON without loss', () => {

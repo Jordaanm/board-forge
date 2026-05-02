@@ -3,18 +3,8 @@ import * as THREE from 'three';
 import {
   resolveFaceFromOrientation,
   orientationForValue,
-  type FaceEntry,
 } from './diceFaceResolver';
-
-// Canonical D6 face map — matches the pip placements in MeshComponent.buildD6.
-const D6_MAP: readonly FaceEntry[] = [
-  { value: 1, upAxis: [ 0,  1,  0] },
-  { value: 6, upAxis: [ 0, -1,  0] },
-  { value: 2, upAxis: [ 0,  0,  1] },
-  { value: 5, upAxis: [ 0,  0, -1] },
-  { value: 3, upAxis: [ 1,  0,  0] },
-  { value: 4, upAxis: [-1,  0,  0] },
-];
+import { D6_FACE_MAP as D6_MAP } from './d6';
 
 // Build a body quaternion from an axis-angle pair.
 function quatAxisAngle(ax: number, ay: number, az: number, angle: number): [number, number, number, number] {
