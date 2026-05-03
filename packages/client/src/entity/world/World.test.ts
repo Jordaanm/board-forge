@@ -291,3 +291,81 @@ describe('World — late-join scene-snapshot (issue #8)', () => {
     expect(pair.guest.get('d-1')).toBeDefined();
   });
 });
+
+describe('World — reliable / unreliable channel routing (issue #9)', () => {
+  let pair: Pair | null = null;
+
+  afterEach(() => {
+    pair?.host.dispose();
+    pair?.guest.dispose();
+    pair = null;
+  });
+
+  function setupWithLoss(unreliableLossProbability: number, seed = 0): Pair {
+    // Deterministic LCG so the test is reproducible without a real RNG dep.
+    let s = seed || 1;
+    const random = () => {
+      s = (s * 1664525 + 1013904223) >>> 0;
+      return s / 0x100000000;
+    };
+    const bus = createInMemoryBusPair({ unreliableLossProbability, random });
+    const peerSeats = new Map<string, SeatIndex>([[GUEST_PEER_ID, GUEST_SEAT]]);
+    const host = createWorld({
+      role: 'host', scene: new THREE.Scene(),
+      identity: { isHost: true, selfSeat: () => HOST_SEAT, selfPeerId: () => HOST_PEER_ID },
+      transport: bus.host,
+      getPeerSeat: (peerId) => peerSeats.get(peerId) ?? null,
+    });
+    const guest = createWorld({
+      role: 'guest', scene: new THREE.Scene(),
+      identity: { isHost: false, selfSeat: () => GUEST_SEAT, selfPeerId: () => GUEST_PEER_ID },
+      transport: bus.guest,
+    });
+    return { host, guest, firePeerJoin: bus.firePeerJoin };
+  }
+
+  test('spawn (reliable) survives 30% unreliable-channel loss', () => {
+    pair = setupWithLoss(0.3);
+    pair.host.spawn('die', { id: 'd-1', position: [0, 5, 0] });
+    pair.host.tick(0.016);
+
+    // entity-spawn rides the reliable channel — InMemoryTransport never drops
+    // it regardless of unreliableLossProbability.
+    expect(pair.guest.get('d-1')).toBeDefined();
+  });
+
+  test('transform (unreliable) drops are tolerated; eventual final state arrives', () => {
+    pair = setupWithLoss(0.3);
+    pair.host.spawn('die', { id: 'd-1', position: [0, 5, 0] });
+    pair.host.tick(0.016);
+
+    // Drive the host through many ticks; physics syncs transform every tick
+    // on the unreliable channel. With 30% loss, ~70% of envelopes get
+    // through — over 50 ticks the guest's transform converges close to the
+    // host's authoritative position even though individual envelopes are
+    // lost.
+    for (let i = 0; i < 50; i++) pair.host.tick(0.016);
+
+    const hostT  = pair.host.get('d-1')!.get(TransformComponent)!;
+    const guestT = pair.guest.get('d-1')!.get(TransformComponent)!;
+    expect(guestT.state.position[0]).toBeCloseTo(hostT.state.position[0], 1);
+    expect(guestT.state.position[1]).toBeCloseTo(hostT.state.position[1], 1);
+    expect(guestT.state.position[2]).toBeCloseTo(hostT.state.position[2], 1);
+  });
+
+  test('100% unreliable loss: spawn still lands; transform never updates', () => {
+    pair = setupWithLoss(1.0);
+    pair.host.spawn('die', { id: 'd-1', position: [0, 5, 0] });
+    for (let i = 0; i < 5; i++) pair.host.tick(0.016);
+
+    // Reliable side delivered the spawn with its initial state.
+    const guestT = pair.guest.get('d-1')!.get(TransformComponent)!;
+    expect(guestT.state.position[1]).toBeCloseTo(5, 5);
+
+    // Unreliable side is fully dropped; subsequent physics-driven transform
+    // updates never reach the guest. Host has fallen further from the spawn
+    // pose under gravity.
+    const hostT = pair.host.get('d-1')!.get(TransformComponent)!;
+    expect(hostT.state.position[1]).toBeLessThan(5);
+  });
+});

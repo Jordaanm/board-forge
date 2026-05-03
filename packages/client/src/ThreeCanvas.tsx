@@ -28,8 +28,8 @@ export interface ReplicationTarget {
 
 interface Props {
   isHost:              boolean;
-  sendRef:             MutableRefObject<(msg: ChannelMessage) => void>;
-  sendToRef:           MutableRefObject<(peerId: string, msg: ChannelMessage) => void>;
+  sendRef:             MutableRefObject<(msg: ChannelMessage, opts?: { reliable?: boolean }) => void>;
+  sendToRef:           MutableRefObject<(peerId: string, msg: ChannelMessage, opts?: { reliable?: boolean }) => void>;
   getTargetsRef:       MutableRefObject<() => ReplicationTarget[]>;
   getSelfSeatRef:      MutableRefObject<() => SeatIndex | null>;
   getSelfPeerIdRef:    MutableRefObject<() => string | null>;
@@ -138,8 +138,8 @@ export function ThreeCanvas({
     // SceneMessage) and is dispatched directly in onMsgRef below.
     let worldRef: World | null = null;
     const transport = new RtcTransport({
-      send:       (msg) => sendRef.current(msg),
-      sendTo:     (peerId, msg) => sendToRef.current(peerId, msg),
+      send:       (msg, opts) => sendRef.current(msg, opts),
+      sendTo:     (peerId, msg, opts) => sendToRef.current(peerId, msg, opts),
       getTargets: isHost ? () => getTargetsRef.current() : () => [],
       getEntity:  (id) => worldRef?.get(id)?.entity,
     });

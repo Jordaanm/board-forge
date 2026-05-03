@@ -43,8 +43,8 @@ export function Room({ roomId, isHost }: Props) {
   const [roomSnapshot, setRoomSnapshot] = useState<RoomStateSnapshot | null>(null);
   const [selfPeerId,   setSelfPeerId]   = useState<string | null>(null);
 
-  const sendRef            = useRef<(msg: ChannelMessage) => void>(noop);
-  const sendToRef          = useRef<(peerId: string, msg: ChannelMessage) => void>(noop);
+  const sendRef            = useRef<(msg: ChannelMessage, opts?: { reliable?: boolean }) => void>(noop);
+  const sendToRef          = useRef<(peerId: string, msg: ChannelMessage, opts?: { reliable?: boolean }) => void>(noop);
   const getTargetsRef      = useRef<() => ReplicationTarget[]>(() => []);
   const getSelfSeatRef     = useRef<() => SeatIndex | null>(() => null);
   const getSelfPeerIdRef   = useRef<() => string | null>(() => null);
@@ -138,8 +138,8 @@ export function Room({ roomId, isHost }: Props) {
         }
       },
     );
-    sendRef.current     = (msg)         => mgr.send(msg);
-    sendToRef.current   = (peerId, msg) => mgr.sendTo(peerId, msg);
+    sendRef.current     = (msg, opts)         => mgr.send(msg, opts);
+    sendToRef.current   = (peerId, msg, opts) => mgr.sendTo(peerId, msg, opts);
     getTargetsRef.current = () => {
       if (!manager) return [];
       return mgr.getPeerIds().map(peerId => ({

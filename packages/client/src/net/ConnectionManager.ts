@@ -11,10 +11,14 @@ type SignalingMsg = { type: string; [k: string]: unknown };
 
 const FALLBACK_ICE_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }];
 
+const RELIABLE_LABEL   = 'game';
+const UNRELIABLE_LABEL = 'game-unreliable';
+
 interface PeerEntry {
-  pc:      RTCPeerConnection;
-  channel: RTCDataChannel | null;
-  open:    boolean;
+  pc:         RTCPeerConnection;
+  reliable:   RTCDataChannel | null;
+  unreliable: RTCDataChannel | null;
+  open:       boolean;  // true once the reliable channel opens
 }
 
 // Convert ws://host or wss://host into http(s)://host so we can hit /ice-config.
@@ -34,6 +38,18 @@ async function fetchIceServers(signalingUrl: string): Promise<RTCIceServer[]> {
   return FALLBACK_ICE_SERVERS;
 }
 
+export interface SendOpts {
+  reliable?: boolean;  // default true
+}
+
+// Two RTCDataChannels per peer (issue #9 of issues--arch.md):
+//   - 'game'           — ordered, retransmitted: scene replication, RPCs, snapshots.
+//   - 'game-unreliable' — ordered:false, maxRetransmits:0: transform / cursor.
+//
+// Rollout: opening both channels in one negotiation is a breaking change for
+// any client that only handles a single 'game' label — none deployed yet, so
+// hosts and guests must roll out together. Future versioning could fall back
+// to reliable-only when the second channel is missing.
 export class ConnectionManager {
   private ws:         WebSocket | null = null;
   private peerId:     string | null = null;
@@ -57,7 +73,7 @@ export class ConnectionManager {
   getPeerIds(): string[] {
     const ids: string[] = [];
     for (const [id, entry] of this.peers) {
-      if (entry.channel?.readyState === 'open') ids.push(id);
+      if (entry.reliable?.readyState === 'open') ids.push(id);
     }
     return ids;
   }
@@ -70,18 +86,24 @@ export class ConnectionManager {
     void this.connect(signalingUrl, roomId, 'guest');
   }
 
-  // Broadcast (host) or send to host (guest).
-  send(data: unknown) {
-    const payload = JSON.stringify(data);
+  // Broadcast (host) or send to host (guest). Defaults to the reliable
+  // channel; pass `{ reliable: false }` to drop on the unreliable channel.
+  // If the unreliable channel hasn't opened yet, falls back to reliable.
+  send(data: unknown, opts: SendOpts = {}) {
+    const payload  = JSON.stringify(data);
+    const reliable = opts.reliable !== false;
     for (const entry of this.peers.values()) {
-      if (entry.channel?.readyState === 'open') entry.channel.send(payload);
+      const ch = pickChannel(entry, reliable);
+      if (ch?.readyState === 'open') ch.send(payload);
     }
   }
 
   // Send to a specific peer.
-  sendTo(peerId: string, data: unknown) {
+  sendTo(peerId: string, data: unknown, opts: SendOpts = {}) {
     const entry = this.peers.get(peerId);
-    if (entry?.channel?.readyState === 'open') entry.channel.send(JSON.stringify(data));
+    if (!entry) return;
+    const ch = pickChannel(entry, opts.reliable !== false);
+    if (ch?.readyState === 'open') ch.send(JSON.stringify(data));
   }
 
   // Forcibly disconnect a peer. Used by the host for kick / ban.
@@ -191,7 +213,7 @@ export class ConnectionManager {
 
   private createPeer(remoteId: string, localRole: Role): PeerEntry {
     const pc = new RTCPeerConnection({ iceServers: this.iceServers });
-    const entry: PeerEntry = { pc, channel: null, open: false };
+    const entry: PeerEntry = { pc, reliable: null, unreliable: null, open: false };
     this.peers.set(remoteId, entry);
 
     pc.onicecandidate = (e) => {
@@ -205,12 +227,16 @@ export class ConnectionManager {
     };
 
     if (localRole === 'host') {
-      const ch = pc.createDataChannel('game');
-      entry.channel = ch;
-      this.wireChannel(remoteId, ch);
+      const reliable   = pc.createDataChannel(RELIABLE_LABEL,   { ordered: true });
+      const unreliable = pc.createDataChannel(UNRELIABLE_LABEL, { ordered: false, maxRetransmits: 0 });
+      entry.reliable   = reliable;
+      entry.unreliable = unreliable;
+      this.wireChannel(remoteId, reliable);
+      this.wireChannel(remoteId, unreliable);
     } else {
       pc.ondatachannel = (e) => {
-        entry.channel = e.channel;
+        if (e.channel.label === UNRELIABLE_LABEL) entry.unreliable = e.channel;
+        else                                      entry.reliable   = e.channel;
         this.wireChannel(remoteId, e.channel);
       };
     }
@@ -221,9 +247,15 @@ export class ConnectionManager {
   private wireChannel(remoteId: string, ch: RTCDataChannel) {
     ch.onopen = () => {
       const entry = this.peers.get(remoteId);
-      if (entry) entry.open = true;
-      this.onStatus('connected');
-      this.onPeerConnected(remoteId);
+      if (!entry) return;
+      // "Connected" is gated on the reliable channel — the unreliable one is
+      // an optimisation that may take longer (or never) to open over flaky
+      // links. send() falls back to reliable if unreliable isn't ready.
+      if (ch.label === RELIABLE_LABEL) {
+        entry.open = true;
+        this.onStatus('connected');
+        this.onPeerConnected(remoteId);
+      }
     };
     ch.onclose = () => this.markPeerClosed(remoteId);
     ch.onmessage = (e) => this.onMsg(remoteId, JSON.parse(e.data as string));
@@ -251,4 +283,12 @@ export class ConnectionManager {
   private signal(msg: unknown) {
     this.ws?.send(JSON.stringify(msg));
   }
+}
+
+function pickChannel(entry: PeerEntry, reliable: boolean): RTCDataChannel | null {
+  if (reliable) return entry.reliable;
+  // Unreliable preferred for non-critical traffic; fall back to reliable when
+  // the unreliable channel isn't open yet so the message still gets through.
+  if (entry.unreliable?.readyState === 'open') return entry.unreliable;
+  return entry.reliable;
 }

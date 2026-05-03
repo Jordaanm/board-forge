@@ -22,13 +22,19 @@ import {
   type ReplicationTarget,
 } from './types';
 
+export interface SendOpts {
+  reliable?: boolean;  // default true — routes to ConnectionManager's reliable channel
+}
+
 export interface RtcTransportOptions {
   // Broadcast and per-peer send hooks — typically wired to ConnectionManager
   // via ThreeCanvas's sendRef / sendToRef. Anything in the broader
   // ChannelMessage union flows through unchanged; SceneMessages destined for
   // multiple peers go via sendTo so each target gets its own scrubbed copy.
-  send:   (msg: ChannelMessage) => void;
-  sendTo: (peerId: string, msg: ChannelMessage) => void;
+  // The reliable flag selects the unreliable RTCDataChannel for transform /
+  // cursor traffic (issue #9 of issues--arch.md).
+  send:   (msg: ChannelMessage, opts?: SendOpts) => void;
+  sendTo: (peerId: string, msg: ChannelMessage, opts?: SendOpts) => void;
   // Returns the current set of replication targets (host: connected guests;
   // guest: empty). Empty disables fan-out — the transport falls back to a
   // single broadcast send.
@@ -43,8 +49,8 @@ export interface RtcTransportOptions {
 }
 
 export class RtcTransport implements WorldTransport {
-  private readonly send_:               (msg: ChannelMessage) => void;
-  private readonly sendTo_:             (peerId: string, msg: ChannelMessage) => void;
+  private readonly send_:               (msg: ChannelMessage, opts?: SendOpts) => void;
+  private readonly sendTo_:             (peerId: string, msg: ChannelMessage, opts?: SendOpts) => void;
   private readonly getTargets:          () => ReplicationTarget[];
   private readonly getEntity:           (id: string) => Entity | undefined;
   private readonly registry:            PrivateFieldRegistry;
@@ -59,7 +65,7 @@ export class RtcTransport implements WorldTransport {
     this.registry   = opts.privateFieldRegistry ?? EMPTY_PRIVATE_FIELD_REGISTRY;
   }
 
-  send(msg: WorldOutboundMessage, _opts: { reliable: boolean }): void {
+  send(msg: WorldOutboundMessage, opts: { reliable: boolean }): void {
     const targets = this.getTargets();
     if (targets.length > 0 && isSceneMessage(msg)) {
       // Host broadcast: per-peer fan-out + scrubbing.
@@ -70,14 +76,14 @@ export class RtcTransport implements WorldTransport {
           this.registry,
           this.getEntity,
         );
-        this.sendTo_(t.peerId, scrubbed);
+        this.sendTo_(t.peerId, scrubbed, { reliable: opts.reliable });
       }
       return;
     }
     // Guest input or no targets: broadcast as-is. Guests have no targets, so
     // their hold-claim / hold-release / guest-drag-move all flow through here
     // straight to the host.
-    this.send_(msg);
+    this.send_(msg, { reliable: opts.reliable });
   }
 
   sendTo(peerId: string, msg: SceneMessage): void {
