@@ -2,7 +2,11 @@
 //
 // Resolves `meshRef`:
 //   - 'prim:cube'   → a unit cube scaled by `size` (scalar = uniform; tuple = [w,h,d])
+//   - 'prim:d6'     → a chamfered cube body with pip overlays (single-material body)
 //   - 'prim:meeple' → capsule + sphere group (matches the legacy Token shape)
+//   - 'prim:card'   → thin box with three material slots: `face` on +Y, `back`
+//                     on -Y, `side` on the four edge faces (BoxGeometry material
+//                     groups remapped to a 3-material array).
 //   - any URL       → reserved for slice-4+ (no asset loader yet)
 //
 // `textureRefs` is a slot-name → URL map. Single-material primitives read from
@@ -61,6 +65,7 @@ export class MeshComponent extends EntityComponent<MeshState> {
   meshKind(): 'cube' | 'meeple' | 'unknown' {
     if (this.state.meshRef === 'prim:cube') return 'cube';
     if (this.state.meshRef === 'prim:d6')   return 'cube';
+    if (this.state.meshRef === 'prim:card') return 'cube';
     if (this.state.meshRef === 'prim:meeple') return 'meeple';
     return 'unknown';
   }
@@ -87,22 +92,34 @@ export class MeshComponent extends EntityComponent<MeshState> {
   private applyMaterialAttributes(): void {
     const tint  = this.state.tint || '#ffffff';
     const slots = this.state.textureRefs ?? {};
+
+    const apply = (mat: THREE.Material, slot: string): void => {
+      const lambert = mat as THREE.MeshLambertMaterial;
+      lambert.color?.set(new THREE.Color(tint));
+      const url = slots[slot] || '';
+      if (url && typeof document !== 'undefined') {
+        new THREE.TextureLoader().load(url, (tex) => {
+          lambert.map = tex;
+          lambert.needsUpdate = true;
+        });
+      } else {
+        lambert.map = null;
+        lambert.needsUpdate = true;
+      }
+    };
+
     this.group.traverse((child) => {
       if (!(child instanceof THREE.Mesh)) return;
       // Pip overlays own their own material — tint/texture only apply to the body.
       if (child.userData.skipTint) return;
-      const slotName = (child.userData.materialSlot as string | undefined) ?? 'default';
-      const url      = slots[slotName] || '';
-      const mat = child.material as THREE.MeshLambertMaterial;
-      mat.color?.set(new THREE.Color(tint));
-      if (url) {
-        new THREE.TextureLoader().load(url, (tex) => {
-          mat.map = tex;
-          mat.needsUpdate = true;
-        });
+      const meshSlot = (child.userData.materialSlot as string | undefined) ?? 'default';
+      if (Array.isArray(child.material)) {
+        for (const mat of child.material) {
+          const matSlot = (mat.userData?.materialSlot as string | undefined) ?? meshSlot;
+          apply(mat, matSlot);
+        }
       } else {
-        mat.map = null;
-        mat.needsUpdate = true;
+        apply(child.material, meshSlot);
       }
     });
   }
@@ -119,7 +136,8 @@ function buildMesh(meshRef: string, size: MeshSize): THREE.Object3D {
     mesh.receiveShadow = true;
     return mesh;
   }
-  if (meshRef === 'prim:d6') return buildD6(size);
+  if (meshRef === 'prim:d6')   return buildD6(size);
+  if (meshRef === 'prim:card') return buildCard(size);
   if (meshRef === 'prim:meeple') {
     const r = (typeof size === 'number' ? size : size[0]) * 0.5;
     const totalH = (typeof size === 'number' ? size : size[1]);
@@ -143,7 +161,7 @@ function sizeToBox(size: MeshSize): [number, number, number] {
 }
 
 function halfExtentsFor(meshRef: string, size: MeshSize): [number, number, number] {
-  if (meshRef === 'prim:cube' || meshRef === 'prim:d6') {
+  if (meshRef === 'prim:cube' || meshRef === 'prim:d6' || meshRef === 'prim:card') {
     const [w, h, d] = sizeToBox(size);
     return [w / 2, h / 2, d / 2];
   }
@@ -197,6 +215,38 @@ function buildD6(size: MeshSize): THREE.Object3D {
   }
 
   return group;
+}
+
+// Card = thin BoxGeometry whose 6 face groups are remapped to 3 materials:
+// face (+Y) → 0, back (-Y) → 1, sides (±X, ±Z) → 2. Each material carries a
+// `userData.materialSlot` so applyMaterialAttributes can route per-slot URLs
+// from `state.textureRefs` to the correct side. Default size matches a
+// playing-card aspect (≈ 63mm × 88mm at 1 unit ≈ 1 dm); thickness is
+// exaggerated to 0.01 for physics stability — real cards (~0.3mm) tunnel.
+function buildCard(size: MeshSize): THREE.Object3D {
+  const [w, h, d] = sizeToBox(size);
+  const geometry = new THREE.BoxGeometry(w, h, d);
+  // BoxGeometry creates one group per face in order +X, -X, +Y, -Y, +Z, -Z
+  // with materialIndex 0..5. Remap so +Y/-Y bind to face/back materials, the
+  // rest to a shared side material.
+  geometry.groups[0].materialIndex = 2; // +X side
+  geometry.groups[1].materialIndex = 2; // -X side
+  geometry.groups[2].materialIndex = 0; // +Y face
+  geometry.groups[3].materialIndex = 1; // -Y back
+  geometry.groups[4].materialIndex = 2; // +Z side
+  geometry.groups[5].materialIndex = 2; // -Z side
+
+  const faceMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+  faceMat.userData = { materialSlot: 'face' };
+  const backMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+  backMat.userData = { materialSlot: 'back' };
+  const sideMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+  sideMat.userData = { materialSlot: 'side' };
+
+  const mesh = new THREE.Mesh(geometry, [faceMat, backMat, sideMat]);
+  mesh.castShadow    = true;
+  mesh.receiveShadow = true;
+  return mesh;
 }
 
 const PIP_POSITIONS: Record<number, ReadonlyArray<readonly [number, number]>> = {

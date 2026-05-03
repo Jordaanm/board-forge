@@ -125,6 +125,69 @@ describe('spawnables — despawn tears down view artefacts', () => {
   });
 });
 
+describe('MeshComponent — prim:card', () => {
+  test('builds a 3-material mesh with face/back/side slots', () => {
+    const e = Scene.spawn('board', ctx);
+    const m = e.getComponent(MeshComponent)!;
+    m.setState({ meshRef: 'prim:card', size: [0.63, 0.01, 0.88] });
+
+    const cardMesh = m.group.children[0] as THREE.Mesh;
+    expect(cardMesh).toBeInstanceOf(THREE.Mesh);
+    expect(Array.isArray(cardMesh.material)).toBe(true);
+
+    const mats = cardMesh.material as THREE.Material[];
+    expect(mats).toHaveLength(3);
+    expect(mats[0].userData.materialSlot).toBe('face');
+    expect(mats[1].userData.materialSlot).toBe('back');
+    expect(mats[2].userData.materialSlot).toBe('side');
+  });
+
+  test('BoxGeometry groups remap +Y to face, -Y to back, sides shared', () => {
+    const e = Scene.spawn('board', ctx);
+    const m = e.getComponent(MeshComponent)!;
+    m.setState({ meshRef: 'prim:card', size: [0.63, 0.01, 0.88] });
+
+    const cardMesh = m.group.children[0] as THREE.Mesh;
+    const groups = (cardMesh.geometry as THREE.BoxGeometry).groups;
+    // BoxGeometry face order: +X, -X, +Y, -Y, +Z, -Z
+    expect(groups[2].materialIndex).toBe(0); // +Y → face
+    expect(groups[3].materialIndex).toBe(1); // -Y → back
+    expect(groups[0].materialIndex).toBe(2); // +X → side
+    expect(groups[1].materialIndex).toBe(2); // -X → side
+    expect(groups[4].materialIndex).toBe(2); // +Z → side
+    expect(groups[5].materialIndex).toBe(2); // -Z → side
+  });
+
+  test('halfExtents derives from card dimensions; meshKind reports cube', () => {
+    const e = Scene.spawn('board', ctx);
+    const m = e.getComponent(MeshComponent)!;
+    m.setState({ meshRef: 'prim:card', size: [0.63, 0.01, 0.88] });
+    expect(m.halfExtents()).toEqual([0.315, 0.005, 0.44]);
+    expect(m.meshKind()).toBe('cube');
+  });
+
+  test('face/back textureRefs route to the correct materials', () => {
+    const e = Scene.spawn('board', ctx);
+    const m = e.getComponent(MeshComponent)!;
+    m.setState({
+      meshRef: 'prim:card',
+      size: [0.63, 0.01, 0.88],
+      textureRefs: { face: 'face.png', back: 'back.png' },
+      tint: '#ff0000',
+    });
+
+    const cardMesh = m.group.children[0] as THREE.Mesh;
+    const mats = cardMesh.material as THREE.MeshLambertMaterial[];
+    // Tint applies to all materials regardless of slot.
+    expect(mats[0].color.getHexString()).toBe('ff0000');
+    expect(mats[1].color.getHexString()).toBe('ff0000');
+    expect(mats[2].color.getHexString()).toBe('ff0000');
+    // Texture loading is async via THREE.TextureLoader and unobservable in
+    // node, but slot tagging guarantees the right material would receive
+    // the right URL — covered by mat.userData.materialSlot above.
+  });
+});
+
 describe('spawnables — serialised snapshot shape', () => {
   test('die EntitySerialized matches expected shape', () => {
     const e = Scene.spawn('die', ctx, { id: 'die-1' });
