@@ -98,7 +98,7 @@ class WorldImpl implements World, HandleRouter {
     this.threeScene = opts.scene;
     this.transport  = opts.transport;
     this.identity   = opts.identity;
-    this.scene      = opts.entityScene ?? new SceneImpl();
+    this.scene      = new SceneImpl();
     this.policy     = { ...DEFAULT_POLICY, ...opts.policy };
 
     this.getTargets           = opts.getReplicationTargets ?? null;
@@ -127,7 +127,7 @@ class WorldImpl implements World, HandleRouter {
   // ── Lifecycle ────────────────────────────────────────────────────────────
   spawn(type: string, opts: SpawnOptions = {}): EntityHandle {
     if (this.role !== 'host') throw new Error('World.spawn is host-only');
-    const ctx: SpawnContext = { scene: this.threeScene, physics: this.physics };
+    const ctx: SpawnContext = { scene: this.threeScene, physics: this.physics, entityScene: this.scene };
     const entity = this.scene.spawn(type, ctx, { id: opts.id });
 
     const position = opts.position ?? this.defaultSpawnPosition(entity);
@@ -165,7 +165,7 @@ class WorldImpl implements World, HandleRouter {
 
   despawn(id: string): void {
     if (this.role !== 'host') throw new Error('World.despawn is host-only');
-    const ctx: SpawnContext = { scene: this.threeScene, physics: this.physics };
+    const ctx: SpawnContext = { scene: this.threeScene, physics: this.physics, entityScene: this.scene };
     const removed = this.scene.despawn(id, ctx);
     for (const removedId of removed) {
       this.handles.delete(removedId);
@@ -234,10 +234,11 @@ class WorldImpl implements World, HandleRouter {
   // the scrubbing pass into the RtcTransport adapter.
   private dispatchOutbound(msg: SceneMessage, reliable: boolean): void {
     if (this.getTargets && this.transport.sendTo) {
-      const targets = this.getTargets();
+      const targets   = this.getTargets();
+      const getEntity = (id: string) => this.scene.getEntity(id);
       for (const t of targets) {
         const ctx      = { peerSeat: t.peerSeat, isHost: t.isHost };
-        const scrubbed = scrubSceneMessage(ctx, msg, this.privateFieldRegistry);
+        const scrubbed = scrubSceneMessage(ctx, msg, this.privateFieldRegistry, getEntity);
         this.transport.sendTo(t.peerId, scrubbed);
       }
       return;
@@ -326,7 +327,7 @@ class WorldImpl implements World, HandleRouter {
   }
 
   loadSnapshot(snaps: readonly EntitySerialized[]): void {
-    const ctx: SpawnContext = { scene: this.threeScene, physics: this.physics };
+    const ctx: SpawnContext = { scene: this.threeScene, physics: this.physics, entityScene: this.scene };
     this.scene.load(snaps, ctx);
     this.notify();
   }
@@ -438,7 +439,7 @@ class WorldImpl implements World, HandleRouter {
     switch (msg.type) {
       case 'entity-spawn': {
         if (this.scene.has(msg.entity.id)) return;
-        const ctx: SpawnContext = { scene: this.threeScene, physics: this.physics };
+        const ctx: SpawnContext = { scene: this.threeScene, physics: this.physics, entityScene: this.scene };
         this.scene.load([msg.entity], ctx);
         this.notify();
         return;
@@ -467,7 +468,7 @@ class WorldImpl implements World, HandleRouter {
       }
 
       case 'despawn-batch': {
-        const ctx: SpawnContext = { scene: this.threeScene, physics: this.physics };
+        const ctx: SpawnContext = { scene: this.threeScene, physics: this.physics, entityScene: this.scene };
         let any = false;
         for (const id of msg.entityIds) {
           const removed = this.scene.despawn(id, ctx);
@@ -526,7 +527,7 @@ class WorldImpl implements World, HandleRouter {
       EntityComponent.setHostReplicator(null);
     }
 
-    const ctx: SpawnContext = { scene: this.threeScene, physics: this.physics };
+    const ctx: SpawnContext = { scene: this.threeScene, physics: this.physics, entityScene: this.scene };
     for (const id of this.scene.all().map(e => e.id)) {
       this.scene.despawn(id, ctx);
     }

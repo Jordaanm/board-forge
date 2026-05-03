@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach } from 'vitest';
 import * as THREE from 'three';
-import { Scene } from '../Scene';
+import { SceneImpl } from '../Scene';
 import { type SpawnContext } from '../EntityComponent';
 import { aggregateContextMenu } from '../contextMenu';
 import { TransformComponent } from './TransformComponent';
@@ -12,12 +12,13 @@ import { PhysicsWorld } from '../../physics/PhysicsWorld';
 import { resolveFaceFromOrientation } from '../../dice/diceFaceResolver';
 import { D6_FACE_MAP } from '../../dice/d6';
 
+let scene: SceneImpl;
 let ctx: SpawnContext;
 
 beforeEach(() => {
-  Scene.clear();
   registerCorePrimitives();
-  ctx = { scene: new THREE.Scene(), physics: new PhysicsWorld() };
+  scene = new SceneImpl();
+  ctx = { scene: new THREE.Scene(), physics: new PhysicsWorld(), entityScene: scene };
 });
 
 // Drive PhysicsComponent through one moving → stopped transition with the body
@@ -37,7 +38,7 @@ function triggerStopAtOrientation(
 
 describe('DiceComponent — roll()', () => {
   test('wakes the body and produces non-zero angular velocity', () => {
-    const e = Scene.spawn('die', ctx);
+    const e = scene.spawn('die', ctx);
     const phys = e.getComponent(PhysicsComponent)!;
     phys.body.sleep();
 
@@ -50,7 +51,7 @@ describe('DiceComponent — roll()', () => {
 
 describe('DiceComponent — setValue()', () => {
   test.each(D6_FACE_MAP.map(f => f.value))('writes value %i and orients accordingly', (v) => {
-    const e = Scene.spawn('die', ctx);
+    const e = scene.spawn('die', ctx);
     const dice  = e.getComponent(DiceComponent)!;
     const phys  = e.getComponent(PhysicsComponent)!;
     const value = e.getComponent(ValueComponent)!;
@@ -71,7 +72,7 @@ describe('DiceComponent — setValue()', () => {
 
 describe('DiceComponent — stop-moving subscription', () => {
   test('writes the resolver-determined face into ValueComponent on rest', () => {
-    const e = Scene.spawn('die', ctx);
+    const e = scene.spawn('die', ctx);
     const phys  = e.getComponent(PhysicsComponent)!;
     const value = e.getComponent(ValueComponent)!;
 
@@ -85,7 +86,7 @@ describe('DiceComponent — stop-moving subscription', () => {
   });
 
   test('cocked rest pose still resolves to the closest face', () => {
-    const e = Scene.spawn('die', ctx);
+    const e = scene.spawn('die', ctx);
     const phys  = e.getComponent(PhysicsComponent)!;
     const value = e.getComponent(ValueComponent)!;
 
@@ -100,7 +101,7 @@ describe('DiceComponent — stop-moving subscription', () => {
 
 describe('DiceComponent — onDespawn', () => {
   test('unsubscribes from stop-moving so later transitions do not write', () => {
-    const e = Scene.spawn('die', ctx);
+    const e = scene.spawn('die', ctx);
     const phys  = e.getComponent(PhysicsComponent)!;
     const value = e.getComponent(ValueComponent)!;
 
@@ -108,7 +109,7 @@ describe('DiceComponent — onDespawn', () => {
     triggerStopAtOrientation(phys, 0, 0, 0, 1);
     expect(value.state.value).toBe('1');
 
-    Scene.despawn(e.id, ctx);
+    scene.despawn(e.id, ctx);
 
     // After despawn, settling at face-6 orientation must not update value.
     triggerStopAtOrientation(phys, 1, 0, 0, 0);
@@ -118,7 +119,7 @@ describe('DiceComponent — onDespawn', () => {
 
 describe('DiceComponent — context menu', () => {
   test('returns Roll action and disabled "Value: N" reading from ValueComponent', () => {
-    const e = Scene.spawn('die', ctx);
+    const e = scene.spawn('die', ctx);
     e.getComponent(ValueComponent)!.setState({ value: '4', isNumeric: true });
 
     const items = aggregateContextMenu(e, { recipientSeat: 0, isHost: true, entity: e });
@@ -135,7 +136,7 @@ describe('DiceComponent — context menu', () => {
   });
 
   test('ValueComponent contributes no items to the menu', () => {
-    const e = Scene.spawn('die', ctx);
+    const e = scene.spawn('die', ctx);
     const items = aggregateContextMenu(e, { recipientSeat: 0, isHost: true, entity: e });
     const valueItems = items.filter(
       i => (i.kind === 'action' || i.kind === 'colorpicker')
@@ -147,7 +148,7 @@ describe('DiceComponent — context menu', () => {
 
 describe('DiceComponent — round-trip', () => {
   test('state survives JSON serialise / deserialise', () => {
-    const e = Scene.spawn('die', ctx, { id: 'd1' });
+    const e = scene.spawn('die', ctx, { id: 'd1' });
     const dice = e.getComponent(DiceComponent)!;
     const cloned = JSON.parse(JSON.stringify(dice.toJSON())) as { maxValue: number; faceMap: typeof D6_FACE_MAP };
     expect(cloned.maxValue).toBe(6);

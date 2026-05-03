@@ -9,6 +9,7 @@ export type {
   ComponentClass,
   ReplicationChannel,
   SpawnContext,
+  EntityScene,
   MenuContext,
   MenuItem,
   CollisionEvent,
@@ -21,7 +22,7 @@ export {
   topoSortComponents,
 } from './ComponentRegistry';
 
-export { Scene, SceneImpl, entityToSerialized, findEntityByObject3D } from './Scene';
+export { SceneImpl, entityToSerialized } from './Scene';
 export type { EntitySerialized } from './Scene';
 
 export type {
@@ -39,8 +40,6 @@ export type {
 } from './wire';
 
 export { HostReplicatorV2 } from './HostReplicatorV2';
-export { applySceneMessage } from './GuestReceiver';
-export type { GuestReceiveContext } from './GuestReceiver';
 export { HoldService } from './HoldService';
 export type { ReleaseVelocity } from './HoldService';
 export { HostInputDispatcher } from './HostInputDispatcher';
@@ -67,7 +66,6 @@ export {
 export type { SpawnableDef, ComponentInit } from './SpawnableRegistry';
 
 export { registerCorePrimitives } from './spawnables';
-export { SceneSystemV2 } from './SceneSystemV2';
 
 export { createWorld, createInMemoryBusPair } from './world';
 export type {

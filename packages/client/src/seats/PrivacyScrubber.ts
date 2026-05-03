@@ -3,7 +3,7 @@
 // seam redacts them when `recipient.seat !== entity.privateToSeat`.
 
 import { type SeatIndex } from './SeatLayout';
-import { Scene } from '../entity/Scene';
+import { type Entity } from '../entity/Entity';
 import { type SceneMessage } from '../entity/wire';
 
 export interface RecipientContext {
@@ -19,34 +19,28 @@ export interface PrivateFieldRegistry {
 
 export const EMPTY_PRIVATE_FIELD_REGISTRY: PrivateFieldRegistry = Object.freeze({});
 
-// Legacy seam (kept for the v1 ObjectState path's tests; no v1 callers
-// remain after slice #4).
-export function scrubFor<T>(
-  _ctx:     RecipientContext,
-  entity:   T,
-  registry: PrivateFieldRegistry,
-): T {
-  if (Object.keys(registry).length === 0) return entity;
-  return entity;
-}
+// Resolves an entityId to its Entity (or undefined). Caller-supplied so this
+// module no longer depends on the Scene singleton — issue #5 of issues--arch.md.
+export type EntityLookup = (entityId: string) => Entity | undefined;
 
 // Per-recipient scrub for v2 SceneMessages. Looks up each referenced entity
 // to read `entity.privateToSeat` and decides whether component state
 // fields listed in the registry must be redacted for this recipient.
 //
-// With the empty registry shipped in slice #6, this is the identity. PRD-2
-// fills in the registry and the host loop already runs through this seam.
+// With the empty registry shipped today this is the identity. PRD-2 fills in
+// the registry and the host loop already runs through this seam.
 export function scrubSceneMessage(
-  ctx:      RecipientContext,
-  msg:      SceneMessage,
-  registry: PrivateFieldRegistry,
+  ctx:       RecipientContext,
+  msg:       SceneMessage,
+  registry:  PrivateFieldRegistry,
+  getEntity: EntityLookup,
 ): SceneMessage {
   if (Object.keys(registry).length === 0) return msg;
 
   switch (msg.type) {
     case 'component-patches': {
       const out = msg.patches.map(p => {
-        const entity = Scene.getEntity(p.entityId);
+        const entity = getEntity(p.entityId);
         if (!entity) return p;
         return redactComponentPatch(ctx, entity.privateToSeat, p, registry);
       });

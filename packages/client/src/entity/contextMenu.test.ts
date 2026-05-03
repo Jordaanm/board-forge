@@ -1,9 +1,11 @@
 import { describe, test, expect, beforeEach } from 'vitest';
-import { Scene } from './Scene';
+import { SceneImpl } from './Scene';
 import { Entity } from './Entity';
 import { EntityComponent, type MenuContext, type MenuItem, type ActionContext } from './EntityComponent';
-import { ComponentRegistry, componentRegistry } from './ComponentRegistry';
+import { componentRegistry } from './ComponentRegistry';
 import { aggregateContextMenu } from './contextMenu';
+
+let scene: SceneImpl;
 
 class A extends EntityComponent<object> {
   static typeId = 'a';
@@ -57,9 +59,9 @@ class CallTracker extends EntityComponent<{ count: number }> {
 }
 
 beforeEach(() => {
-  Scene.clear();
+  scene = new SceneImpl();
   componentRegistry.clear();
-  Scene.setRegistry(componentRegistry);
+  scene.setRegistry(componentRegistry);
 });
 
 function spawn(id: string, cls: { typeId: string; requires?: readonly string[] } | { typeId: string; requires?: readonly string[] }[]): Entity {
@@ -70,7 +72,7 @@ function spawn(id: string, cls: { typeId: string; requires?: readonly string[] }
     comp.state = {} as object;
     e.attachComponent(comp);
   }
-  Scene.add(e);
+  scene.add(e);
   return e;
 }
 
@@ -145,7 +147,7 @@ describe('aggregateContextMenu', () => {
 
   test('entity with no components → empty menu', () => {
     const e = new Entity({ id: 'lonely', type: 't', name: 'lonely' });
-    Scene.add(e);
+    scene.add(e);
     expect(aggregateContextMenu(e, { recipientSeat: 0, isHost: true, entity: e })).toEqual([]);
   });
 

@@ -15,9 +15,21 @@ export type ReplicationChannel = 'reliable' | 'unreliable';
 
 // Carried into every onSpawn / onDespawn call. Components own their view
 // artefacts and need the scene root + physics world to attach / detach them.
+// `entityScene` is the SceneImpl that owns this spawn — components that look
+// up sibling entities (e.g. PhysicsComponent.findEntityByBody) read it here
+// instead of going through a process-global singleton.
 export interface SpawnContext {
-  scene:    THREE.Scene;
-  physics:  PhysicsWorld | null;  // null on guests — they don't simulate.
+  scene:        THREE.Scene;
+  physics:      PhysicsWorld | null;  // null on guests — they don't simulate.
+  entityScene:  EntityScene;
+}
+
+// Minimal Scene surface — kept here as an interface so components don't pull
+// in the SceneImpl class type and create a circular import.
+export interface EntityScene {
+  all(): Entity[];
+  getEntity(id: string): Entity | undefined;
+  has(id: string): boolean;
 }
 
 export interface MenuContext {

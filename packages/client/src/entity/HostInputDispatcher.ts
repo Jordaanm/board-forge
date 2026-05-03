@@ -9,7 +9,7 @@
 //   * HostInputDispatcher — scene-channel RPCs (hold-claim / hold-release /
 //                          request-update) that do gate on OwnershipPolicy.
 
-import { Scene, type SceneImpl } from './Scene';
+import { type SceneImpl } from './Scene';
 import { type SeatIndex } from '../seats/SeatLayout';
 import { canManipulate } from '../seats/OwnershipPolicy';
 import { type HoldService } from './HoldService';
@@ -20,7 +20,7 @@ export class HostInputDispatcher {
   constructor(
     private readonly hold:        HoldService,
     private readonly getPeerSeat: (peerId: string) => SeatIndex | null,
-    private readonly scene:       SceneImpl = Scene,
+    private readonly scene:       SceneImpl,
   ) {}
 
   // Returns true on accept (entity claimed and broadcast). False on any

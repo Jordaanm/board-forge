@@ -3,7 +3,7 @@
 // HoldService. drag-move messages only take effect while the sender's seat
 // matches the entity's heldBy.
 
-import { Scene, type SceneImpl } from '../entity/Scene';
+import { type SceneImpl } from '../entity/Scene';
 import { PhysicsComponent } from '../entity/components/PhysicsComponent';
 import { type GuestInputMessage } from '../net/SceneState';
 import { type SeatIndex } from '../seats/SeatLayout';
@@ -13,7 +13,7 @@ export class GuestInputHandler {
   constructor(
     private readonly hold: HoldService,
     private readonly getPeerSeat: (peerId: string) => SeatIndex | null,
-    private readonly scene: SceneImpl = Scene,
+    private readonly scene: SceneImpl,
   ) {}
 
   handleMessage(peerId: string, msg: GuestInputMessage) {

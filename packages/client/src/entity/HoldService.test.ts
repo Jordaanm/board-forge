@@ -1,11 +1,10 @@
 import { describe, test, expect, beforeEach } from 'vitest';
 import * as CANNON from 'cannon-es';
-import { Scene } from './Scene';
+import { SceneImpl } from './Scene';
 import { Entity } from './Entity';
 import { HostReplicatorV2 } from './HostReplicatorV2';
 import { HoldService } from './HoldService';
 import { PhysicsComponent } from './components/PhysicsComponent';
-import { type ComponentClass } from './EntityComponent';
 import { ComponentRegistry } from './ComponentRegistry';
 
 // Lightweight stand-in for PhysicsComponent — exposes a real CANNON.Body so
@@ -38,6 +37,7 @@ class StubPhysics {
   fromJSON(o: object) { this.state = { ...(o as typeof this.state) }; }
 }
 
+let scene: SceneImpl;
 let r: HostReplicatorV2;
 let svc: HoldService;
 
@@ -47,16 +47,16 @@ function spawnPhysical(id: string): { entity: Entity; phys: StubPhysics } {
   // Attach as the actual PhysicsComponent typeId so getComponent(PhysicsComponent) finds it.
   entity.components.set('physics', phys as unknown as PhysicsComponent);
   phys.entity = entity;
-  Scene.add(entity);
+  scene.add(entity);
   return { entity, phys };
 }
 
 beforeEach(() => {
-  Scene.clear();
+  scene = new SceneImpl();
   // Empty registry — HoldService doesn't load via the registry, just iterates entities.
-  Scene.setRegistry(new ComponentRegistry());
+  scene.setRegistry(new ComponentRegistry());
   r = new HostReplicatorV2();
-  svc = new HoldService(r);
+  svc = new HoldService(r, scene);
 });
 
 describe('HoldService.tryClaim', () => {

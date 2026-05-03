@@ -9,7 +9,6 @@ import { createInMemoryBusPair } from './InMemoryTransport';
 import { TransformComponent } from '../components/TransformComponent';
 import { ValueComponent } from '../components/ValueComponent';
 import { PhysicsComponent } from '../components/PhysicsComponent';
-import { Scene } from '../Scene';
 import { type World } from './types';
 import { type SeatIndex } from '../../seats/SeatLayout';
 
@@ -49,7 +48,6 @@ describe('World — host→guest round-trip', () => {
     pair?.host.dispose();
     pair?.guest.dispose();
     pair = null;
-    Scene.clear();  // singleton hygiene — issue #5 deletes the singleton entirely.
   });
 
   test('guest receives entity-spawn after host.tick flushes the replicator', () => {
@@ -129,7 +127,6 @@ describe('World — guest drag round-trip (issue #3)', () => {
     pair?.host.dispose();
     pair?.guest.dispose();
     pair = null;
-    Scene.clear();
   });
 
   test('guest tryHold → host accepts → guest sees heldBy === guest seat', () => {

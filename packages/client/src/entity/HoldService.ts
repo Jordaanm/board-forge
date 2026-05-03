@@ -10,7 +10,7 @@
 // `tryClaim` / `release`, so the policy lives in one place.
 
 import * as CANNON from 'cannon-es';
-import { Scene, type SceneImpl } from './Scene';
+import { type SceneImpl } from './Scene';
 import { type Entity } from './Entity';
 import { type SeatIndex } from '../seats/SeatLayout';
 import { type HostReplicatorV2 } from './HostReplicatorV2';
@@ -28,7 +28,7 @@ export class HoldService {
 
   constructor(
     private readonly replicator: HostReplicatorV2,
-    private readonly scene:      SceneImpl = Scene,
+    private readonly scene:      SceneImpl,
   ) {}
 
   // First-claimer-wins. Returns false if the entity is already held — the

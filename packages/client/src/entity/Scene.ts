@@ -1,6 +1,7 @@
-// Process-global Scene singleton. Components do `Scene.getEntity(guid)` for
-// ad-hoc cross-entity lookups instead of carrying explicit references.
-// Slice #1 of planning/issues/issues--scene-graph.md.
+// Per-World entity store. Owns entities + the topological component lifecycle
+// (spawn / despawn). Instances are constructed by `World`; previously a single
+// process-global `Scene` singleton lived here, but issue #5 of issues--arch.md
+// retired it so tests can run multiple Worlds in parallel without colliding.
 
 import { Entity, defaultEntityName } from './Entity';
 import { type SpawnContext } from './EntityComponent';
@@ -21,9 +22,6 @@ export interface EntitySerialized {
   components:    Record<string, object>;  // typeId → component.toJSON()
 }
 
-// Exported so the World module can construct per-instance scenes alongside
-// the legacy singleton (issue #1 of issues--arch.md). Subsequent slices
-// retire the singleton entirely.
 export class SceneImpl {
   private entities = new Map<string, Entity>();
   private registry: ComponentRegistry = componentRegistry;
@@ -49,10 +47,6 @@ export class SceneImpl {
 
   removeEntity(id: string): void {
     this.entities.delete(id);
-  }
-
-  clear(): void {
-    this.entities.clear();
   }
 
   // Test seam: swap the registry that load() consults. Production uses the
@@ -178,25 +172,6 @@ function newGuid(): string {
     const v = ch === 'x' ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });
-}
-
-// Singleton. Tests can call `Scene.clear()` between runs.
-export const Scene = new SceneImpl();
-
-// Resolve a THREE.Object3D hit (typically from a raycast) back to its owning
-// entity by walking up the parent chain to find an object that matches some
-// entity's TransformComponent.object3d. Returns undefined if the hit isn't
-// rooted in an entity tree.
-export function findEntityByObject3D(hit: import('three').Object3D): Entity | undefined {
-  let obj: import('three').Object3D | null = hit;
-  while (obj) {
-    for (const entity of Scene.all()) {
-      const t = entity.components.get('transform') as { object3d?: import('three').Object3D } | undefined;
-      if (t?.object3d === obj) return entity;
-    }
-    obj = obj.parent;
-  }
-  return undefined;
 }
 
 // Walk an entity to its serialised snapshot. Mirrors the load() input shape so

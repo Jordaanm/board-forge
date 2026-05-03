@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach } from 'vitest';
 import * as THREE from 'three';
-import { Scene, type EntitySerialized } from '../Scene';
+import { SceneImpl, type EntitySerialized } from '../Scene';
 import { type SpawnContext } from '../EntityComponent';
 import { TransformComponent } from './TransformComponent';
 import { MeshComponent } from './MeshComponent';
@@ -10,12 +10,13 @@ import { CardComponent } from './CardComponent';
 import { registerCorePrimitives } from '../spawnables';
 import { PhysicsWorld } from '../../physics/PhysicsWorld';
 
+let scene: SceneImpl;
 let ctx: SpawnContext;
 
 beforeEach(() => {
-  Scene.clear();
   registerCorePrimitives();
-  ctx = { scene: new THREE.Scene(), physics: new PhysicsWorld() };
+  scene = new SceneImpl();
+  ctx = { scene: new THREE.Scene(), physics: new PhysicsWorld(), entityScene: scene };
 });
 
 // Drive PhysicsComponent through one moving → stopped transition with the body
@@ -34,7 +35,7 @@ function triggerStopAtOrientation(
 
 describe('CardComponent — spawn-time mesh propagation', () => {
   test('face/back URLs propagate into mesh.textureRefs', () => {
-    const e = Scene.spawn('card', ctx);
+    const e = scene.spawn('card', ctx);
     const card = e.getComponent(CardComponent)!;
     const mesh = e.getComponent(MeshComponent)!;
     card.setState({ face: 'face.png', back: 'back.png' });
@@ -46,7 +47,7 @@ describe('CardComponent — spawn-time mesh propagation', () => {
 
 describe('CardComponent — initial FlatView from orientation', () => {
   test('face up at spawn → FlatView gets face URL', () => {
-    const e = Scene.spawn('card', ctx);
+    const e = scene.spawn('card', ctx);
     const card     = e.getComponent(CardComponent)!;
     const flatview = e.getComponent(FlatViewComponent)!;
     card.setState({ face: 'face.png', back: 'back.png' });
@@ -55,7 +56,8 @@ describe('CardComponent — initial FlatView from orientation', () => {
   });
 
   test('face down at load → FlatView gets back URL', () => {
-    Scene.clear();
+    scene = new SceneImpl();
+    ctx = { ...ctx, entityScene: scene };
     const flippedQuat: [number, number, number, number] = [1, 0, 0, 0]; // 180° around X
     const snap: EntitySerialized = {
       id:            'card-1',
@@ -76,14 +78,14 @@ describe('CardComponent — initial FlatView from orientation', () => {
       },
     };
 
-    const [e] = Scene.load([snap], ctx);
+    const [e] = scene.load([snap], ctx);
     expect(e.getComponent(FlatViewComponent)!.state.textureRef).toBe('back.png');
   });
 });
 
 describe('CardComponent — physics stop-moving updates FlatView', () => {
   test('flipping to face down updates FlatView to back URL', () => {
-    const e = Scene.spawn('card', ctx);
+    const e = scene.spawn('card', ctx);
     const card     = e.getComponent(CardComponent)!;
     const phys     = e.getComponent(PhysicsComponent)!;
     const flatview = e.getComponent(FlatViewComponent)!;
@@ -102,7 +104,7 @@ describe('CardComponent — physics stop-moving updates FlatView', () => {
 
 describe('CardComponent — round-trip', () => {
   test('face / back / category survive JSON serialise / deserialise', () => {
-    const e = Scene.spawn('card', ctx, { id: 'card-rt' });
+    const e = scene.spawn('card', ctx, { id: 'card-rt' });
     const card = e.getComponent(CardComponent)!;
     card.setState({ face: 'F.png', back: 'B.png', category: 'spades' });
 
@@ -113,7 +115,7 @@ describe('CardComponent — round-trip', () => {
 
 describe('CardComponent — onDespawn unsubscribes', () => {
   test('post-despawn stop-moving event does not write into FlatView', () => {
-    const e = Scene.spawn('card', ctx);
+    const e = scene.spawn('card', ctx);
     const card     = e.getComponent(CardComponent)!;
     const phys     = e.getComponent(PhysicsComponent)!;
     const flatview = e.getComponent(FlatViewComponent)!;
@@ -122,7 +124,7 @@ describe('CardComponent — onDespawn unsubscribes', () => {
     // Baseline — face up.
     expect(flatview.state.textureRef).toBe('face.png');
 
-    Scene.despawn(e.id, ctx);
+    scene.despawn(e.id, ctx);
 
     // After despawn the subscription must be gone — driving stop-moving with
     // a flipped orientation must NOT write back.png into FlatView.
@@ -133,7 +135,7 @@ describe('CardComponent — onDespawn unsubscribes', () => {
 
 describe('CardComponent — onPropertiesChanged', () => {
   test('changing face re-pushes to mesh and re-resolves FlatView', () => {
-    const e = Scene.spawn('card', ctx);
+    const e = scene.spawn('card', ctx);
     const card     = e.getComponent(CardComponent)!;
     const mesh     = e.getComponent(MeshComponent)!;
     const flatview = e.getComponent(FlatViewComponent)!;
@@ -146,7 +148,7 @@ describe('CardComponent — onPropertiesChanged', () => {
   });
 
   test('changing back updates mesh; FlatView stays on face when face up', () => {
-    const e = Scene.spawn('card', ctx);
+    const e = scene.spawn('card', ctx);
     const card     = e.getComponent(CardComponent)!;
     const mesh     = e.getComponent(MeshComponent)!;
     const flatview = e.getComponent(FlatViewComponent)!;

@@ -5,9 +5,8 @@
 // back into the TransformComponent's state.
 
 import * as CANNON from 'cannon-es';
-import { EntityComponent, type SpawnContext, type CollisionEvent } from '../EntityComponent';
+import { EntityComponent, type SpawnContext, type CollisionEvent, type EntityScene } from '../EntityComponent';
 import { type Entity } from '../Entity';
-import { Scene } from '../Scene';
 import { TransformComponent } from './TransformComponent';
 import { MeshComponent } from './MeshComponent';
 
@@ -31,11 +30,13 @@ export class PhysicsComponent extends EntityComponent<PhysicsState> {
   private startMovingHandlers: Array<() => void> = [];
   private stopMovingHandlers:  Array<() => void> = [];
   private collideHandler: ((e: { body: CANNON.Body; contact?: unknown }) => void) | null = null;
+  private entityScene: EntityScene | null = null;
 
   onSpawn(ctx: SpawnContext): void {
     const transform = this.entity.getComponent(TransformComponent)!;
     const mesh      = this.entity.getComponent(MeshComponent)!;
     this.body = buildBody(this.state, mesh);
+    this.entityScene = ctx.entityScene;
 
     const [px, py, pz]     = transform.state.position;
     const [qx, qy, qz, qw] = transform.state.rotation;
@@ -121,7 +122,7 @@ export class PhysicsComponent extends EntityComponent<PhysicsState> {
   }
 
   private handleCollide(otherBody: CANNON.Body): void {
-    const otherEntity = findEntityByBody(otherBody);
+    const otherEntity = this.entityScene ? findEntityByBody(this.entityScene, otherBody) : undefined;
     const event: CollisionEvent = {};
     for (const comp of this.entity.components.values()) {
       comp.onCollision(otherEntity ?? this.entity, event);
@@ -151,9 +152,9 @@ function buildShape(mesh: MeshComponent): CANNON.Shape {
   }
 }
 
-// Linear scan; fine for PoC scale. Slice 5+ may add a body→entity index.
-function findEntityByBody(body: CANNON.Body): Entity | undefined {
-  for (const e of Scene.all()) {
+// Linear scan; fine for PoC scale. A body→entity index is a future optimisation.
+function findEntityByBody(scene: EntityScene, body: CANNON.Body): Entity | undefined {
+  for (const e of scene.all()) {
     const phys = e.getComponent(PhysicsComponent);
     if (phys?.body === body) return e;
   }

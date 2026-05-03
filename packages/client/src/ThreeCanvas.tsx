@@ -3,7 +3,6 @@ import * as THREE from 'three';
 import { createTable, applyTableProp, type TableProps } from './scene/Table';
 import { createWorld } from './entity/world';
 import { type World, type WorldTransport, type WorldInboundMessage } from './entity/world';
-import { Scene } from './entity/Scene';
 import { type Entity } from './entity/Entity';
 import { TransformComponent } from './entity/components/TransformComponent';
 import { MeshComponent } from './entity/components/MeshComponent';
@@ -167,7 +166,6 @@ export function ThreeCanvas({
         selfPeerId: () => getSelfPeerIdRef.current(),
       },
       transport:             worldTransport,
-      entityScene:           Scene,
       getReplicationTargets: isHost ? () => getTargetsRef.current() : undefined,
       getPeerSeat:           isHost ? (peerId) => getPeerSeatRef.current(peerId) : undefined,
     });

@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from 'vitest';
-import { Scene } from './Scene';
+import { SceneImpl } from './Scene';
 import { Entity } from './Entity';
 import { ComponentRegistry } from './ComponentRegistry';
 import { EntityComponent } from './EntityComponent';
@@ -20,6 +20,7 @@ class ValueComp extends EntityComponent<ValueState> {
   }
 }
 
+let scene: SceneImpl;
 let r: HostReplicatorV2;
 let svc: HoldService;
 let dispatcher: HostInputDispatcher;
@@ -30,17 +31,17 @@ function spawn(id: string, owner: SeatIndex | null = null): Entity {
   const v = new ValueComp();
   v.state = { v: 0 };
   e.attachComponent(v);
-  Scene.add(e);
+  scene.add(e);
   return e;
 }
 
 beforeEach(() => {
-  Scene.clear();
-  Scene.setRegistry(new ComponentRegistry());
+  scene = new SceneImpl();
+  scene.setRegistry(new ComponentRegistry());
   PEERS.clear();
   r = new HostReplicatorV2();
-  svc = new HoldService(r);
-  dispatcher = new HostInputDispatcher(svc, (peerId) => PEERS.get(peerId) ?? null);
+  svc = new HoldService(r, scene);
+  dispatcher = new HostInputDispatcher(svc, (peerId) => PEERS.get(peerId) ?? null, scene);
   EntityComponent.setHostReplicator(r);
 });
 

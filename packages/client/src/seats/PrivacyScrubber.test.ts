@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeEach } from 'vitest';
-import { Scene } from '../entity/Scene';
+import { SceneImpl } from '../entity/Scene';
 import { Entity } from '../entity/Entity';
 import { ComponentRegistry } from '../entity/ComponentRegistry';
 import {
@@ -10,14 +10,17 @@ import {
 import { type SceneMessage } from '../entity/wire';
 import { type SeatIndex } from './SeatLayout';
 
+let scene: SceneImpl;
+const lookup = (id: string) => scene.getEntity(id);
+
 beforeEach(() => {
-  Scene.clear();
-  Scene.setRegistry(new ComponentRegistry());
+  scene = new SceneImpl();
+  scene.setRegistry(new ComponentRegistry());
 });
 
 function spawn(id: string, privateToSeat: SeatIndex | null = null): Entity {
   const e = new Entity({ id, type: 'thing', name: id, privateToSeat });
-  Scene.add(e);
+  scene.add(e);
   return e;
 }
 
@@ -29,7 +32,7 @@ describe('scrubSceneMessage with empty registry', () => {
       patches: [{ entityId: 'a', typeId: 'card', partial: { face: 'A♣' } }],
     };
     const scrubbed = scrubSceneMessage(
-      { peerSeat: 5, isHost: false }, msg, EMPTY_PRIVATE_FIELD_REGISTRY,
+      { peerSeat: 5, isHost: false }, msg, EMPTY_PRIVATE_FIELD_REGISTRY, lookup,
     );
     expect(scrubbed).toBe(msg);
   });
@@ -44,7 +47,7 @@ describe('scrubSceneMessage component-patches with private fields', () => {
       type: 'component-patches', channel: 'reliable',
       patches: [{ entityId: 'a', typeId: 'card', partial: { face: 'A♣', back: 'red' } }],
     };
-    const out = scrubSceneMessage({ peerSeat: 5, isHost: true }, msg, registry);
+    const out = scrubSceneMessage({ peerSeat: 5, isHost: true }, msg, registry, lookup);
     expect(out).toEqual(msg);
   });
 
@@ -54,7 +57,7 @@ describe('scrubSceneMessage component-patches with private fields', () => {
       type: 'component-patches', channel: 'reliable',
       patches: [{ entityId: 'a', typeId: 'card', partial: { face: 'A♣', back: 'red' } }],
     };
-    const out = scrubSceneMessage({ peerSeat: 2, isHost: false }, msg, registry);
+    const out = scrubSceneMessage({ peerSeat: 2, isHost: false }, msg, registry, lookup);
     expect(out).toEqual(msg);
   });
 
@@ -64,7 +67,7 @@ describe('scrubSceneMessage component-patches with private fields', () => {
       type: 'component-patches', channel: 'reliable',
       patches: [{ entityId: 'a', typeId: 'card', partial: { face: 'A♣', back: 'red' } }],
     };
-    const out = scrubSceneMessage({ peerSeat: 5, isHost: false }, msg, registry);
+    const out = scrubSceneMessage({ peerSeat: 5, isHost: false }, msg, registry, lookup);
     expect((out as typeof msg).patches[0].partial).toEqual({ back: 'red' });
   });
 
@@ -74,7 +77,7 @@ describe('scrubSceneMessage component-patches with private fields', () => {
       type: 'component-patches', channel: 'reliable',
       patches: [{ entityId: 'a', typeId: 'card', partial: { face: 'A♣', back: 'red' } }],
     };
-    const out = scrubSceneMessage({ peerSeat: 5, isHost: false }, msg, registry);
+    const out = scrubSceneMessage({ peerSeat: 5, isHost: false }, msg, registry, lookup);
     expect(out).toEqual(msg);
   });
 });
@@ -91,7 +94,7 @@ describe('scrubSceneMessage entity-spawn with private fields', () => {
         components: { card: { face: 'A♣', back: 'red' } },
       },
     };
-    const out = scrubSceneMessage({ peerSeat: 5, isHost: false }, msg, registry);
+    const out = scrubSceneMessage({ peerSeat: 5, isHost: false }, msg, registry, lookup);
     expect((out as typeof msg).entity.components.card).toEqual({ back: 'red' });
   });
 
@@ -104,7 +107,7 @@ describe('scrubSceneMessage entity-spawn with private fields', () => {
         components: { card: { face: 'A♣', back: 'red' } },
       },
     };
-    const out = scrubSceneMessage({ peerSeat: 1, isHost: false }, msg, registry);
+    const out = scrubSceneMessage({ peerSeat: 1, isHost: false }, msg, registry, lookup);
     expect(out).toEqual(msg);
   });
 });
