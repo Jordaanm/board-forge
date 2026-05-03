@@ -214,7 +214,7 @@ export class SceneSystemV2 implements ISceneSystem {
       const cur = mesh.state.size as [number, number, number];
       if (key === 'width')      mesh.setState({ size: [Number(value), cur[1], cur[2]] });
       else if (key === 'depth') mesh.setState({ size: [cur[0], cur[1], Number(value)] });
-      else if (key === 'textureUrl') mesh.setState({ textureRef: String(value ?? '') });
+      else if (key === 'textureUrl') mesh.setState({ textureRefs: { ...mesh.state.textureRefs, default: String(value ?? '') } });
     } else if (entity.type === 'token') {
       if (key === 'color') mesh.setState({ tint: String(value ?? '#ffffff') });
     }
@@ -260,7 +260,7 @@ function derivePropsView(entity: Entity): Record<string, unknown> {
     const sz = mesh.state.size as [number, number, number];
     props.width      = sz[0];
     props.depth      = sz[2];
-    props.textureUrl = mesh.state.textureRef;
+    props.textureUrl = mesh.state.textureRefs?.default ?? '';
   } else if (entity.type === 'token' && mesh) {
     props.color = mesh.state.tint;
   } else if (entity.type === 'die' && value) {

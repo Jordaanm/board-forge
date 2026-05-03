@@ -5,9 +5,12 @@
 //   - 'prim:meeple' → capsule + sphere group (matches the legacy Token shape)
 //   - any URL       → reserved for slice-4+ (no asset loader yet)
 //
-// `textureRef` is a URL (empty = none). `tint` is a CSS colour applied to the
-// material — pragmatic extension for slice 3 so the token's blue colour can
-// round-trip without introducing a token-specific component.
+// `textureRefs` is a slot-name → URL map. Single-material primitives read from
+// the `default` slot. Multi-material primitives (e.g. `prim:card`) tag each
+// child mesh's `userData.materialSlot` to route per-slot URLs to per-side
+// materials. `tint` is a CSS colour applied to the material — pragmatic
+// extension for slice 3 so the token's blue colour can round-trip without
+// introducing a token-specific component.
 
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
@@ -17,10 +20,10 @@ import { TransformComponent } from './TransformComponent';
 export type MeshSize = number | [number, number, number];
 
 export interface MeshState {
-  meshRef:    string;
-  textureRef: string;
-  tint:       string;
-  size:       MeshSize;
+  meshRef:     string;
+  textureRefs: Record<string, string>;
+  tint:        string;
+  size:        MeshSize;
 }
 
 export class MeshComponent extends EntityComponent<MeshState> {
@@ -45,7 +48,7 @@ export class MeshComponent extends EntityComponent<MeshState> {
     if (!this.group) return;
     if (changed.meshRef !== undefined || changed.size !== undefined) {
       this.rebuild();
-    } else if (changed.textureRef !== undefined || changed.tint !== undefined) {
+    } else if (changed.textureRefs !== undefined || changed.tint !== undefined) {
       this.applyMaterialAttributes();
     }
   }
@@ -82,14 +85,16 @@ export class MeshComponent extends EntityComponent<MeshState> {
   }
 
   private applyMaterialAttributes(): void {
-    const tint = this.state.tint || '#ffffff';
-    const url  = this.state.textureRef || '';
+    const tint  = this.state.tint || '#ffffff';
+    const slots = this.state.textureRefs ?? {};
     this.group.traverse((child) => {
       if (!(child instanceof THREE.Mesh)) return;
       // Pip overlays own their own material — tint/texture only apply to the body.
       if (child.userData.skipTint) return;
+      const slotName = (child.userData.materialSlot as string | undefined) ?? 'default';
+      const url      = slots[slotName] || '';
       const mat = child.material as THREE.MeshLambertMaterial;
-      mat.color.set(new THREE.Color(tint));
+      mat.color?.set(new THREE.Color(tint));
       if (url) {
         new THREE.TextureLoader().load(url, (tex) => {
           mat.map = tex;

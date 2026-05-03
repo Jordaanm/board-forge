@@ -97,7 +97,7 @@ describe('wire encode/decode round-trip', () => {
       type: 'request-update',
       entityId: 'e1',
       typeId: 'mesh',
-      partial: { textureRef: 'foo.png' },
+      partial: { textureRefs: { default: 'foo.png' } },
     };
     expect(roundTrip(m)).toEqual(m);
   });

@@ -27,7 +27,7 @@ export function registerCorePrimitives(): void {
     defaultTags: ['board'],
     components: [
       { typeId: 'transform', state: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } },
-      { typeId: 'mesh',      state: { meshRef: 'prim:cube', textureRef: '', tint: '#2d5a27', size: [4, 0.05, 3] } },
+      { typeId: 'mesh',      state: { meshRef: 'prim:cube', textureRefs: { default: '' }, tint: '#2d5a27', size: [4, 0.05, 3] } },
       { typeId: 'physics',   state: { mass: 0.5, friction: 0.5, restitution: 0.3 } },
     ],
   });
@@ -38,7 +38,7 @@ export function registerCorePrimitives(): void {
     defaultTags: ['die'],
     components: [
       { typeId: 'transform', state: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } },
-      { typeId: 'mesh',      state: { meshRef: 'prim:d6', textureRef: '', tint: '#fafafa', size: 0.7 } },
+      { typeId: 'mesh',      state: { meshRef: 'prim:d6', textureRefs: { default: '' }, tint: '#fafafa', size: 0.7 } },
       { typeId: 'physics',   state: { mass: 0.2, friction: 0.5, restitution: 0.5 } },
       { typeId: 'value',     state: { value: '6', isNumeric: true } },
       { typeId: 'dice',      state: { maxValue: 6, faceMap: D6_FACE_MAP } },
@@ -51,7 +51,7 @@ export function registerCorePrimitives(): void {
     defaultTags: ['token'],
     components: [
       { typeId: 'transform', state: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } },
-      { typeId: 'mesh',      state: { meshRef: 'prim:meeple', textureRef: '', tint: '#2266cc', size: [0.5, 0.75, 0.5] } },
+      { typeId: 'mesh',      state: { meshRef: 'prim:meeple', textureRefs: { default: '' }, tint: '#2266cc', size: [0.5, 0.75, 0.5] } },
       { typeId: 'physics',   state: { mass: 0.1, friction: 0.5, restitution: 0.3 } },
     ],
   });
