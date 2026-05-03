@@ -14,6 +14,14 @@ export interface InMemoryBusOptions {
   random?: () => number;
 }
 
+export interface InMemoryBusPair {
+  host:  WorldTransport;
+  guest: WorldTransport;
+  // Synthesise a peer-join event on the named side. Issue #8 boundary tests
+  // use this to drive the host's late-join replay path.
+  firePeerJoin(side: 'host' | 'guest', peerId: string): void;
+}
+
 const HOST_PEER_ID  = 'host-peer';
 const GUEST_PEER_ID = 'guest-peer';
 
@@ -21,14 +29,12 @@ type MessageHandler  = (peerId: string, msg: WorldInboundMessage) => void;
 type PeerJoinHandler = (peerId: string) => void;
 
 interface Endpoint {
-  remoteId:        string;
-  messageHandlers: MessageHandler[];
+  remoteId:         string;
+  messageHandlers:  MessageHandler[];
   peerJoinHandlers: PeerJoinHandler[];
 }
 
-// Returns [hostTransport, guestTransport]. Each call to host.send delivers
-// synchronously to every guest message handler, and vice versa.
-export function createInMemoryBusPair(opts: InMemoryBusOptions = {}): [WorldTransport, WorldTransport] {
+export function createInMemoryBusPair(opts: InMemoryBusOptions = {}): InMemoryBusPair {
   const random   = opts.random ?? Math.random;
   const lossProb = opts.unreliableLossProbability ?? 0;
 
@@ -69,5 +75,12 @@ export function createInMemoryBusPair(opts: InMemoryBusOptions = {}): [WorldTran
   const hostTransport  = makeTransport(host,  guest, HOST_PEER_ID);
   const guestTransport = makeTransport(guest, host, GUEST_PEER_ID);
 
-  return [hostTransport, guestTransport];
+  return {
+    host:  hostTransport,
+    guest: guestTransport,
+    firePeerJoin(side, peerId) {
+      const ep = side === 'host' ? host : guest;
+      for (const h of ep.peerJoinHandlers) h(peerId);
+    },
+  };
 }

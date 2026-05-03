@@ -1,6 +1,7 @@
 // Boundary tests: host→guest round-trip via InMemoryTransport.
 // Issue #1: replication chain (spawn → flush → transport → inbound dispatch).
 // Issue #3: guest drag chain (tryHold → setPosition → release through EntityHandle).
+// Issue #8: late-join scene-snapshot via World peer-join handler.
 
 import { describe, test, expect, afterEach } from 'vitest';
 import * as THREE from 'three';
@@ -15,6 +16,7 @@ import { type SeatIndex } from '../../seats/SeatLayout';
 interface Pair {
   host:  World;
   guest: World;
+  firePeerJoin: (side: 'host' | 'guest', peerId: string) => void;
 }
 
 const HOST_PEER_ID  = 'host-peer';
@@ -23,22 +25,22 @@ const HOST_SEAT:  SeatIndex = 0;
 const GUEST_SEAT: SeatIndex = 1;
 
 function setup(): Pair {
-  const [hostTransport, guestTransport] = createInMemoryBusPair();
+  const bus = createInMemoryBusPair();
   const peerSeats = new Map<string, SeatIndex>([[GUEST_PEER_ID, GUEST_SEAT]]);
   const host = createWorld({
     role:        'host',
     scene:       new THREE.Scene(),
     identity:    { isHost: true,  selfSeat: () => HOST_SEAT,  selfPeerId: () => HOST_PEER_ID },
-    transport:   hostTransport,
+    transport:   bus.host,
     getPeerSeat: (peerId) => peerSeats.get(peerId) ?? null,
   });
   const guest = createWorld({
     role:      'guest',
     scene:     new THREE.Scene(),
     identity:  { isHost: false, selfSeat: () => GUEST_SEAT, selfPeerId: () => GUEST_PEER_ID },
-    transport: guestTransport,
+    transport: bus.guest,
   });
-  return { host, guest };
+  return { host, guest, firePeerJoin: bus.firePeerJoin };
 }
 
 describe('World — host→guest round-trip', () => {
@@ -223,5 +225,69 @@ describe('World — guest drag round-trip (issue #3)', () => {
     guestHandle.release();
     pair.host.tick(0.016);
     expect(guestHandle.heldBy()).toBeNull();
+  });
+});
+
+describe('World — late-join scene-snapshot (issue #8)', () => {
+  let pair: Pair | null = null;
+
+  afterEach(() => {
+    pair?.host.dispose();
+    pair?.guest.dispose();
+    pair = null;
+  });
+
+  test('host pre-populates 3 entities; guest joins; sees full scene', () => {
+    pair = setup();
+    // Pre-populate the host. The InMemoryTransport delivers spawns straight
+    // into the existing guest as they happen, so to exercise the late-join
+    // path specifically we capture the snapshot, dispose, rebuild the pair
+    // with a fresh empty guest, prime the host via loadSnapshot, then fire
+    // peer-join.
+    pair.host.spawn('die',   { id: 'd-1' });
+    pair.host.spawn('token', { id: 't-1' });
+    pair.host.spawn('board', { id: 'b-1' });
+    const snap = pair.host.snapshot();
+    pair.host.dispose();
+    pair.guest.dispose();
+
+    pair = setup();
+    pair.host.loadSnapshot(snap);
+    expect(pair.guest.all()).toEqual([]);  // sanity: guest starts empty
+
+    pair.firePeerJoin('host', GUEST_PEER_ID);
+
+    const ids = pair.guest.all().map(h => h.id).sort();
+    expect(ids).toEqual(['b-1', 'd-1', 't-1']);
+
+    const guestDie = pair.guest.get('d-1')!;
+    expect(guestDie.entity.type).toBe('die');
+    expect(guestDie.get(ValueComponent)!.state.value).toBe('6');
+  });
+
+  test('snapshot is idempotent — re-firing peer-join does not throw on duplicates', () => {
+    pair = setup();
+    pair.host.spawn('die', { id: 'd-1' });
+    const snap = pair.host.snapshot();
+    pair.host.dispose();
+    pair.guest.dispose();
+
+    pair = setup();
+    pair.host.loadSnapshot(snap);
+
+    pair.firePeerJoin('host', GUEST_PEER_ID);
+    expect(() => pair!.firePeerJoin('host', GUEST_PEER_ID)).not.toThrow();
+    expect(pair.guest.all().map(h => h.id)).toEqual(['d-1']);
+  });
+
+  test('guest peer-join handler is a no-op (only host replays)', () => {
+    pair = setup();
+    pair.host.spawn('die', { id: 'd-1' });
+    pair.host.tick(0.016);
+
+    // Firing a peer-join on the guest's side should not produce an error or
+    // a stray scene-snapshot from the guest. Guest entities are still there.
+    expect(() => pair!.firePeerJoin('guest', HOST_PEER_ID)).not.toThrow();
+    expect(pair.guest.get('d-1')).toBeDefined();
   });
 });

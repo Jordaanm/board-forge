@@ -375,14 +375,6 @@ class WorldImpl implements World, HandleRouter {
     this.guestInput?.releasePeer(peerId);
   }
 
-  // Late-join replay — issue #8 reroutes through transport.onPeerJoin and
-  // deletes this method.
-  replayTo(peerId: string): void {
-    if (this.role !== 'host' || !this.transport.sendTo) return;
-    for (const entity of this.scene.all()) {
-      this.transport.sendTo(peerId, { type: 'entity-spawn', entity: entityToSerialized(entity) });
-    }
-  }
 
   // ── Inbound dispatch ─────────────────────────────────────────────────────
   private handleInbound(peerId: string, msg: WorldInboundMessage): void {
@@ -421,6 +413,14 @@ class WorldImpl implements World, HandleRouter {
         const ctx: SpawnContext = { scene: this.threeScene, physics: this.physics, entityScene: this.scene };
         this.scene.load([msg.entity], ctx);
         this.notify();
+        return;
+      }
+
+      case 'scene-snapshot': {
+        // Defensive: skip entities the guest already has so a re-fired snapshot
+        // is idempotent. State divergence resync is a future PRD-2 concern.
+        const fresh = msg.entities.filter(e => !this.scene.has(e.id));
+        if (fresh.length > 0) this.loadSnapshot(fresh);
         return;
       }
 
@@ -487,11 +487,15 @@ class WorldImpl implements World, HandleRouter {
     }
   }
 
-  // Late-join handler stub — issue #8 implements snapshot replay through this
-  // hook. Today nothing fires onPeerJoin in production transports; ThreeCanvas
-  // calls `world.replayTo(peerId)` directly from its onPeerJoinedRef wiring.
-  private handlePeerJoin(_peerId: string): void {
-    // intentionally empty
+  // Late-join replay (issue #8). Host fires the entire scene as a single
+  // scene-snapshot envelope so the new guest's loadSnapshot can run the
+  // two-phase construction (all entities materialised before any onSpawn
+  // fires) — keeps cross-entity GUID refs in component state resolvable.
+  // Guests never call this on inbound peer-join (no peers connect to a guest
+  // directly in our star topology).
+  private handlePeerJoin(peerId: string): void {
+    if (this.role !== 'host' || !this.transport.sendTo) return;
+    this.transport.sendTo(peerId, { type: 'scene-snapshot', entities: this.snapshot() });
   }
 
   // ── Dispose ──────────────────────────────────────────────────────────────

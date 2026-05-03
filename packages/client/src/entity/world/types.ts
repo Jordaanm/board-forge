@@ -90,11 +90,10 @@ export interface World {
   snapshot(): EntitySerialized[];
   loadSnapshot(snaps: readonly EntitySerialized[]): void;
 
-  // Transitional surfaces — issue #8 retires `replayTo` once World subscribes
-  // to a real peer-join hook. `releasePeer` stays until input dispatch is
-  // fully owned by World.
+  // Transitional surface — `releasePeer` stays until input dispatch is fully
+  // owned by World. Late-join (formerly `replayTo`) is now driven internally
+  // by transport.onPeerJoin (issue #8).
   releasePeer(peerId: string): void;
-  replayTo(peerId: string): void;
 
   dispose(): void;
 }

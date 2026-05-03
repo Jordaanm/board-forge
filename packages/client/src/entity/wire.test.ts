@@ -4,6 +4,7 @@ import {
   type ComponentPatchesMessage,
   type EntityPatch,
   type EntitySpawn,
+  type SceneSnapshot,
   type DespawnBatch,
   type InvokeAction,
   type HoldClaim,
@@ -102,6 +103,20 @@ describe('wire encode/decode round-trip', () => {
     expect(roundTrip(m)).toEqual(m);
   });
 
+  test('SceneSnapshot', () => {
+    const m: SceneSnapshot = {
+      type: 'scene-snapshot',
+      entities: [
+        {
+          id: 'e1', type: 'die', name: 'D', tags: [],
+          owner: null, privateToSeat: null, parentId: null, children: [],
+          components: { value: { v: 1, isNumeric: true } },
+        },
+      ],
+    };
+    expect(roundTrip(m)).toEqual(m);
+  });
+
   test('SceneMessage union accepts all message kinds', () => {
     const messages: SceneMessage[] = [
       { type: 'component-patches', channel: 'reliable', patches: [] },
@@ -110,6 +125,7 @@ describe('wire encode/decode round-trip', () => {
         owner: null, privateToSeat: null, parentId: null, children: [],
         components: {},
       } },
+      { type: 'scene-snapshot', entities: [] },
       { type: 'entity-patch', entityId: 'e', partial: {} },
       { type: 'despawn-batch', entityIds: [] },
       { type: 'invoke-action', entityId: 'e', componentTypeId: 't', actionId: 'a' },
@@ -117,6 +133,6 @@ describe('wire encode/decode round-trip', () => {
       { type: 'hold-release', entityId: 'e' },
       { type: 'request-update', entityId: 'e', typeId: 't', partial: {} },
     ];
-    expect(messages).toHaveLength(8);
+    expect(messages).toHaveLength(9);
   });
 });

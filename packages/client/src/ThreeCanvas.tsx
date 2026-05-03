@@ -253,7 +253,6 @@ export function ThreeCanvas({
     };
 
     onPeerJoinedRef.current = (peerId) => {
-      world.replayTo(peerId);
       transport.firePeerJoin(peerId);
     };
 

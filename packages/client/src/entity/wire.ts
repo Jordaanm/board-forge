@@ -48,6 +48,15 @@ export interface EntitySpawn {
   entity: EntitySerialized;
 }
 
+// Late-join payload (issue #8 of issues--arch.md) — host's complete scene
+// shipped to a freshly-connected guest in one envelope. Guests apply via
+// SceneImpl.load so two-phase construction (all entities materialised before
+// any onSpawn fires) keeps cross-entity GUID refs resolvable. Always reliable.
+export interface SceneSnapshot {
+  type:     'scene-snapshot';
+  entities: EntitySerialized[];
+}
+
 // Reverse-tree order of entity ids to delete. Always reliable.
 export interface DespawnBatch {
   type:      'despawn-batch';
@@ -90,6 +99,7 @@ export interface RequestUpdate {
 export type SceneMessage =
   | ComponentPatchesMessage
   | EntitySpawn
+  | SceneSnapshot
   | EntityPatch
   | DespawnBatch
   | InvokeAction
