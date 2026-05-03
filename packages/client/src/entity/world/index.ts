@@ -8,7 +8,9 @@ export type {
   WorldOptions,
   WorldIdentity,
   WorldTransport,
+  WorldInboundMessage,
   ReplicationPolicy,
+  ReplicationTarget,
   EntityHandle,
   SpawnOptions,
 } from './types';

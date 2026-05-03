@@ -10,10 +10,23 @@
 import * as THREE from 'three';
 import { type Entity } from '../Entity';
 import { type EntityComponent, type ComponentClass } from '../EntityComponent';
-import { type EntitySerialized } from '../Scene';
+import { type EntitySerialized, type SceneImpl } from '../Scene';
 import { type SceneMessage } from '../wire';
 import { type SeatIndex } from '../../seats/SeatLayout';
 import { type PhysicsWorld } from '../../physics/PhysicsWorld';
+import { type GuestInputMessage } from '../../net/SceneState';
+import { type PrivateFieldRegistry } from '../../seats/PrivacyScrubber';
+import { type HoldService } from '../HoldService';
+
+// Inbound from the wire: scene-level replication plus guest input streams.
+// Outbound from the host is always SceneMessage — guest input is one-way.
+export type WorldInboundMessage = SceneMessage | GuestInputMessage;
+
+export interface ReplicationTarget {
+  peerId:   string;
+  peerSeat: SeatIndex | null;
+  isHost:   boolean;
+}
 
 export interface SpawnOptions {
   id?:       string;
@@ -56,6 +69,13 @@ export interface World {
   snapshot(): EntitySerialized[];
   loadSnapshot(snaps: readonly EntitySerialized[]): void;
 
+  // Transitional surfaces — issue #3 (drag unification) and #8 (peer-join
+  // handler) delete these. Returning HoldService directly leaks an
+  // implementation detail; live with it for one slice.
+  holdService(): HoldService | null;
+  releasePeer(peerId: string): void;
+  replayTo(peerId: string): void;
+
   dispose(): void;
 }
 
@@ -64,7 +84,7 @@ export interface World {
 export interface WorldTransport {
   send(msg: SceneMessage, opts: { reliable: boolean }): void;
   sendTo?(peerId: string, msg: SceneMessage): void;
-  onMessage(handler: (peerId: string, msg: SceneMessage) => void): () => void;
+  onMessage(handler: (peerId: string, msg: WorldInboundMessage) => void): () => void;
   onPeerJoin(handler: (peerId: string) => void): () => void;
 }
 
@@ -91,4 +111,17 @@ export interface WorldOptions {
   physics?:  PhysicsWorld;
   // Layered over defaults — sane defaults preserve current behaviour.
   policy?:   Partial<ReplicationPolicy>;
+  // Optional pre-built SceneImpl. ThreeCanvas passes the global Scene singleton
+  // so legacy DragController / findEntityByObject3D / Scene.getEntity lookups
+  // still see the same entities; tests omit and get an isolated SceneImpl per
+  // World. Issue #5 deletes the singleton entirely.
+  entityScene?: SceneImpl;
+  // Per-target fan-out for privacy scrubbing. When provided, host flushes go
+  // through `transport.sendTo(peerId, scrubbed)` per target instead of the
+  // broadcast `transport.send`. Issue #7 moves this into RtcTransport.
+  getReplicationTargets?: () => ReplicationTarget[];
+  privateFieldRegistry?:  PrivateFieldRegistry;
+  // Required on the host for HostInputDispatcher's ownership checks; resolves
+  // a peer id to its current seat. Returns null for spectators.
+  getPeerSeat?: (peerId: string) => SeatIndex | null;
 }

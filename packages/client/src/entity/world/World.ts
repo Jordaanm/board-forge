@@ -1,19 +1,23 @@
-// World — issue #1 of issues--arch.md.
+// World — issues #1 and #2 of issues--arch.md.
 //
-// Composes the existing Scene / HostReplicatorV2 / inbound dispatch behind a
-// single facade so subsequent slices can migrate ThreeCanvas / DragController /
-// EditorPanel call sites one at a time. Each World owns its own SceneImpl
-// instance — host and guest can co-exist in one process for boundary tests.
+// Composes Scene + HostReplicatorV2 + HoldService + HostInputDispatcher +
+// GuestInputHandler behind a single facade so ThreeCanvas can collapse five
+// modules' worth of wiring into one createWorld call. Each World owns its own
+// SceneImpl by default; ThreeCanvas opts into the legacy global singleton via
+// `entityScene` so existing DragController / findEntityByObject3D consumers
+// continue to see the same entities.
 //
 // `EntityComponent.hostReplicator` is still a process-global static. World
-// sets it on host construction and clears on dispose. Tests with multiple
-// hosts in one process collide there; issue #6 deletes the static.
+// sets it on host construction and clears on dispose. Issue #6 retires it.
 
 import * as THREE from 'three';
 import { type Entity } from '../Entity';
 import { EntityComponent, type SpawnContext } from '../EntityComponent';
 import { SceneImpl, entityToSerialized, type EntitySerialized } from '../Scene';
 import { HostReplicatorV2 } from '../HostReplicatorV2';
+import { HoldService } from '../HoldService';
+import { HostInputDispatcher } from '../HostInputDispatcher';
+import { GuestInputHandler } from '../../input/GuestInputHandler';
 import { type SceneMessage, type EntityFieldsPartial } from '../wire';
 import { TransformComponent } from '../components/TransformComponent';
 import { PhysicsComponent } from '../components/PhysicsComponent';
@@ -21,19 +25,23 @@ import { MeshComponent } from '../components/MeshComponent';
 import { registerCorePrimitives } from '../spawnables';
 import { PhysicsWorld } from '../../physics/PhysicsWorld';
 import { TABLE_SURFACE_Y, TABLE_WIDTH, TABLE_DEPTH } from '../../scene/Table';
+import { type SeatIndex } from '../../seats/SeatLayout';
+import { EMPTY_PRIVATE_FIELD_REGISTRY, scrubSceneMessage, type PrivateFieldRegistry } from '../../seats/PrivacyScrubber';
 import { EntityHandleImpl } from './EntityHandle';
 import {
   type World,
   type WorldOptions,
   type WorldTransport,
+  type WorldInboundMessage,
   type WorldIdentity,
   type EntityHandle,
   type SpawnOptions,
   type ReplicationPolicy,
+  type ReplicationTarget,
 } from './types';
 
 // Bounds-enforcement constants — mirror SceneSystemV2 so behaviour is identical
-// during the parity-only first slice. Issue #5 deletes the duplicate.
+// during the parity slice. Issue #5 deletes the duplicate.
 const REST_VEL_THRESHOLD = 0.05;
 const REST_Y_MAX         = TABLE_SURFACE_Y + 1.4;
 const REST_Y_MIN         = TABLE_SURFACE_Y - 0.05;
@@ -62,7 +70,14 @@ class WorldImpl implements World {
   private readonly scene:      SceneImpl;
   private readonly physics:    PhysicsWorld | null;
   private readonly replicator: HostReplicatorV2 | null;
+  private readonly hold:       HoldService | null;
+  private readonly hostInput:  HostInputDispatcher | null;
+  private readonly guestInput: GuestInputHandler | null;
   private readonly policy:     ReplicationPolicy;
+
+  private readonly getTargets:           (() => ReplicationTarget[]) | null;
+  private readonly privateFieldRegistry: PrivateFieldRegistry;
+  private readonly getPeerSeat:          (peerId: string) => SeatIndex | null;
 
   private readonly handles   = new Map<string, EntityHandleImpl>();
   private readonly restPoses = new Map<string, RestPose>();
@@ -81,16 +96,26 @@ class WorldImpl implements World {
     this.threeScene = opts.scene;
     this.transport  = opts.transport;
     this.identity   = opts.identity;
-    this.scene      = new SceneImpl();
+    this.scene      = opts.entityScene ?? new SceneImpl();
     this.policy     = { ...DEFAULT_POLICY, ...opts.policy };
+
+    this.getTargets           = opts.getReplicationTargets ?? null;
+    this.privateFieldRegistry = opts.privateFieldRegistry ?? EMPTY_PRIVATE_FIELD_REGISTRY;
+    this.getPeerSeat          = opts.getPeerSeat ?? (() => null);
 
     if (opts.role === 'host') {
       this.physics    = opts.physics ?? new PhysicsWorld();
       this.replicator = new HostReplicatorV2();
       EntityComponent.setHostReplicator(this.replicator);
+      this.hold       = new HoldService(this.replicator);
+      this.hostInput  = new HostInputDispatcher(this.hold, this.getPeerSeat);
+      this.guestInput = new GuestInputHandler(this.hold, this.getPeerSeat);
     } else {
       this.physics    = null;
       this.replicator = null;
+      this.hold       = null;
+      this.hostInput  = null;
+      this.guestInput = null;
     }
 
     this.unsubscribeMessage  = this.transport.onMessage((peerId, msg) => this.handleInbound(peerId, msg));
@@ -103,26 +128,37 @@ class WorldImpl implements World {
     const ctx: SpawnContext = { scene: this.threeScene, physics: this.physics };
     const entity = this.scene.spawn(type, ctx, { id: opts.id });
 
-    if (opts.position) {
-      const transform = entity.getComponent(TransformComponent);
-      if (transform) {
-        transform.setState({
-          position: opts.position,
-          rotation: transform.state.rotation,
-          scale:    transform.state.scale,
-        });
-      }
-      const phys = entity.getComponent(PhysicsComponent);
-      if (phys?.body) {
-        phys.body.position.set(opts.position[0], opts.position[1], opts.position[2]);
-        phys.body.velocity.setZero();
-        phys.body.angularVelocity.setZero();
-      }
+    const position = opts.position ?? this.defaultSpawnPosition(entity);
+    const transform = entity.getComponent(TransformComponent);
+    if (transform) {
+      transform.setState({
+        position,
+        rotation: transform.state.rotation,
+        scale:    transform.state.scale,
+      });
+    }
+    const phys = entity.getComponent(PhysicsComponent);
+    if (phys?.body) {
+      phys.body.position.set(position[0], position[1], position[2]);
+      phys.body.velocity.setZero();
+      phys.body.angularVelocity.setZero();
     }
 
     if (this.replicator) this.replicator.enqueueEntitySpawn(entityToSerialized(entity));
     this.notify();
     return this.handleFor(entity);
+  }
+
+  // Mirrors SceneSystemV2.spawn's random table-surface placement so existing
+  // EditorPanel-driven spawns land where they used to. Issue #4 reconsiders
+  // whether spawn placement is World's concern or the editor's.
+  private defaultSpawnPosition(entity: Entity): [number, number, number] {
+    const x = (Math.random() - 0.5) * 6;
+    const z = (Math.random() - 0.5) * 3;
+    const mesh = entity.getComponent(MeshComponent);
+    const hy   = mesh ? mesh.halfExtents()[1] : 0;
+    const y    = TABLE_SURFACE_Y + hy + 0.5;
+    return [x, y, z];
   }
 
   despawn(id: string): void {
@@ -171,11 +207,11 @@ class WorldImpl implements World {
   }
 
   // ── Per-frame driver ─────────────────────────────────────────────────────
-  tick(_dtSeconds: number): void {
+  tick(dtSeconds: number): void {
     if (this.disposed) return;
 
     if (this.role === 'host' && this.physics && this.replicator) {
-      this.physics.step(_dtSeconds);
+      this.physics.step(dtSeconds);
       this.enforceTableBounds();
       this.syncFromPhysics();
 
@@ -184,11 +220,27 @@ class WorldImpl implements World {
       // Reliable first so guests construct entities before unreliable patches
       // arrive — patches for unknown entities are silently dropped, so first-
       // tick transform updates survive the round trip.
-      for (const msg of reliable)   this.transport.send(msg, { reliable: true  });
-      for (const msg of unreliable) this.transport.send(msg, { reliable: false });
+      for (const msg of reliable)   this.dispatchOutbound(msg, true);
+      for (const msg of unreliable) this.dispatchOutbound(msg, false);
     }
 
     this.tickIndex++;
+  }
+
+  // Per-target fan-out + scrubbing when targets are configured (production
+  // ThreeCanvas path). Otherwise broadcast (boundary tests). Issue #7 moves
+  // the scrubbing pass into the RtcTransport adapter.
+  private dispatchOutbound(msg: SceneMessage, reliable: boolean): void {
+    if (this.getTargets && this.transport.sendTo) {
+      const targets = this.getTargets();
+      for (const t of targets) {
+        const ctx      = { peerSeat: t.peerSeat, isHost: t.isHost };
+        const scrubbed = scrubSceneMessage(ctx, msg, this.privateFieldRegistry);
+        this.transport.sendTo(t.peerId, scrubbed);
+      }
+      return;
+    }
+    this.transport.send(msg, { reliable });
   }
 
   private enforceTableBounds(): void {
@@ -277,11 +329,59 @@ class WorldImpl implements World {
     this.notify();
   }
 
+  // ── Hold service surface (transitional) ──────────────────────────────────
+  // DragController still takes a HoldService directly; issue #3 unifies it
+  // around EntityHandle.tryHold/release and deletes this getter.
+  holdService(): HoldService | null {
+    return this.hold;
+  }
+
+  // Peer-left hook — drops every hold owned by the leaving peer's seat.
+  releasePeer(peerId: string): void {
+    if (this.role !== 'host') return;
+    this.guestInput?.releasePeer(peerId);
+  }
+
+  // Late-join replay — issue #8 reroutes through transport.onPeerJoin and
+  // deletes this method.
+  replayTo(peerId: string): void {
+    if (this.role !== 'host' || !this.transport.sendTo) return;
+    for (const entity of this.scene.all()) {
+      this.transport.sendTo(peerId, { type: 'entity-spawn', entity: entityToSerialized(entity) });
+    }
+  }
+
   // ── Inbound dispatch ─────────────────────────────────────────────────────
-  // Mirrors applySceneMessage but writes to this World's own SceneImpl. Issue
-  // #5 deletes the legacy free-function once ThreeCanvas migrates.
-  private handleInbound(_peerId: string, msg: SceneMessage): void {
+  private handleInbound(peerId: string, msg: WorldInboundMessage): void {
     if (this.disposed) return;
+    if (this.role === 'host') this.handleInboundHost(peerId, msg);
+    else                      this.handleInboundGuest(msg);
+  }
+
+  // Host receives guest inputs (hold-*, request-update, invoke-action,
+  // guest-drag-*). Outbound replication echoes (entity-spawn, etc.) are
+  // host-authored, so the host ignores them on inbound.
+  private handleInboundHost(peerId: string, msg: WorldInboundMessage): void {
+    switch (msg.type) {
+      case 'hold-claim':       this.hostInput?.handleHoldClaim(peerId, msg);     return;
+      case 'hold-release':     this.hostInput?.handleHoldRelease(peerId, msg);   return;
+      case 'request-update':   this.hostInput?.handleRequestUpdate(peerId, msg); return;
+      case 'invoke-action':    this.hostInput?.handleInvokeAction(peerId, msg);  return;
+      case 'guest-drag-move':  this.guestInput?.handleMessage(peerId, msg);      return;
+      case 'guest-drag-start':
+      case 'guest-drag-end':
+        // Reserved by the wire schema but not produced today.
+        return;
+      default:
+        // entity-spawn / entity-patch / component-patches / despawn-batch are
+        // host-authored — host doesn't apply its own outbound echoes.
+        return;
+    }
+  }
+
+  // Mirrors applySceneMessage but writes to this World's own SceneImpl. Issue
+  // #5 deletes the legacy free function once nothing imports it.
+  private handleInboundGuest(msg: WorldInboundMessage): void {
     switch (msg.type) {
       case 'entity-spawn': {
         if (this.scene.has(msg.entity.id)) return;
@@ -328,12 +428,6 @@ class WorldImpl implements World {
         return;
       }
 
-      case 'invoke-action':
-      case 'request-update':
-        // Host-only inbound paths. Guest drops; host wires HostInputDispatcher
-        // in issue #2 to reach these.
-        return;
-
       case 'hold-claim': {
         const entity = this.scene.getEntity(msg.entityId);
         if (!entity) return;
@@ -349,12 +443,20 @@ class WorldImpl implements World {
         this.notify();
         return;
       }
+
+      case 'invoke-action':
+      case 'request-update':
+      case 'guest-drag-move':
+      case 'guest-drag-start':
+      case 'guest-drag-end':
+        // Host-only inbound paths. Guest drops.
+        return;
     }
   }
 
   // Late-join handler stub — issue #8 implements snapshot replay through this
-  // hook. Today nothing is wired to fire onPeerJoin in production (ThreeCanvas
-  // owns its own logic until issue #2 migrates), so this is a no-op.
+  // hook. Today nothing fires onPeerJoin in production transports; ThreeCanvas
+  // calls `world.replayTo(peerId)` directly from its onPeerJoinedRef wiring.
   private handlePeerJoin(_peerId: string): void {
     // intentionally empty
   }
@@ -412,3 +514,4 @@ function normaliseTags(value: unknown): string[] {
   }
   return out;
 }
+

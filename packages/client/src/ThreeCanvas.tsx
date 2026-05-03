@@ -1,25 +1,21 @@
 import { useEffect, useRef, type MutableRefObject } from 'react';
 import * as THREE from 'three';
 import { createTable, applyTableProp, type TableProps } from './scene/Table';
-import { SceneSystemV2 } from './entity/SceneSystemV2';
-import { HostReplicatorV2 } from './entity/HostReplicatorV2';
-import { applySceneMessage } from './entity/GuestReceiver';
-import { EntityComponent } from './entity/EntityComponent';
-import { Scene, entityToSerialized } from './entity/Scene';
+import { createWorld } from './entity/world';
+import { type World, type WorldTransport, type WorldInboundMessage } from './entity/world';
+import { Scene } from './entity/Scene';
+import { type Entity } from './entity/Entity';
+import { TransformComponent } from './entity/components/TransformComponent';
+import { MeshComponent } from './entity/components/MeshComponent';
+import { ValueComponent } from './entity/components/ValueComponent';
 import { DiceComponent } from './entity/components/DiceComponent';
-import { HoldService } from './entity/HoldService';
-import { HostInputDispatcher } from './entity/HostInputDispatcher';
 import { MoveGizmo } from './scene/MoveGizmo';
 import { CameraController } from './camera/CameraController';
-import { PhysicsWorld } from './physics/PhysicsWorld';
 import { DragController } from './input/DragController';
 import { GuestDragController } from './input/GuestDragController';
-import { GuestInputHandler } from './input/GuestInputHandler';
 import { ContextMenuController, type ContextMenuRequest } from './input/ContextMenuController';
 import { type ChannelMessage, type SpawnableType } from './net/SceneState';
-import { type SceneMessage } from './entity/wire';
 import { type SeatIndex } from './seats/SeatLayout';
-import { EMPTY_PRIVATE_FIELD_REGISTRY, scrubSceneMessage } from './seats/PrivacyScrubber';
 import { CursorTracker } from './cursor/CursorTracker';
 import { CursorOverlay } from './cursor/CursorOverlay';
 import { TABLE_SURFACE_Y } from './scene/Table';
@@ -108,7 +104,6 @@ export function ThreeCanvas({
     scene.add(tableMesh);
 
     const camController = new CameraController(camera, renderer.domElement);
-    const graph = new SceneSystemV2();
 
     const cursorTracker = new CursorTracker();
     const cursorOverlay = new CursorOverlay(scene);
@@ -137,6 +132,46 @@ export function ThreeCanvas({
 
     freeCameraRef.current = (on) => camController.setRestricted(on);
 
+    // ── World transport adapter ─────────────────────────────────────────
+    // Wraps the existing send / sendTo refs and exposes inbound subscription
+    // hooks. Cursor traffic continues to flow outside the World — it isn't a
+    // SceneMessage. Issue #7 replaces this inline adapter with RtcTransport.
+    const worldHandlers:         Array<(peerId: string, msg: WorldInboundMessage) => void> = [];
+    const worldPeerJoinHandlers: Array<(peerId: string) => void> = [];
+
+    const worldTransport: WorldTransport = {
+      send:   (msg)         => sendRef.current(msg),
+      sendTo: (peerId, msg) => sendToRef.current(peerId, msg),
+      onMessage: (h) => {
+        worldHandlers.push(h);
+        return () => {
+          const i = worldHandlers.indexOf(h);
+          if (i >= 0) worldHandlers.splice(i, 1);
+        };
+      },
+      onPeerJoin: (h) => {
+        worldPeerJoinHandlers.push(h);
+        return () => {
+          const i = worldPeerJoinHandlers.indexOf(h);
+          if (i >= 0) worldPeerJoinHandlers.splice(i, 1);
+        };
+      },
+    };
+
+    const world: World = createWorld({
+      role:                  isHost ? 'host' : 'guest',
+      scene,
+      identity: {
+        isHost,
+        selfSeat:   () => getSelfSeatRef.current(),
+        selfPeerId: () => getSelfPeerIdRef.current(),
+      },
+      transport:             worldTransport,
+      entityScene:           Scene,
+      getReplicationTargets: isHost ? () => getTargetsRef.current() : undefined,
+      getPeerSeat:           isHost ? (peerId) => getPeerSeatRef.current(peerId) : undefined,
+    });
+
     // ── Selection highlight ─────────────────────────────────────────────
     let highlightHelper: THREE.BoxHelper | null = null;
     let highlightId:     string | null = null;
@@ -157,79 +192,45 @@ export function ThreeCanvas({
       highlightId = id;
       clearHighlight();
       if (!id) return;
-      const entry = graph.getEntry(id);
-      if (!entry) return;
-      highlightHelper = new THREE.BoxHelper(entry.mesh, 0xffd740);
+      const handle = world.get(id);
+      const obj    = handle?.get(TransformComponent)?.object3d;
+      if (!obj) return;
+      highlightHelper = new THREE.BoxHelper(obj, 0xffd740);
       (highlightHelper.material as THREE.LineBasicMaterial).linewidth = 2;
       scene.add(highlightHelper);
-      moveGizmo.attach(entry.mesh);
+      moveGizmo.attach(obj);
       scene.add(moveGizmo.group);
     };
 
     const selectCallback = (id: string | null) => onSelectRef.current(id);
 
-    const unsubscribe = graph.subscribe(() => {
-      if (highlightId && !graph.getEntry(highlightId)) {
+    const unsubscribe = world.subscribe(() => {
+      if (highlightId && !world.get(highlightId)) {
         highlightId = null;
         clearHighlight();
       }
-      onObjectsChangeRef.current(graph.getAll().map(e => {
-        const ent = Scene.getEntity(e.id);
-        return {
-          id:         e.id,
-          objectType: e.objectType,
-          tags:       ent ? [...ent.tags] : [],
-          props:      { ...e.props },
-        };
-      }));
+      onObjectsChangeRef.current(world.all().map(h => entityToObjectSummary(h.entity)));
     });
 
-    // ── Host ─────────────────────────────────────────────────────────────
-    let physics:     PhysicsWorld        | null = null;
-    let dragCtrl:    DragController      | null = null;
-    let guestInput:  GuestInputHandler   | null = null;
-    let hostRepl:    HostReplicatorV2    | null = null;
-    let holdSvc:     HoldService         | null = null;
-    let hostInput:   HostInputDispatcher | null = null;
-    let contextCtrl: ContextMenuController | null = null;
-    let guestDrag:   GuestDragController | null = null;
-
-    const broadcast = (msgs: SceneMessage[]) => {
-      if (msgs.length === 0) return;
-      const targets = getTargetsRef.current();
-      for (const t of targets) {
-        const ctx = { peerSeat: t.peerSeat, isHost: t.isHost };
-        for (const m of msgs) {
-          const scrubbed = scrubSceneMessage(ctx, m, EMPTY_PRIVATE_FIELD_REGISTRY);
-          sendToRef.current(t.peerId, scrubbed);
-        }
-      }
-    };
+    // ── Host vs guest input wiring ──────────────────────────────────────
+    let dragCtrl:    DragController         | null = null;
+    let guestDrag:   GuestDragController    | null = null;
+    let contextCtrl: ContextMenuController  | null = null;
 
     if (isHost) {
-      physics    = new PhysicsWorld();
-      hostRepl   = new HostReplicatorV2();
-      holdSvc    = new HoldService(hostRepl);
-      hostInput  = new HostInputDispatcher(holdSvc, (peerId) => getPeerSeatRef.current(peerId));
-      EntityComponent.setHostReplicator(hostRepl);
-      graph.setReplicator(hostRepl);
-      dragCtrl   = new DragController(
+      const holdSvc = world.holdService()!;
+      dragCtrl = new DragController(
         camera, renderer.domElement, holdSvc,
         () => getSelfSeatRef.current(), moveGizmo, selectCallback,
       );
-      guestInput = new GuestInputHandler(holdSvc, (peerId) => getPeerSeatRef.current(peerId));
 
-      spawnRef.current = (type) => graph.spawn(type, scene, physics!);
+      spawnRef.current        = (type) => { world.spawn(type); };
+      deleteObjectRef.current = (id)   => world.despawn(id);
+      updatePropRef.current   = (id, key, value) => world.updateProp(id, key, value);
 
       rollRef.current = () => {
-        for (const entity of Scene.all()) {
-          entity.getComponent(DiceComponent)?.roll();
-        }
+        world.forEach((h) => h.entity.getComponent(DiceComponent)?.roll());
       };
-
-      deleteObjectRef.current = (id) => graph.remove(id, scene, physics);
-
-      updatePropRef.current = (id, key, value) => graph.updateProp(id, key, value);
 
       updateTablePropRef.current = (key, value) => applyTableProp(tableMesh, key, value);
 
@@ -239,39 +240,8 @@ export function ThreeCanvas({
         (req) => onContextMenuRef.current(req),
       );
 
-      onMsgRef.current = (peerId, msg) => {
-        if (msg.type === 'guest-drag-move')   { guestInput!.handleMessage(peerId, msg); return; }
-        if (msg.type === 'hold-claim')        { hostInput!.handleHoldClaim(peerId, msg); return; }
-        if (msg.type === 'hold-release')      { hostInput!.handleHoldRelease(peerId, msg); return; }
-        if (msg.type === 'request-update')    { hostInput!.handleRequestUpdate(peerId, msg); return; }
-        if (msg.type === 'invoke-action')     { hostInput!.handleInvokeAction(peerId, msg); return; }
-        if (msg.type === 'cursor-position')   {
-          // Update local view, then relay to other peers so guests see each
-          // other (star topology — all guest traffic flows through the host).
-          cursorTracker.update(msg.peerId, msg.seat, msg.x, msg.z);
-          for (const t of getTargetsRef.current()) {
-            if (t.peerId === peerId) continue;
-            sendToRef.current(t.peerId, msg);
-          }
-          return;
-        }
-      };
-
-      onPeerLeftRef.current = (peerId) => {
-        guestInput!.releasePeer(peerId);
-        cursorTracker.remove(peerId);
-      };
-
-      onPeerJoinedRef.current = (peerId) => {
-        for (const entity of Scene.all()) {
-          sendToRef.current(peerId, { type: 'entity-spawn', entity: entityToSerialized(entity) });
-        }
-      };
-
     } else {
-      EntityComponent.setHostReplicator(null);
-      graph.setReplicator(null);
-      guestDrag   = new GuestDragController(
+      guestDrag = new GuestDragController(
         camera, renderer.domElement, moveGizmo,
         (msg) => sendRef.current(msg),
         () => getSelfSeatRef.current(),
@@ -283,31 +253,38 @@ export function ThreeCanvas({
         () => getSelfSeatRef.current(),
         (req) => onContextMenuRef.current(req),
       );
+    }
 
-      onMsgRef.current = (_peerId, msg) => {
-        if (msg.type === 'entity-spawn'      ||
-            msg.type === 'entity-patch'      ||
-            msg.type === 'component-patches' ||
-            msg.type === 'despawn-batch'     ||
-            msg.type === 'invoke-action'     ||
-            msg.type === 'hold-claim'        ||
-            msg.type === 'hold-release'      ||
-            msg.type === 'request-update') {
-          applySceneMessage(msg, { isHost: false, scene });
-          graph.syncFromScene();
-          return;
-        }
-        if (msg.type === 'cursor-position') {
+    // ── Inbound message router ──────────────────────────────────────────
+    // Cursor traffic stays here (not a SceneMessage). Everything else is
+    // forwarded into worldTransport so World's inbound dispatch handles it.
+    onMsgRef.current = (peerId, msg) => {
+      if (msg.type === 'cursor-position') {
+        if (isHost) {
+          // Star topology: host relays each guest's cursor to all other peers.
+          cursorTracker.update(msg.peerId, msg.seat, msg.x, msg.z);
+          for (const t of getTargetsRef.current()) {
+            if (t.peerId === peerId) continue;
+            sendToRef.current(t.peerId, msg);
+          }
+        } else {
           if (msg.peerId === getSelfPeerIdRef.current()) return; // skip echo
           cursorTracker.update(msg.peerId, msg.seat, msg.x, msg.z);
-          return;
         }
-      };
+        return;
+      }
+      for (const h of worldHandlers) h(peerId, msg as WorldInboundMessage);
+    };
 
-      onPeerLeftRef.current = (peerId) => {
-        cursorTracker.remove(peerId);
-      };
-    }
+    onPeerLeftRef.current = (peerId) => {
+      world.releasePeer(peerId);
+      cursorTracker.remove(peerId);
+    };
+
+    onPeerJoinedRef.current = (peerId) => {
+      world.replayTo(peerId);
+      for (const h of worldPeerJoinHandlers) h(peerId);
+    };
 
     // ── Animation loop ────────────────────────────────────────────────────
     let lastTime = performance.now();
@@ -316,20 +293,15 @@ export function ThreeCanvas({
     const animate = () => {
       animId = requestAnimationFrame(animate);
 
-      if (isHost && physics && dragCtrl && hostRepl) {
-        const now = performance.now();
-        const dt  = Math.min((now - lastTime) / 1000, 0.05);
-        lastTime  = now;
+      const now = performance.now();
+      const dt  = Math.min((now - lastTime) / 1000, 0.05);
+      lastTime  = now;
 
-        physics.step(dt);
-        graph.enforceTableBounds();
-        dragCtrl.update();
-        graph.syncFromPhysics();
+      world.tick(dt);
 
-        broadcast(hostRepl.flushUnreliable());
-        broadcast(hostRepl.flushReliable());
-
-      } else if (!isHost) {
+      if (isHost) {
+        dragCtrl?.update();
+      } else {
         guestDrag?.update();
       }
 
@@ -379,9 +351,8 @@ export function ThreeCanvas({
       dragCtrl?.dispose();
       guestDrag?.dispose();
       contextCtrl?.dispose();
-      EntityComponent.setHostReplicator(null);
-      Scene.clear();
-      if (!isHost) onMsgRef.current = () => {};
+      world.dispose();
+      onMsgRef.current        = () => {};
       onPeerLeftRef.current   = () => {};
       onPeerJoinedRef.current = () => {};
       spawnRef.current        = () => {};
@@ -407,4 +378,28 @@ export function ThreeCanvas({
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
     </div>
   );
+}
+
+// Editor-panel view of an entity. Mirrors SceneSystemV2.derivePropsView until
+// issue #4 migrates EditorPanel to read components directly.
+function entityToObjectSummary(entity: Entity): ObjectSummary {
+  const mesh  = entity.getComponent(MeshComponent);
+  const value = entity.getComponent(ValueComponent);
+  const props: Record<string, unknown> = { name: entity.name };
+  if (entity.type === 'board' && mesh) {
+    const sz = mesh.state.size as [number, number, number];
+    props.width      = sz[0];
+    props.depth      = sz[2];
+    props.textureUrl = mesh.state.textureRefs?.default ?? '';
+  } else if (entity.type === 'token' && mesh) {
+    props.color = mesh.state.tint;
+  } else if (entity.type === 'die' && value) {
+    props.value = value.state.value;
+  }
+  return {
+    id:         entity.id,
+    objectType: entity.type as SpawnableType,
+    tags:       [...entity.tags],
+    props,
+  };
 }
