@@ -4,8 +4,7 @@
 // Optional unreliable-channel loss + reorder injection — issue #9 / #10 lean
 // on these knobs to test coalescing and reliability semantics.
 
-import { type SceneMessage } from '../wire';
-import { type WorldTransport } from './types';
+import { type WorldTransport, type WorldInboundMessage } from './types';
 
 export interface InMemoryBusOptions {
   // Drop probability for unreliable-channel messages, 0..1. Reliable messages
@@ -18,7 +17,7 @@ export interface InMemoryBusOptions {
 const HOST_PEER_ID  = 'host-peer';
 const GUEST_PEER_ID = 'guest-peer';
 
-type MessageHandler  = (peerId: string, msg: SceneMessage) => void;
+type MessageHandler  = (peerId: string, msg: WorldInboundMessage) => void;
 type PeerJoinHandler = (peerId: string) => void;
 
 interface Endpoint {
@@ -36,7 +35,7 @@ export function createInMemoryBusPair(opts: InMemoryBusOptions = {}): [WorldTran
   const host:  Endpoint = { remoteId: HOST_PEER_ID,  messageHandlers: [], peerJoinHandlers: [] };
   const guest: Endpoint = { remoteId: GUEST_PEER_ID, messageHandlers: [], peerJoinHandlers: [] };
 
-  function deliver(target: Endpoint, fromPeerId: string, msg: SceneMessage, reliable: boolean): void {
+  function deliver(target: Endpoint, fromPeerId: string, msg: WorldInboundMessage, reliable: boolean): void {
     if (!reliable && lossProb > 0 && random() < lossProb) return;
     for (const h of target.messageHandlers) h(fromPeerId, msg);
   }

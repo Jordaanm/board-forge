@@ -27,7 +27,8 @@ import { PhysicsWorld } from '../../physics/PhysicsWorld';
 import { TABLE_SURFACE_Y, TABLE_WIDTH, TABLE_DEPTH } from '../../scene/Table';
 import { type SeatIndex } from '../../seats/SeatLayout';
 import { EMPTY_PRIVATE_FIELD_REGISTRY, scrubSceneMessage, type PrivateFieldRegistry } from '../../seats/PrivacyScrubber';
-import { EntityHandleImpl } from './EntityHandle';
+import { canManipulate } from '../../seats/OwnershipPolicy';
+import { EntityHandleImpl, type HandleRouter } from './EntityHandle';
 import {
   type World,
   type WorldOptions,
@@ -39,6 +40,7 @@ import {
   type ReplicationPolicy,
   type ReplicationTarget,
 } from './types';
+import { type HoldRelease } from '../wire';
 
 // Bounds-enforcement constants — mirror SceneSystemV2 so behaviour is identical
 // during the parity slice. Issue #5 deletes the duplicate.
@@ -62,7 +64,7 @@ export function createWorld(opts: WorldOptions): World {
   return new WorldImpl(opts);
 }
 
-class WorldImpl implements World {
+class WorldImpl implements World, HandleRouter {
   private readonly role:       'host' | 'guest';
   private readonly threeScene: THREE.Scene;
   private readonly transport:  WorldTransport;
@@ -107,9 +109,9 @@ class WorldImpl implements World {
       this.physics    = opts.physics ?? new PhysicsWorld();
       this.replicator = new HostReplicatorV2();
       EntityComponent.setHostReplicator(this.replicator);
-      this.hold       = new HoldService(this.replicator);
-      this.hostInput  = new HostInputDispatcher(this.hold, this.getPeerSeat);
-      this.guestInput = new GuestInputHandler(this.hold, this.getPeerSeat);
+      this.hold       = new HoldService(this.replicator, this.scene);
+      this.hostInput  = new HostInputDispatcher(this.hold, this.getPeerSeat, this.scene);
+      this.guestInput = new GuestInputHandler(this.hold, this.getPeerSeat, this.scene);
     } else {
       this.physics    = null;
       this.replicator = null;
@@ -329,11 +331,62 @@ class WorldImpl implements World {
     this.notify();
   }
 
-  // ── Hold service surface (transitional) ──────────────────────────────────
-  // DragController still takes a HoldService directly; issue #3 unifies it
-  // around EntityHandle.tryHold/release and deletes this getter.
-  holdService(): HoldService | null {
-    return this.hold;
+  // ── HandleRouter (issue #3) ─────────────────────────────────────────────
+  // Mutation verbs called by EntityHandleImpl. Host writes the body / runs
+  // HoldService directly; guest sends RPCs and applies optimistic updates so
+  // the local view tracks the cursor without round-tripping the host.
+  isHost(): boolean { return this.role === 'host'; }
+
+  selfSeat(): SeatIndex | null {
+    return this.identity.selfSeat();
+  }
+
+  setPosition(entity: Entity, x: number, y: number, z: number): void {
+    if (this.role === 'host') {
+      const phys = entity.getComponent(PhysicsComponent);
+      if (phys?.body) {
+        phys.body.position.set(x, y, z);
+        return;
+      }
+      const t = entity.getComponent(TransformComponent);
+      if (t) t.setState({ position: [x, y, z], rotation: t.state.rotation, scale: t.state.scale });
+      return;
+    }
+    // Guest: optimistic transform update + guest-drag-move RPC.
+    const t = entity.getComponent(TransformComponent);
+    if (t) {
+      t.applyRemoteState({ position: [x, y, z], rotation: t.state.rotation, scale: t.state.scale });
+    }
+    this.transport.send(
+      { type: 'guest-drag-move', objectId: entity.id, px: x, py: y, pz: z },
+      { reliable: false },
+    );
+  }
+
+  tryHold(entity: Entity, seat: SeatIndex): boolean {
+    if (entity.heldBy !== null) return false;
+    if (!canManipulate({ peerSeat: seat, isHost: this.role === 'host' }, entity.owner)) return false;
+
+    if (this.role === 'host') {
+      return this.hold!.tryClaim(entity, seat);
+    }
+    // Guest: dispatch RPC; caller polls heldBy() for the host's echo.
+    this.transport.send({ type: 'hold-claim', entityId: entity.id, seat }, { reliable: true });
+    return true;
+  }
+
+  release(entity: Entity, velocity?: { vx: number; vy: number; vz: number }): void {
+    if (this.role === 'host') {
+      this.hold!.release(entity, velocity);
+      return;
+    }
+    const msg: HoldRelease = { type: 'hold-release', entityId: entity.id };
+    if (velocity) {
+      msg.vx = velocity.vx;
+      msg.vy = velocity.vy;
+      msg.vz = velocity.vz;
+    }
+    this.transport.send(msg, { reliable: true });
   }
 
   // Peer-left hook — drops every hold owned by the leaving peer's seat.
@@ -487,7 +540,7 @@ class WorldImpl implements World {
   private handleFor(entity: Entity): EntityHandleImpl {
     const cached = this.handles.get(entity.id);
     if (cached && cached.entity === entity) return cached;
-    const handle = new EntityHandleImpl(entity);
+    const handle = new EntityHandleImpl(entity, this);
     this.handles.set(entity.id, handle);
     return handle;
   }

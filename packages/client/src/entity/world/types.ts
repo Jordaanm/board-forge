@@ -16,11 +16,13 @@ import { type SeatIndex } from '../../seats/SeatLayout';
 import { type PhysicsWorld } from '../../physics/PhysicsWorld';
 import { type GuestInputMessage } from '../../net/SceneState';
 import { type PrivateFieldRegistry } from '../../seats/PrivacyScrubber';
-import { type HoldService } from '../HoldService';
 
 // Inbound from the wire: scene-level replication plus guest input streams.
-// Outbound from the host is always SceneMessage — guest input is one-way.
 export type WorldInboundMessage = SceneMessage | GuestInputMessage;
+
+// Outbound from the World: host emits SceneMessages (replication); guest emits
+// GuestInputMessages (drag move) and SceneMessages (hold-claim / hold-release).
+export type WorldOutboundMessage = SceneMessage | GuestInputMessage;
 
 export interface ReplicationTarget {
   peerId:   string;
@@ -33,8 +35,9 @@ export interface SpawnOptions {
   position?: [number, number, number];
 }
 
-// Read-surface facade over an Entity. Symmetric across host/guest. Issue #3
-// adds the mutation verbs (setPosition / requestMove / tryHold / release).
+// Symmetric host/guest facade over an Entity. The mutation verbs route
+// internally — host writes the body / HoldService directly, guest sends the
+// equivalent RPC and applies an optimistic local update where applicable.
 export interface EntityHandle {
   readonly id:     string;
   readonly entity: Entity;
@@ -44,6 +47,25 @@ export interface EntityHandle {
   heldBy(): SeatIndex | null;
 
   get<T extends EntityComponent<any>>(cls: ComponentClass<T>): T | undefined;
+
+  // Authoritative move on host (writes the physics body); optimistic transform
+  // update + `guest-drag-move` RPC on guest. Used by DragController during
+  // pointer-driven carry.
+  setPosition(x: number, y: number, z: number): void;
+
+  // Ownership policy gate for starting a drag — wraps canManipulate against
+  // the World's identity. Independent of `heldBy` (callers also check that).
+  canStartDrag(): boolean;
+
+  // Hold-claim attempt. Returns true if the local check passes (entity is
+  // free + ownership allows). Host completes the claim synchronously; guest
+  // dispatches a `hold-claim` RPC and the caller polls `heldBy()` for the
+  // host's echo.
+  tryHold(seat: SeatIndex): boolean;
+
+  // Drop the hold. Host runs HoldService.release locally. Guest dispatches a
+  // `hold-release` RPC. Velocity is the end-of-drag throw, optional.
+  release(velocity?: { vx: number; vy: number; vz: number }): void;
 }
 
 export interface World {
@@ -69,10 +91,9 @@ export interface World {
   snapshot(): EntitySerialized[];
   loadSnapshot(snaps: readonly EntitySerialized[]): void;
 
-  // Transitional surfaces — issue #3 (drag unification) and #8 (peer-join
-  // handler) delete these. Returning HoldService directly leaks an
-  // implementation detail; live with it for one slice.
-  holdService(): HoldService | null;
+  // Transitional surfaces — issue #8 retires `replayTo` once World subscribes
+  // to a real peer-join hook. `releasePeer` stays until input dispatch is
+  // fully owned by World.
   releasePeer(peerId: string): void;
   replayTo(peerId: string): void;
 
@@ -82,7 +103,7 @@ export interface World {
 // Single seam for the wire. Production: RtcTransport over ConnectionManager.
 // Tests: createInMemoryBusPair() — see InMemoryTransport.ts.
 export interface WorldTransport {
-  send(msg: SceneMessage, opts: { reliable: boolean }): void;
+  send(msg: WorldOutboundMessage, opts: { reliable: boolean }): void;
   sendTo?(peerId: string, msg: SceneMessage): void;
   onMessage(handler: (peerId: string, msg: WorldInboundMessage) => void): () => void;
   onPeerJoin(handler: (peerId: string) => void): () => void;

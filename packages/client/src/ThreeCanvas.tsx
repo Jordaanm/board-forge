@@ -12,7 +12,6 @@ import { DiceComponent } from './entity/components/DiceComponent';
 import { MoveGizmo } from './scene/MoveGizmo';
 import { CameraController } from './camera/CameraController';
 import { DragController } from './input/DragController';
-import { GuestDragController } from './input/GuestDragController';
 import { ContextMenuController, type ContextMenuRequest } from './input/ContextMenuController';
 import { type ChannelMessage, type SpawnableType } from './net/SceneState';
 import { type SeatIndex } from './seats/SeatLayout';
@@ -212,18 +211,22 @@ export function ThreeCanvas({
       onObjectsChangeRef.current(world.all().map(h => entityToObjectSummary(h.entity)));
     });
 
-    // ── Host vs guest input wiring ──────────────────────────────────────
-    let dragCtrl:    DragController         | null = null;
-    let guestDrag:   GuestDragController    | null = null;
-    let contextCtrl: ContextMenuController  | null = null;
+    // ── Input wiring ────────────────────────────────────────────────────
+    // One DragController works for both roles — issue #3. EntityHandle's
+    // mutation verbs route to host body writes / HoldService directly on the
+    // host, and to RPCs + optimistic transform updates on the guest.
+    const dragCtrl = new DragController(
+      camera, renderer.domElement, world,
+      () => getSelfSeatRef.current(), moveGizmo, selectCallback,
+    );
+
+    const contextCtrl = new ContextMenuController(
+      renderer.domElement, camera, isHost,
+      () => getSelfSeatRef.current(),
+      (req) => onContextMenuRef.current(req),
+    );
 
     if (isHost) {
-      const holdSvc = world.holdService()!;
-      dragCtrl = new DragController(
-        camera, renderer.domElement, holdSvc,
-        () => getSelfSeatRef.current(), moveGizmo, selectCallback,
-      );
-
       spawnRef.current        = (type) => { world.spawn(type); };
       deleteObjectRef.current = (id)   => world.despawn(id);
       updatePropRef.current   = (id, key, value) => world.updateProp(id, key, value);
@@ -233,26 +236,6 @@ export function ThreeCanvas({
       };
 
       updateTablePropRef.current = (key, value) => applyTableProp(tableMesh, key, value);
-
-      contextCtrl = new ContextMenuController(
-        renderer.domElement, camera, true,
-        () => getSelfSeatRef.current(),
-        (req) => onContextMenuRef.current(req),
-      );
-
-    } else {
-      guestDrag = new GuestDragController(
-        camera, renderer.domElement, moveGizmo,
-        (msg) => sendRef.current(msg),
-        () => getSelfSeatRef.current(),
-        selectCallback,
-      );
-
-      contextCtrl = new ContextMenuController(
-        renderer.domElement, camera, false,
-        () => getSelfSeatRef.current(),
-        (req) => onContextMenuRef.current(req),
-      );
     }
 
     // ── Inbound message router ──────────────────────────────────────────
@@ -298,12 +281,7 @@ export function ThreeCanvas({
       lastTime  = now;
 
       world.tick(dt);
-
-      if (isHost) {
-        dragCtrl?.update();
-      } else {
-        guestDrag?.update();
-      }
+      dragCtrl.update();
 
       // ── Cursor: throttled send + render sync ───────────────────────────
       const cursorNow = performance.now();
@@ -348,9 +326,8 @@ export function ThreeCanvas({
       clearHighlight();
       moveGizmo.dispose();
       camController.dispose();
-      dragCtrl?.dispose();
-      guestDrag?.dispose();
-      contextCtrl?.dispose();
+      dragCtrl.dispose();
+      contextCtrl.dispose();
       world.dispose();
       onMsgRef.current        = () => {};
       onPeerLeftRef.current   = () => {};

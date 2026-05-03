@@ -1,22 +1,26 @@
+// Unified pointer-driven drag — issue #3 of issues--arch.md.
+//
+// One DragController works on host and guest. Mutation verbs (tryHold,
+// setPosition, release) route through EntityHandle, which the World resolves
+// per role. The host completes a hold-claim synchronously; the guest dispatches
+// an RPC and waits for the host's echo to flip `entity.heldBy`. Both paths
+// drive the same pending → dragging state machine here.
+
 import * as THREE from 'three';
-import { type Entity } from '../entity/Entity';
-import { Scene, findEntityByObject3D } from '../entity/Scene';
+import { type World, type EntityHandle } from '../entity/world';
 import { TransformComponent } from '../entity/components/TransformComponent';
 import { PhysicsComponent } from '../entity/components/PhysicsComponent';
-import { type HoldService } from '../entity/HoldService';
 import { type SeatIndex } from '../seats/SeatLayout';
-import { canManipulate } from '../seats/OwnershipPolicy';
 import { CARRY_LIFT_HEIGHT, THROW_VELOCITY_WINDOW_MS } from '../config/dragConfig';
 import { type MoveGizmo, type GizmoAxis } from '../scene/MoveGizmo';
 import { projectRayOntoAxis } from './axisDrag';
 
 const VELOCITY_SAMPLES = 20;
-
-const HOLD_MS = 150;
-const MOVE_PX = 5;
+const HOLD_MS          = 150;
+const MOVE_PX          = 5;
 
 type Pending = {
-  entity:    Entity;
+  handle:    EntityHandle;
   startX:    number;
   startY:    number;
   startT:    number;
@@ -24,37 +28,42 @@ type Pending = {
 };
 
 type AxisDrag = {
-  entity:    Entity;
-  axis:      THREE.Vector3;
-  origin:    THREE.Vector3;
-  grabAxisT: number;
-  currentX:  number;
-  currentY:  number;
-  currentZ:  number;
+  handle:     EntityHandle;
+  axis:       THREE.Vector3;
+  origin:     THREE.Vector3;
+  grabAxisT:  number;
+  current:    THREE.Vector3;
+  active:     boolean;  // false until host echoes the hold-claim
+};
+
+type CarryDrag = {
+  handle: EntityHandle;
+  active: boolean;       // false while waiting for guest hold-claim echo
 };
 
 export class DragController {
-  private pending: Pending | null = null;
+  private pending:      Pending | null = null;
   private pendingEmpty: { pointerId: number } | null = null;
-  private held:     { entity: Entity } | null = null;
-  private axisDrag: AxisDrag | null = null;
+  private carry:        CarryDrag | null = null;
+  private axisDrag:     AxisDrag  | null = null;
+
   private holdOffsetX = 0;
   private holdOffsetZ = 0;
   private holdY       = 0;
 
-  private readonly raycaster    = new THREE.Raycaster();
-  private readonly pointer      = new THREE.Vector2();
-  private readonly carryPlane   = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-  private readonly carryTarget  = new THREE.Vector3();
-  private readonly velHistory:    { pos: THREE.Vector3; t: number }[] = [];
+  private readonly raycaster   = new THREE.Raycaster();
+  private readonly pointer     = new THREE.Vector2();
+  private readonly carryPlane  = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  private readonly carryTarget = new THREE.Vector3();
+  private readonly velHistory:   { pos: THREE.Vector3; t: number }[] = [];
 
   constructor(
-    private readonly camera:       THREE.PerspectiveCamera,
-    private readonly element:      HTMLElement,
-    private readonly hold:         HoldService,
-    private readonly getSelfSeat:  () => SeatIndex | null,
-    private readonly gizmo:        MoveGizmo,
-    private readonly onSelect:     (id: string | null) => void,
+    private readonly camera:      THREE.PerspectiveCamera,
+    private readonly element:     HTMLElement,
+    private readonly world:       World,
+    private readonly getSelfSeat: () => SeatIndex | null,
+    private readonly gizmo:       MoveGizmo,
+    private readonly onSelect:    (id: string | null) => void,
   ) {
     element.addEventListener('pointerdown', this.onDown);
     element.addEventListener('pointermove', this.onMove);
@@ -67,29 +76,36 @@ export class DragController {
     this.element.removeEventListener('pointerup',   this.onUp);
   }
 
-  // Per slice #6: host's drag is gated by OwnershipPolicy so the local UX
-  // matches what the host's hold-claim handler would accept. Host context
-  // (`isHost: true`) means canManipulate always returns true here — the
-  // method exists for parity with GuestDragController and for tests.
-  canStartDrag(entity: Entity): boolean {
-    return canManipulate({ peerSeat: this.getSelfSeat(), isHost: true }, entity.owner);
-  }
-
+  // Per-frame: promote pending claims to active drags once the host's echo
+  // confirms `heldBy === self seat`, and stream the carry target through the
+  // handle (host writes the body; guest sends a guest-drag-move RPC).
   update() {
-    if (this.axisDrag) {
-      const a    = this.axisDrag;
-      const body = a.entity.getComponent(PhysicsComponent)?.body;
-      if (!body) return;
-      body.position.set(a.currentX, a.currentY, a.currentZ);
-      return;
-    }
     if (this.pending && performance.now() - this.pending.startT >= HOLD_MS) {
-      this.beginDrag(this.pending);
+      this.beginCarry(this.pending);
     }
-    if (!this.held) return;
-    const body = this.held.entity.getComponent(PhysicsComponent)?.body;
-    if (!body) return;
-    body.position.set(this.carryTarget.x, this.holdY, this.carryTarget.z);
+
+    if (this.carry && !this.carry.active) {
+      const seat = this.getSelfSeat();
+      if (seat !== null && this.carry.handle.heldBy() === seat) {
+        this.activateCarry(this.carry.handle);
+      }
+    }
+
+    if (this.axisDrag && !this.axisDrag.active) {
+      const seat = this.getSelfSeat();
+      if (seat !== null && this.axisDrag.handle.heldBy() === seat) {
+        this.axisDrag.active = true;
+      }
+    }
+
+    if (this.carry?.active) {
+      this.carry.handle.setPosition(this.carryTarget.x, this.holdY, this.carryTarget.z);
+    }
+
+    if (this.axisDrag?.active) {
+      const a = this.axisDrag;
+      a.handle.setPosition(a.current.x, a.current.y, a.current.z);
+    }
   }
 
   private setPointer(e: PointerEvent) {
@@ -106,30 +122,31 @@ export class DragController {
   }
 
   private onDown = (e: PointerEvent) => {
-    if (e.button !== 0 || this.held || this.axisDrag || this.pending || this.pendingEmpty) return;
+    if (e.button !== 0 || this.carry || this.axisDrag || this.pending || this.pendingEmpty) return;
     this.setPointer(e);
     this.raycaster.setFromCamera(this.pointer, this.camera);
 
+    // Gizmo arms take priority over the object body.
     const axisName = this.gizmo.pickAxis(this.raycaster);
     if (axisName) {
       const target = this.gizmo.getTarget();
-      const entity = target ? findEntityByObject3D(target) : undefined;
-      const body   = entity?.getComponent(PhysicsComponent)?.body;
-      if (entity && body) {
-        if (!this.canStartDrag(entity)) return;
-        if (this.tryHold(entity)) {
-          this.beginAxisDrag(entity, axisName);
-          this.element.setPointerCapture(e.pointerId);
-        }
+      const handle = target ? this.world.pickByObject3D(target) : undefined;
+      if (handle && handle.entity.type !== 'board') {
+        if (!handle.canStartDrag()) return;
+        const seat = this.getSelfSeat();
+        if (seat === null) return;
+        if (!handle.tryHold(seat)) return;
+        this.beginAxisDrag(handle, axisName);
+        this.element.setPointerCapture(e.pointerId);
         return;
       }
     }
 
     const meshes: THREE.Object3D[] = [];
-    for (const entity of Scene.all()) {
-      const t = entity.getComponent(TransformComponent);
+    this.world.forEach((h) => {
+      const t = h.get(TransformComponent);
       if (t?.object3d) meshes.push(t.object3d);
-    }
+    });
     const hits = this.raycaster.intersectObjects(meshes, true);
 
     if (hits.length === 0) {
@@ -138,12 +155,12 @@ export class DragController {
       return;
     }
 
-    const entity = findEntityByObject3D(hits[0].object);
-    if (!entity) return;
-    if (!this.canStartDrag(entity)) return;
+    const handle = this.world.pickByObject3D(hits[0].object);
+    if (!handle) return;
+    if (!handle.canStartDrag()) return;
 
     this.pending = {
-      entity,
+      handle,
       startX:    e.clientX,
       startY:    e.clientY,
       startT:    performance.now(),
@@ -160,18 +177,20 @@ export class DragController {
       const t = projectRayOntoAxis(this.raycaster.ray, a.origin, a.axis, this.camera.position);
       if (t === null) return;
       const delta = t - a.grabAxisT;
-      a.currentX = a.origin.x + a.axis.x * delta;
-      a.currentY = a.origin.y + a.axis.y * delta;
-      a.currentZ = a.origin.z + a.axis.z * delta;
+      a.current.set(
+        a.origin.x + a.axis.x * delta,
+        a.origin.y + a.axis.y * delta,
+        a.origin.z + a.axis.z * delta,
+      );
       return;
     }
 
     if (this.pending) {
       const dx = e.clientX - this.pending.startX;
       const dy = e.clientY - this.pending.startY;
-      if (dx * dx + dy * dy > MOVE_PX * MOVE_PX) this.beginDrag(this.pending);
+      if (dx * dx + dy * dy > MOVE_PX * MOVE_PX) this.beginCarry(this.pending);
     }
-    if (!this.held) return;
+    if (!this.carry) return;
     this.setPointer(e);
     this.raycaster.setFromCamera(this.pointer, this.camera);
     const pt = this.castToCarryPlane();
@@ -185,22 +204,28 @@ export class DragController {
     if (e.button !== 0) return;
 
     if (this.axisDrag) {
-      const entity = this.axisDrag.entity;
+      this.axisDrag.handle.release();
       this.axisDrag = null;
-      this.hold.release(entity);
       return;
     }
 
-    if (this.held) {
-      const entity = this.held.entity;
-      this.held = null;
-      const vel = this.computeThrowVelocity();
-      this.hold.release(entity, { vx: vel.x, vy: 0, vz: vel.z });
+    if (this.carry) {
+      const handle = this.carry.handle;
+      const wasActive = this.carry.active;
+      this.carry = null;
+      if (wasActive) {
+        const vel = this.computeThrowVelocity();
+        handle.release({ vx: vel.x, vy: 0, vz: vel.z });
+      } else {
+        // Hold-claim never confirmed — defensive release (idempotent on host).
+        handle.release();
+      }
+      this.velHistory.length = 0;
       return;
     }
 
     if (this.pending) {
-      this.onSelect(this.pending.entity.id);
+      this.onSelect(this.pending.handle.id);
       this.pending = null;
       return;
     }
@@ -211,26 +236,34 @@ export class DragController {
     }
   };
 
-  private tryHold(entity: Entity): boolean {
-    const seat = this.getSelfSeat();
-    if (seat === null) return false;
-    return this.hold.tryClaim(entity, seat);
-  }
-
-  private beginDrag(p: Pending) {
+  // Promote a pending pointer down to a hold attempt. Sends the hold-claim
+  // (host: synchronous; guest: RPC). Carry is "inactive" until the host's
+  // echo flips heldBy(); update() activates it on the next tick.
+  private beginCarry(p: Pending) {
     this.pending = null;
-    const body = p.entity.getComponent(PhysicsComponent)?.body;
-    if (!body) return;
-    if (!this.tryHold(p.entity)) return;
+    if (p.handle.entity.heldBy !== null) return;
+    if (!p.handle.canStartDrag()) return;
+    const seat = this.getSelfSeat();
+    if (seat === null) return;
+    if (!p.handle.tryHold(seat)) return;
 
-    this.held = { entity: p.entity };
+    this.carry = { handle: p.handle, active: false };
     this.velHistory.length = 0;
-    this.holdY = body.position.y + CARRY_LIFT_HEIGHT;
+
+    // Compute the carry plane from the entity's *visible* pose (transform's
+    // Object3D). Works on both host and guest — host's body is sync'd to
+    // transform each tick by PhysicsComponent.syncToTransform.
+    const t      = p.handle.get(TransformComponent);
+    const meshY  = t?.object3d.position.y ?? 0;
+    const meshX  = t?.object3d.position.x ?? 0;
+    const meshZ  = t?.object3d.position.z ?? 0;
+    this.holdY               = meshY + CARRY_LIFT_HEIGHT;
     this.carryPlane.constant = -this.holdY;
+
     const pt = this.castToCarryPlane();
     if (pt) {
-      this.holdOffsetX = body.position.x - pt.x;
-      this.holdOffsetZ = body.position.z - pt.z;
+      this.holdOffsetX = meshX - pt.x;
+      this.holdOffsetZ = meshZ - pt.z;
       this.carryTarget.set(pt.x + this.holdOffsetX, this.holdY, pt.z + this.holdOffsetZ);
       this.velHistory.push({ pos: pt.clone(), t: performance.now() });
     } else {
@@ -239,19 +272,30 @@ export class DragController {
     }
   }
 
-  private beginAxisDrag(entity: Entity, axisName: GizmoAxis) {
-    const body = entity.getComponent(PhysicsComponent)!.body;
+  private activateCarry(_handle: EntityHandle) {
+    if (!this.carry) return;
+    this.carry.active = true;
+  }
+
+  private beginAxisDrag(handle: EntityHandle, axisName: GizmoAxis) {
+    const phys = handle.get(PhysicsComponent);
+    const t    = handle.get(TransformComponent);
+    const pose = phys?.body?.position ?? t?.object3d.position;
+    if (!pose) return;
     const axis = axisName === 'x' ? new THREE.Vector3(1, 0, 0)
               :  axisName === 'y' ? new THREE.Vector3(0, 1, 0)
               :                     new THREE.Vector3(0, 0, 1);
-    const origin = new THREE.Vector3(body.position.x, body.position.y, body.position.z);
-    const t = projectRayOntoAxis(this.raycaster.ray, origin, axis, this.camera.position);
+    const origin    = new THREE.Vector3(pose.x, pose.y, pose.z);
+    const grabAxisT = projectRayOntoAxis(this.raycaster.ray, origin, axis, this.camera.position) ?? 0;
     this.axisDrag = {
-      entity, axis, origin,
-      grabAxisT: t ?? 0,
-      currentX:  origin.x,
-      currentY:  origin.y,
-      currentZ:  origin.z,
+      handle,
+      axis,
+      origin,
+      grabAxisT,
+      current: origin.clone(),
+      // Host: hold-claim already succeeded synchronously, drag is live.
+      // Guest: wait for the host's echo before streaming positions.
+      active: this.world.get(handle.id) !== undefined && handle.heldBy() === this.getSelfSeat(),
     };
   }
 

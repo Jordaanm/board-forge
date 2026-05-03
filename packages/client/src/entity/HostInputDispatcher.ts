@@ -9,7 +9,7 @@
 //   * HostInputDispatcher — scene-channel RPCs (hold-claim / hold-release /
 //                          request-update) that do gate on OwnershipPolicy.
 
-import { Scene } from './Scene';
+import { Scene, type SceneImpl } from './Scene';
 import { type SeatIndex } from '../seats/SeatLayout';
 import { canManipulate } from '../seats/OwnershipPolicy';
 import { type HoldService } from './HoldService';
@@ -20,19 +20,20 @@ export class HostInputDispatcher {
   constructor(
     private readonly hold:        HoldService,
     private readonly getPeerSeat: (peerId: string) => SeatIndex | null,
+    private readonly scene:       SceneImpl = Scene,
   ) {}
 
   // Returns true on accept (entity claimed and broadcast). False on any
   // refusal: unknown entity, ownership refused, already held.
   handleHoldClaim(_peerId: string, msg: HoldClaim): boolean {
-    const entity = Scene.getEntity(msg.entityId);
+    const entity = this.scene.getEntity(msg.entityId);
     if (!entity) return false;
     if (!canManipulate({ peerSeat: msg.seat, isHost: false }, entity.owner)) return false;
     return this.hold.tryClaim(entity, msg.seat);
   }
 
   handleHoldRelease(peerId: string, msg: HoldRelease): boolean {
-    const entity = Scene.getEntity(msg.entityId);
+    const entity = this.scene.getEntity(msg.entityId);
     if (!entity) return false;
     const senderSeat = this.getPeerSeat(peerId);
     if (senderSeat === null || entity.heldBy !== senderSeat) return false;
@@ -44,7 +45,7 @@ export class HostInputDispatcher {
   }
 
   handleRequestUpdate(peerId: string, msg: RequestUpdate): boolean {
-    const entity = Scene.getEntity(msg.entityId);
+    const entity = this.scene.getEntity(msg.entityId);
     if (!entity) return false;
     const senderSeat = this.getPeerSeat(peerId);
     if (!canManipulate({ peerSeat: senderSeat, isHost: false }, entity.owner)) return false;
@@ -57,7 +58,7 @@ export class HostInputDispatcher {
   // Slice #7 — guest clicks an entity's context-menu action. Host validates
   // ownership, looks up the targeted component, runs `onAction(...)` on it.
   handleInvokeAction(peerId: string, msg: InvokeAction): boolean {
-    const entity = Scene.getEntity(msg.entityId);
+    const entity = this.scene.getEntity(msg.entityId);
     if (!entity) return false;
     const senderSeat = this.getPeerSeat(peerId);
     if (!canManipulate({ peerSeat: senderSeat, isHost: false }, entity.owner)) return false;

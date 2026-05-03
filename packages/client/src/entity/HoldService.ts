@@ -10,7 +10,7 @@
 // `tryClaim` / `release`, so the policy lives in one place.
 
 import * as CANNON from 'cannon-es';
-import { Scene } from './Scene';
+import { Scene, type SceneImpl } from './Scene';
 import { type Entity } from './Entity';
 import { type SeatIndex } from '../seats/SeatLayout';
 import { type HostReplicatorV2 } from './HostReplicatorV2';
@@ -26,7 +26,10 @@ export class HoldService {
   // Cache the body's pre-claim type so we restore it (DYNAMIC/STATIC) on release.
   private priorBodyType = new Map<string, CANNON.BodyType>();
 
-  constructor(private readonly replicator: HostReplicatorV2) {}
+  constructor(
+    private readonly replicator: HostReplicatorV2,
+    private readonly scene:      SceneImpl = Scene,
+  ) {}
 
   // First-claimer-wins. Returns false if the entity is already held — the
   // host drops the claim silently and the guest's optimistic drag UI times
@@ -73,7 +76,7 @@ export class HoldService {
   // Peer disconnect: drop every hold owned by the leaving seat. No final
   // velocity — the body is dropped where it sits.
   releaseAllForSeat(seat: SeatIndex): void {
-    for (const entity of Scene.all()) {
+    for (const entity of this.scene.all()) {
       if (entity.heldBy === seat) this.release(entity);
     }
   }
