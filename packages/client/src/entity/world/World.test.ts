@@ -369,3 +369,116 @@ describe('World — reliable / unreliable channel routing (issue #9)', () => {
     expect(hostT.state.position[1]).toBeLessThan(5);
   });
 });
+
+describe('World — ReplicationPolicy (issue #10)', () => {
+  let pair: Pair | null = null;
+
+  afterEach(() => {
+    pair?.host.dispose();
+    pair?.guest.dispose();
+    pair = null;
+  });
+
+  function setupWithPolicy(policy: Partial<{
+    channelFor:  (typeId: string) => 'reliable' | 'unreliable';
+    coalesceFor: (typeId: string) => 'merge' | 'replace' | 'last-write-wins';
+    shouldFlush: (typeId: string, ctx: { tick: number; nowMs: number }) => boolean;
+  }>): { pair: Pair; sentPatches: { typeId: string; entityId: string }[] } {
+    const sentPatches: { typeId: string; entityId: string }[] = [];
+    const bus = createInMemoryBusPair();
+    const peerSeats = new Map<string, SeatIndex>([[GUEST_PEER_ID, GUEST_SEAT]]);
+
+    // Wrap bus.host so we can spy on outbound component-patches envelopes.
+    const spyHost = {
+      ...bus.host,
+      send(msg: any, opts: { reliable: boolean }) {
+        if (msg?.type === 'component-patches') {
+          for (const p of msg.patches) sentPatches.push({ typeId: p.typeId, entityId: p.entityId });
+        }
+        bus.host.send(msg, opts);
+      },
+    };
+
+    const host = createWorld({
+      role: 'host', scene: new THREE.Scene(),
+      identity: { isHost: true, selfSeat: () => HOST_SEAT, selfPeerId: () => HOST_PEER_ID },
+      transport: spyHost,
+      policy,
+      getPeerSeat: (peerId) => peerSeats.get(peerId) ?? null,
+    });
+    const guest = createWorld({
+      role: 'guest', scene: new THREE.Scene(),
+      identity: { isHost: false, selfSeat: () => GUEST_SEAT, selfPeerId: () => GUEST_PEER_ID },
+      transport: bus.guest,
+    });
+    return { pair: { host, guest, firePeerJoin: bus.firePeerJoin }, sentPatches };
+  }
+
+  test('last-write-wins collapses N intra-tick mutations into one wire patch', () => {
+    const { pair: p, sentPatches } = setupWithPolicy({
+      coalesceFor: () => 'last-write-wins',
+    });
+    pair = p;
+
+    pair.host.spawn('die', { id: 'd-1', position: [0, 5, 0] });
+    pair.host.tick(0.016);  // initial spawn + first physics tick
+
+    // Drain initial patches before counting.
+    const before = sentPatches.length;
+
+    // 10 manual transform setStates in one synchronous burst.
+    const t = pair.host.get('d-1')!.get(TransformComponent)!;
+    for (let i = 0; i < 10; i++) {
+      t.setState({ position: [i, 5, 0], rotation: t.state.rotation, scale: t.state.scale });
+    }
+    pair.host.tick(0.016);
+
+    // Count transform patches sent on this tick — there'd be at least 10
+    // without coalescing (10 setStates) plus any physics-driven ones; under
+    // last-write-wins the tick produces exactly one transform patch for d-1.
+    const transformPatches = sentPatches.slice(before).filter(p => p.typeId === 'transform' && p.entityId === 'd-1');
+    expect(transformPatches).toHaveLength(1);
+  });
+
+  test('shouldFlush returning false defers the tick; later returning true releases', () => {
+    let flushAllowed = false;
+    const { pair: p, sentPatches } = setupWithPolicy({
+      shouldFlush: (typeId) => typeId === 'transform' ? flushAllowed : true,
+    });
+    pair = p;
+
+    pair.host.spawn('die', { id: 'd-1', position: [0, 5, 0] });
+    pair.host.tick(0.016);  // entity-spawn (reliable, not gated) + transform deferred
+
+    const before = sentPatches.length;
+    const t = pair.host.get('d-1')!.get(TransformComponent)!;
+    t.setState({ position: [1, 5, 0], rotation: t.state.rotation, scale: t.state.scale });
+    pair.host.tick(0.016);
+    pair.host.tick(0.016);
+
+    // While shouldFlush returns false for transform, no transform patches go
+    // out — physics-driven setStates accumulate but stay buffered.
+    const deferredCount = sentPatches.slice(before).filter(p => p.typeId === 'transform').length;
+    expect(deferredCount).toBe(0);
+
+    // Open the gate. Next tick drains the buffer (coalesced merge → one patch).
+    flushAllowed = true;
+    const beforeRelease = sentPatches.length;
+    pair.host.tick(0.016);
+    const releasedCount = sentPatches.slice(beforeRelease).filter(p => p.typeId === 'transform').length;
+    expect(releasedCount).toBeGreaterThanOrEqual(1);
+  });
+
+  test('default policy preserves channel from EntityComponent.channel static', () => {
+    // No policy override — World's DEFAULT_POLICY reads componentRegistry.
+    pair = setup();
+    pair.host.spawn('die', { id: 'd-1', position: [0, 5, 0] });
+    pair.host.tick(0.016);
+
+    // TransformComponent.channel is 'unreliable'; ValueComponent has no
+    // override (defaults to 'reliable' on the base class). The boundary
+    // tests above already exercised this; here we just sanity-check the
+    // guest still receives state.
+    expect(pair.guest.get('d-1')).toBeDefined();
+  });
+});

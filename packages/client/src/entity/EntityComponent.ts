@@ -16,9 +16,11 @@ export type ReplicationChannel = 'reliable' | 'unreliable';
 // The narrow surface a component needs to push state mutations onto the wire.
 // Issue #6 of issues--arch.md retired the `EntityComponent.hostReplicator`
 // process-global static — components now hold a per-instance reference set
-// when their owning entity is added to a Scene that has a World.
+// when their owning entity is added to a Scene that has a World. Issue #10
+// pushed channel selection into ReplicationPolicy, so callers no longer pass
+// it explicitly.
 export interface ComponentReplicator {
-  enqueueComponentPatch(patch: ComponentPatch, channel: ReplicationChannel): void;
+  enqueueComponentPatch(patch: ComponentPatch): void;
 }
 
 // Carried into every onSpawn / onDespawn call. Components own their view
@@ -101,15 +103,18 @@ export abstract class EntityComponent<TState extends object> {
 
   // Host-only at runtime. Merges into `state`, fires `onPropertiesChanged`,
   // and queues a ComponentPatch on the owning World's replicator (if any).
+  // Channel selection + coalescing happen inside the replicator via
+  // ReplicationPolicy; setState doesn't need to pass either.
   setState(patch: Partial<TState>): void {
     Object.assign(this.state as object, patch);
     this.onPropertiesChanged(patch);
     if (this.world && this.entity) {
       const ctor = this.constructor as ComponentClass;
-      this.world.enqueueComponentPatch(
-        { entityId: this.entity.id, typeId: ctor.typeId, partial: patch as Record<string, unknown> },
-        ctor.channel,
-      );
+      this.world.enqueueComponentPatch({
+        entityId: this.entity.id,
+        typeId:   ctor.typeId,
+        partial:  patch as Record<string, unknown>,
+      });
     }
   }
 

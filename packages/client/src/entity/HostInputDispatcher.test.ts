@@ -3,10 +3,16 @@ import { SceneImpl } from './Scene';
 import { Entity } from './Entity';
 import { ComponentRegistry } from './ComponentRegistry';
 import { EntityComponent } from './EntityComponent';
-import { HostReplicatorV2 } from './HostReplicatorV2';
+import { HostReplicatorV2, type ReplicatorPolicy } from './HostReplicatorV2';
 import { HoldService } from './HoldService';
 import { HostInputDispatcher } from './HostInputDispatcher';
 import { type SeatIndex } from '../seats/SeatLayout';
+
+const POLICY: ReplicatorPolicy = {
+  channelFor:  () => 'reliable',
+  coalesceFor: () => 'merge',
+  shouldFlush: () => true,
+};
 
 // Per-component this.world is injected by SceneImpl.add (issue #6 of arch.md);
 // the test rig sets scene.world to the replicator before adding entities so
@@ -43,7 +49,7 @@ beforeEach(() => {
   scene = new SceneImpl();
   scene.setRegistry(new ComponentRegistry());
   PEERS.clear();
-  r = new HostReplicatorV2();
+  r = new HostReplicatorV2(POLICY);
   scene.world = r;
   svc = new HoldService(r, scene);
   dispatcher = new HostInputDispatcher(svc, (peerId) => PEERS.get(peerId) ?? null, scene);

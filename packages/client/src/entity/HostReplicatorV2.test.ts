@@ -1,16 +1,29 @@
 import { describe, test, expect, beforeEach } from 'vitest';
-import { HostReplicatorV2 } from './HostReplicatorV2';
+import { HostReplicatorV2, type ReplicatorPolicy } from './HostReplicatorV2';
 import { type ComponentPatchesMessage, type EntityPatch, type SceneMessage } from './wire';
 
+// Channel routing per typeId for these tests.
+const CHANNELS: Record<string, 'reliable' | 'unreliable'> = {
+  transform: 'unreliable',
+  value:     'reliable',
+  t:         'unreliable',
+};
+
+const POLICY: ReplicatorPolicy = {
+  channelFor:  (typeId) => CHANNELS[typeId] ?? 'reliable',
+  coalesceFor: () => 'merge',
+  shouldFlush: () => true,
+};
+
 let r: HostReplicatorV2;
-beforeEach(() => { r = new HostReplicatorV2(); });
+beforeEach(() => { r = new HostReplicatorV2(POLICY); });
 
 describe('HostReplicatorV2 channel separation', () => {
   test('component patches route to their declared channel', () => {
-    r.enqueueComponentPatch({ entityId: 'a', typeId: 'transform', partial: { x: 1 } }, 'unreliable');
-    r.enqueueComponentPatch({ entityId: 'b', typeId: 'value',     partial: { v: 5 } }, 'reliable');
+    r.enqueueComponentPatch({ entityId: 'a', typeId: 'transform', partial: { x: 1 } });
+    r.enqueueComponentPatch({ entityId: 'b', typeId: 'value',     partial: { v: 5 } });
 
-    const u = r.flushUnreliable();
+    const u        = r.flushUnreliable();
     const reliable = r.flushReliable();
 
     expect(u).toHaveLength(1);
@@ -47,21 +60,25 @@ describe('HostReplicatorV2 channel separation', () => {
 });
 
 describe('HostReplicatorV2 per-tick buffer + flush', () => {
-  test('buffers within a tick, flush returns + clears', () => {
-    r.enqueueComponentPatch({ entityId: 'a', typeId: 't', partial: { x: 1 } }, 'unreliable');
-    r.enqueueComponentPatch({ entityId: 'a', typeId: 't', partial: { x: 2 } }, 'unreliable');
-    r.enqueueComponentPatch({ entityId: 'b', typeId: 't', partial: { y: 9 } }, 'unreliable');
+  test('buffers within a tick; merge collapses repeats per (typeId, entityId)', () => {
+    r.enqueueComponentPatch({ entityId: 'a', typeId: 't', partial: { x: 1 } });
+    r.enqueueComponentPatch({ entityId: 'a', typeId: 't', partial: { x: 2 } });
+    r.enqueueComponentPatch({ entityId: 'b', typeId: 't', partial: { y: 9 } });
 
     expect(r.hasPendingUnreliable()).toBe(true);
     const out = r.flushUnreliable();
-    expect((out[0] as ComponentPatchesMessage).patches).toHaveLength(3);
+    // Two patches: entity 'a' (merged: x=2 wins) + entity 'b'.
+    expect((out[0] as ComponentPatchesMessage).patches).toEqual([
+      { entityId: 'a', typeId: 't', partial: { x: 2 } },
+      { entityId: 'b', typeId: 't', partial: { y: 9 } },
+    ]);
     expect(r.hasPendingUnreliable()).toBe(false);
     expect(r.flushUnreliable()).toEqual([]);  // second flush is empty
   });
 
   test('reliable component patches bundle into a single envelope', () => {
-    r.enqueueComponentPatch({ entityId: 'a', typeId: 'value', partial: { v: 1 } }, 'reliable');
-    r.enqueueComponentPatch({ entityId: 'b', typeId: 'value', partial: { v: 2 } }, 'reliable');
+    r.enqueueComponentPatch({ entityId: 'a', typeId: 'value', partial: { v: 1 } });
+    r.enqueueComponentPatch({ entityId: 'b', typeId: 'value', partial: { v: 2 } });
     r.enqueueEntityPatch('a', { tags: ['x'] });
 
     const out = r.flushReliable();
@@ -108,7 +125,7 @@ describe('HostReplicatorV2 reparenting atomicity', () => {
   });
 
   test('reparent + intervening patches still flush atomically as a group', () => {
-    r.enqueueComponentPatch({ entityId: 'x', typeId: 'transform', partial: {} }, 'reliable');
+    r.enqueueComponentPatch({ entityId: 'x', typeId: 'value', partial: {} });
     r.enqueueReparent('child', 'newParent', ['child']);
     const out = r.flushReliable();
 
@@ -121,7 +138,6 @@ describe('HostReplicatorV2 reparenting atomicity', () => {
 
 describe('HostReplicatorV2 v2 path off by default', () => {
   test('replicator is inert until something enqueues', () => {
-    // Constructing the replicator alone produces no messages.
     expect(r.hasPendingReliable()).toBe(false);
     expect(r.hasPendingUnreliable()).toBe(false);
     const out: SceneMessage[] = [...r.flushReliable(), ...r.flushUnreliable()];

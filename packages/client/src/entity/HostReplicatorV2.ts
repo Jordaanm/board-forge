@@ -1,37 +1,78 @@
 // Host-side replicator for the v2 entity-component scene graph.
-// Slice #2 of planning/issues/issues--scene-graph.md.
-//
-// Buffers per-component patches per channel per tick. Unreliable patches
-// flush each physics step; reliable on a slower cadence. `entity-patch`,
-// `despawn-batch`, `invoke-action`, `hold-*` are always reliable, regardless
-// of source.
-//
-// This module is intentionally not wired into the runtime yet — slice #3
-// engages it behind a feature flag, slice #4 cuts the legacy HostReplicator
-// over wholesale.
+// Issue #10 of issues--arch.md restructured this around ReplicationPolicy:
+// component patches are coalesced per (channel, typeId, entityId) so a flood
+// of intra-tick setStates collapses into one wire patch per entity, and per-
+// typeId flush cadence is gated by `policy.shouldFlush`.
 
-import { type ReplicationChannel } from './EntityComponent';
+import { type ReplicationChannel, type ComponentReplicator } from './EntityComponent';
 import {
   type ComponentPatch,
   type ComponentPatchesMessage,
-  type EntityPatch,
   type EntityFieldsPartial,
   type EntitySerialized,
-  type DespawnBatch,
   type InvokeAction,
   type HoldClaim,
   type HoldRelease,
   type SceneMessage,
 } from './wire';
 
-export class HostReplicatorV2 {
-  private reliableComponentPatches:   ComponentPatch[] = [];
-  private unreliableComponentPatches: ComponentPatch[] = [];
-  private reliableMessages:           SceneMessage[]   = [];
+// Same shape as ReplicationPolicy in entity/world/types.ts but redeclared
+// locally to avoid a layering cycle (HostReplicatorV2 lives below the world
+// module). World passes its policy in via the constructor.
+export interface ReplicatorPolicy {
+  channelFor(typeId: string): ReplicationChannel;
+  coalesceFor(typeId: string): 'merge' | 'replace' | 'last-write-wins';
+  shouldFlush(typeId: string, ctx: { tick: number; nowMs: number }): boolean;
+}
 
-  enqueueComponentPatch(patch: ComponentPatch, channel: ReplicationChannel): void {
-    if (channel === 'unreliable') this.unreliableComponentPatches.push(patch);
-    else                          this.reliableComponentPatches.push(patch);
+export interface FlushContext {
+  tick:  number;
+  nowMs: number;
+}
+
+interface ChannelBuffer {
+  // typeId → entityId → coalesced patch
+  byType: Map<string, Map<string, ComponentPatch>>;
+}
+
+function emptyBuffer(): ChannelBuffer {
+  return { byType: new Map() };
+}
+
+export class HostReplicatorV2 implements ComponentReplicator {
+  private reliableComponents:   ChannelBuffer = emptyBuffer();
+  private unreliableComponents: ChannelBuffer = emptyBuffer();
+  private reliableMessages:     SceneMessage[] = [];
+
+  constructor(private readonly policy: ReplicatorPolicy) {}
+
+  enqueueComponentPatch(patch: ComponentPatch): void {
+    const channel  = this.policy.channelFor(patch.typeId);
+    const coalesce = this.policy.coalesceFor(patch.typeId);
+    const buffer   = channel === 'unreliable' ? this.unreliableComponents : this.reliableComponents;
+    let byEntity   = buffer.byType.get(patch.typeId);
+    if (!byEntity) {
+      byEntity = new Map();
+      buffer.byType.set(patch.typeId, byEntity);
+    }
+    const existing = byEntity.get(patch.entityId);
+    if (!existing) {
+      byEntity.set(patch.entityId, {
+        entityId: patch.entityId,
+        typeId:   patch.typeId,
+        partial:  { ...patch.partial },
+      });
+      return;
+    }
+    if (coalesce === 'merge') {
+      // Object.assign keeps any keys from the prior patch that the new patch
+      // doesn't overwrite. last-write per key.
+      Object.assign(existing.partial, patch.partial);
+    } else {
+      // 'replace' / 'last-write-wins' — drop prior keys; the latest setState
+      // is assumed to carry everything the receiver needs.
+      existing.partial = { ...patch.partial };
+    }
   }
 
   enqueueEntityPatch(entityId: string, partial: EntityFieldsPartial): void {
@@ -84,31 +125,27 @@ export class HostReplicatorV2 {
     this.reliableMessages.push(out);
   }
 
-  // Drains the unreliable buffer. Called per physics step. Returns at most
-  // one envelope (containing all queued unreliable component patches).
-  flushUnreliable(): SceneMessage[] {
-    if (this.unreliableComponentPatches.length === 0) return [];
+  // Drains the unreliable buffer for typeIds that pass `policy.shouldFlush`.
+  // Buffered patches for deferred typeIds remain for the next eligible tick.
+  flushUnreliable(ctx: FlushContext = { tick: 0, nowMs: 0 }): SceneMessage[] {
+    const patches = drainEligible(this.unreliableComponents, this.policy, ctx);
+    if (patches.length === 0) return [];
     const envelope: ComponentPatchesMessage = {
       type:    'component-patches',
       channel: 'unreliable',
-      patches: this.unreliableComponentPatches,
+      patches,
     };
-    this.unreliableComponentPatches = [];
     return [envelope];
   }
 
-  // Drains the reliable buffer. Component patches are bundled into a single
-  // envelope; standalone messages (entity-patch / despawn-batch / invoke /
-  // hold-*) follow in enqueue order.
-  flushReliable(): SceneMessage[] {
+  // Drains the reliable buffer + standalone messages. Component patches for
+  // deferred typeIds stay buffered; standalone entity-spawn / entity-patch /
+  // despawn / hold-* always flush (they have no shouldFlush gate).
+  flushReliable(ctx: FlushContext = { tick: 0, nowMs: 0 }): SceneMessage[] {
     const out: SceneMessage[] = [];
-    if (this.reliableComponentPatches.length > 0) {
-      out.push({
-        type:    'component-patches',
-        channel: 'reliable',
-        patches: this.reliableComponentPatches,
-      });
-      this.reliableComponentPatches = [];
+    const patches = drainEligible(this.reliableComponents, this.policy, ctx);
+    if (patches.length > 0) {
+      out.push({ type: 'component-patches', channel: 'reliable', patches });
     }
     if (this.reliableMessages.length > 0) {
       out.push(...this.reliableMessages);
@@ -118,10 +155,32 @@ export class HostReplicatorV2 {
   }
 
   hasPendingReliable(): boolean {
-    return this.reliableComponentPatches.length > 0 || this.reliableMessages.length > 0;
+    return this.reliableMessages.length > 0
+        || hasAnyPatches(this.reliableComponents);
   }
 
   hasPendingUnreliable(): boolean {
-    return this.unreliableComponentPatches.length > 0;
+    return hasAnyPatches(this.unreliableComponents);
   }
+}
+
+function drainEligible(
+  buffer:  ChannelBuffer,
+  policy:  ReplicatorPolicy,
+  ctx:     FlushContext,
+): ComponentPatch[] {
+  const out: ComponentPatch[] = [];
+  for (const [typeId, byEntity] of buffer.byType) {
+    if (!policy.shouldFlush(typeId, ctx)) continue;
+    for (const patch of byEntity.values()) out.push(patch);
+    byEntity.clear();
+  }
+  return out;
+}
+
+function hasAnyPatches(buffer: ChannelBuffer): boolean {
+  for (const byEntity of buffer.byType.values()) {
+    if (byEntity.size > 0) return true;
+  }
+  return false;
 }

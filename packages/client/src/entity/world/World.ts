@@ -16,6 +16,7 @@ import { type Entity } from '../Entity';
 import { type SpawnContext } from '../EntityComponent';
 import { SceneImpl, entityToSerialized, type EntitySerialized } from '../Scene';
 import { HostReplicatorV2 } from '../HostReplicatorV2';
+import { componentRegistry } from '../ComponentRegistry';
 import { HoldService } from '../HoldService';
 import { HostInputDispatcher } from '../HostInputDispatcher';
 import { GuestInputHandler } from '../../input/GuestInputHandler';
@@ -53,8 +54,16 @@ interface RestPose {
   qx: number; qy: number; qz: number; qw: number;
 }
 
+// Issue #10: defaults preserve current behaviour. channelFor reads each
+// component's static `channel` so existing setup keeps routing correctly;
+// coalesceFor=merge keeps semantics (Object.assign keys) but collapses
+// duplicate intra-tick patches to one envelope; shouldFlush=true means every
+// tick flushes both channels.
 const DEFAULT_POLICY: ReplicationPolicy = {
-  channelFor:  () => 'reliable',
+  channelFor: (typeId) => {
+    const cls = componentRegistry.get(typeId);
+    return cls?.channel ?? 'reliable';
+  },
   coalesceFor: () => 'merge',
   shouldFlush: () => true,
 };
@@ -102,7 +111,7 @@ class WorldImpl implements World, HandleRouter {
 
     if (opts.role === 'host') {
       this.physics    = opts.physics ?? new PhysicsWorld();
-      this.replicator = new HostReplicatorV2();
+      this.replicator = new HostReplicatorV2(this.policy);
       this.scene.world = this.replicator;
       this.hold       = new HoldService(this.replicator, this.scene);
       this.hostInput  = new HostInputDispatcher(this.hold, this.getPeerSeat, this.scene);
@@ -212,8 +221,9 @@ class WorldImpl implements World, HandleRouter {
       this.enforceTableBounds();
       this.syncFromPhysics();
 
-      const unreliable = this.replicator.flushUnreliable();
-      const reliable   = this.replicator.flushReliable();
+      const flushCtx   = { tick: this.tickIndex, nowMs: nowMs() };
+      const unreliable = this.replicator.flushUnreliable(flushCtx);
+      const reliable   = this.replicator.flushReliable(flushCtx);
       // Reliable first so guests construct entities before unreliable patches
       // arrive — patches for unknown entities are silently dropped, so first-
       // tick transform updates survive the round trip. Per-peer fan-out and
@@ -535,6 +545,12 @@ function mergeEntityFields(entity: Entity, partial: EntityFieldsPartial): void {
   if (partial.privateToSeat !== undefined) entity.privateToSeat = partial.privateToSeat;
   if (partial.parentId      !== undefined) entity.parentId      = partial.parentId;
   if (partial.children      !== undefined) entity.children      = [...partial.children];
+}
+
+function nowMs(): number {
+  return typeof performance !== 'undefined' && typeof performance.now === 'function'
+    ? performance.now()
+    : Date.now();
 }
 
 function normaliseTags(value: unknown): string[] {

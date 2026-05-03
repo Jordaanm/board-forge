@@ -2,10 +2,16 @@ import { describe, test, expect, beforeEach } from 'vitest';
 import * as CANNON from 'cannon-es';
 import { SceneImpl } from './Scene';
 import { Entity } from './Entity';
-import { HostReplicatorV2 } from './HostReplicatorV2';
+import { HostReplicatorV2, type ReplicatorPolicy } from './HostReplicatorV2';
 import { HoldService } from './HoldService';
 import { PhysicsComponent } from './components/PhysicsComponent';
 import { ComponentRegistry } from './ComponentRegistry';
+
+const POLICY: ReplicatorPolicy = {
+  channelFor:  () => 'reliable',
+  coalesceFor: () => 'merge',
+  shouldFlush: () => true,
+};
 
 // Lightweight stand-in for PhysicsComponent — exposes a real CANNON.Body so
 // the kinematic toggle is observable, but skips the world-attach lifecycle
@@ -55,7 +61,7 @@ beforeEach(() => {
   scene = new SceneImpl();
   // Empty registry — HoldService doesn't load via the registry, just iterates entities.
   scene.setRegistry(new ComponentRegistry());
-  r = new HostReplicatorV2();
+  r = new HostReplicatorV2(POLICY);
   svc = new HoldService(r, scene);
 });
 
