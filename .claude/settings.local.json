@@ -27,7 +27,9 @@
       "PowerShell(Test-Path *)",
       "Bash(echo \"EXIT: $?\")",
       "Bash(bun run *)",
-      "Bash(pnpm --filter @virtual-table/client tsc --noEmit)"
+      "Bash(pnpm --filter @virtual-table/client tsc --noEmit)",
+      "Bash('$_.Name')",
+      "Bash(powershell -Command ' *)"
     ]
   }
 }

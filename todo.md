@@ -1,28 +1,24 @@
 ## TODO
 
+### Bugs
+* Tint menu closes immediately when you click on it, making it difficult to properly pick a colour.
+* Changes to the table are not replicated to all peers.
+  * The table settings should be part of the scene state, and replicated to all peers.
+* The table's hitbox is not updated when the table is resized or shape is changed.
+* An object moving fast enough passes through objects instead of colliding and stopping.
+
+### Minor Features
+* Selecting an item in the scene highlights it in the scene graph panel.
+* Double clicking an item in the scene graph panel selects it in the scene.
+
 ### Context menu cleanup (post-PRD-2)
-* Remove the transitional `__delete` / `__roll` host-local built-ins from `ContextMenuController.ts`.
-* Once PRD-2 ships a Die component, migrate Roll onto it via `onContextMenu` + `onAction`.
-* Decide whether Delete becomes a base-class action on every entity or moves into the editor panel UX. Either way, drop the special-cased ids in `dispatchMenuAction`.
-
-### NEW LIST
-
-* Tracking player cursors
-  * Show a cursor for each peer. If that peer occupies a seat, decorate the cursor with that seat's colour
-  * When a player is dragging an object around, the cursor should change to show they are holding something
-    * Eg, default cursor is an open hand, but if they are holding an object, change it to a grabbing fist.
-
-### Tags
-
-* Each object should have a "tags" property, which is a list of strings. Tags are used to group objects together, filter them, and search for them.
-  * Tags should be unique, and should be case-insensitive.
-  * Tags shoudl be editable in the UI.
+* Remove the transitional `__delete` host-local built-in from `ContextMenuController.ts`.
+* Decide whether Delete becomes a base-class action on every entity or moves into the editor panel UX. Either way, drop the special-cased id in `dispatchMenuAction`.
 
 ### Add Card object type
 * Cards have a "category" property, which is a string.
 * Cards have a "face" and "back" property, which reference images to be used as the card's front and back faces.
 * Cards have a "value" property, which is a string.
-
 
 ### Hands
 * Hands are a zone type that can hold any number of objects, of any type.
