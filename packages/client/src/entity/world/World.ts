@@ -27,7 +27,6 @@ import { registerCorePrimitives } from '../spawnables';
 import { PhysicsWorld } from '../../physics/PhysicsWorld';
 import { TABLE_SURFACE_Y, TABLE_WIDTH, TABLE_DEPTH } from '../../scene/Table';
 import { type SeatIndex } from '../../seats/SeatLayout';
-import { EMPTY_PRIVATE_FIELD_REGISTRY, scrubSceneMessage, type PrivateFieldRegistry } from '../../seats/PrivacyScrubber';
 import { canManipulate } from '../../seats/OwnershipPolicy';
 import { EntityHandleImpl, type HandleRouter } from './EntityHandle';
 import {
@@ -39,7 +38,6 @@ import {
   type EntityHandle,
   type SpawnOptions,
   type ReplicationPolicy,
-  type ReplicationTarget,
 } from './types';
 import { type HoldRelease } from '../wire';
 
@@ -78,9 +76,7 @@ class WorldImpl implements World, HandleRouter {
   private readonly guestInput: GuestInputHandler | null;
   private readonly policy:     ReplicationPolicy;
 
-  private readonly getTargets:           (() => ReplicationTarget[]) | null;
-  private readonly privateFieldRegistry: PrivateFieldRegistry;
-  private readonly getPeerSeat:          (peerId: string) => SeatIndex | null;
+  private readonly getPeerSeat: (peerId: string) => SeatIndex | null;
 
   private readonly handles   = new Map<string, EntityHandleImpl>();
   private readonly restPoses = new Map<string, RestPose>();
@@ -102,9 +98,7 @@ class WorldImpl implements World, HandleRouter {
     this.scene      = new SceneImpl();
     this.policy     = { ...DEFAULT_POLICY, ...opts.policy };
 
-    this.getTargets           = opts.getReplicationTargets ?? null;
-    this.privateFieldRegistry = opts.privateFieldRegistry ?? EMPTY_PRIVATE_FIELD_REGISTRY;
-    this.getPeerSeat          = opts.getPeerSeat ?? (() => null);
+    this.getPeerSeat = opts.getPeerSeat ?? (() => null);
 
     if (opts.role === 'host') {
       this.physics    = opts.physics ?? new PhysicsWorld();
@@ -222,29 +216,13 @@ class WorldImpl implements World, HandleRouter {
       const reliable   = this.replicator.flushReliable();
       // Reliable first so guests construct entities before unreliable patches
       // arrive — patches for unknown entities are silently dropped, so first-
-      // tick transform updates survive the round trip.
-      for (const msg of reliable)   this.dispatchOutbound(msg, true);
-      for (const msg of unreliable) this.dispatchOutbound(msg, false);
+      // tick transform updates survive the round trip. Per-peer fan-out and
+      // privacy scrubbing now live in RtcTransport (issue #7).
+      for (const msg of reliable)   this.transport.send(msg, { reliable: true  });
+      for (const msg of unreliable) this.transport.send(msg, { reliable: false });
     }
 
     this.tickIndex++;
-  }
-
-  // Per-target fan-out + scrubbing when targets are configured (production
-  // ThreeCanvas path). Otherwise broadcast (boundary tests). Issue #7 moves
-  // the scrubbing pass into the RtcTransport adapter.
-  private dispatchOutbound(msg: SceneMessage, reliable: boolean): void {
-    if (this.getTargets && this.transport.sendTo) {
-      const targets   = this.getTargets();
-      const getEntity = (id: string) => this.scene.getEntity(id);
-      for (const t of targets) {
-        const ctx      = { peerSeat: t.peerSeat, isHost: t.isHost };
-        const scrubbed = scrubSceneMessage(ctx, msg, this.privateFieldRegistry, getEntity);
-        this.transport.sendTo(t.peerId, scrubbed);
-      }
-      return;
-    }
-    this.transport.send(msg, { reliable });
   }
 
   private enforceTableBounds(): void {

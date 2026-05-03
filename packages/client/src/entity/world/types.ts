@@ -15,7 +15,6 @@ import { type SceneMessage } from '../wire';
 import { type SeatIndex } from '../../seats/SeatLayout';
 import { type PhysicsWorld } from '../../physics/PhysicsWorld';
 import { type GuestInputMessage } from '../../net/SceneState';
-import { type PrivateFieldRegistry } from '../../seats/PrivacyScrubber';
 
 // Inbound from the wire: scene-level replication plus guest input streams.
 export type WorldInboundMessage = SceneMessage | GuestInputMessage;
@@ -132,11 +131,6 @@ export interface WorldOptions {
   physics?:  PhysicsWorld;
   // Layered over defaults — sane defaults preserve current behaviour.
   policy?:   Partial<ReplicationPolicy>;
-  // Per-target fan-out for privacy scrubbing. When provided, host flushes go
-  // through `transport.sendTo(peerId, scrubbed)` per target instead of the
-  // broadcast `transport.send`. Issue #7 moves this into RtcTransport.
-  getReplicationTargets?: () => ReplicationTarget[];
-  privateFieldRegistry?:  PrivateFieldRegistry;
   // Required on the host for HostInputDispatcher's ownership checks; resolves
   // a peer id to its current seat. Returns null for spectators.
   getPeerSeat?: (peerId: string) => SeatIndex | null;

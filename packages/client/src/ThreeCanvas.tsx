@@ -2,7 +2,8 @@ import { useEffect, useRef, type MutableRefObject } from 'react';
 import * as THREE from 'three';
 import { createTable, applyTableProp, type TableProps } from './scene/Table';
 import { createWorld } from './entity/world';
-import { type World, type WorldTransport, type WorldInboundMessage } from './entity/world';
+import { type World, type WorldInboundMessage } from './entity/world';
+import { RtcTransport } from './entity/world';
 import { type Entity } from './entity/Entity';
 import { TransformComponent } from './entity/components/TransformComponent';
 import { MeshComponent } from './entity/components/MeshComponent';
@@ -131,44 +132,30 @@ export function ThreeCanvas({
 
     freeCameraRef.current = (on) => camController.setRestricted(on);
 
-    // ── World transport adapter ─────────────────────────────────────────
-    // Wraps the existing send / sendTo refs and exposes inbound subscription
-    // hooks. Cursor traffic continues to flow outside the World — it isn't a
-    // SceneMessage. Issue #7 replaces this inline adapter with RtcTransport.
-    const worldHandlers:         Array<(peerId: string, msg: WorldInboundMessage) => void> = [];
-    const worldPeerJoinHandlers: Array<(peerId: string) => void> = [];
-
-    const worldTransport: WorldTransport = {
-      send:   (msg)         => sendRef.current(msg),
-      sendTo: (peerId, msg) => sendToRef.current(peerId, msg),
-      onMessage: (h) => {
-        worldHandlers.push(h);
-        return () => {
-          const i = worldHandlers.indexOf(h);
-          if (i >= 0) worldHandlers.splice(i, 1);
-        };
-      },
-      onPeerJoin: (h) => {
-        worldPeerJoinHandlers.push(h);
-        return () => {
-          const i = worldPeerJoinHandlers.indexOf(h);
-          if (i >= 0) worldPeerJoinHandlers.splice(i, 1);
-        };
-      },
-    };
+    // ── World transport ─────────────────────────────────────────────────
+    // RtcTransport owns per-peer fan-out and privacy scrubbing internally.
+    // Cursor traffic continues to flow outside the World (it isn't a
+    // SceneMessage) and is dispatched directly in onMsgRef below.
+    let worldRef: World | null = null;
+    const transport = new RtcTransport({
+      send:       (msg) => sendRef.current(msg),
+      sendTo:     (peerId, msg) => sendToRef.current(peerId, msg),
+      getTargets: isHost ? () => getTargetsRef.current() : () => [],
+      getEntity:  (id) => worldRef?.get(id)?.entity,
+    });
 
     const world: World = createWorld({
-      role:                  isHost ? 'host' : 'guest',
+      role:        isHost ? 'host' : 'guest',
       scene,
       identity: {
         isHost,
         selfSeat:   () => getSelfSeatRef.current(),
         selfPeerId: () => getSelfPeerIdRef.current(),
       },
-      transport:             worldTransport,
-      getReplicationTargets: isHost ? () => getTargetsRef.current() : undefined,
-      getPeerSeat:           isHost ? (peerId) => getPeerSeatRef.current(peerId) : undefined,
+      transport,
+      getPeerSeat: isHost ? (peerId) => getPeerSeatRef.current(peerId) : undefined,
     });
+    worldRef = world;
 
     // ── Selection highlight ─────────────────────────────────────────────
     let highlightHelper: THREE.BoxHelper | null = null;
@@ -257,7 +244,7 @@ export function ThreeCanvas({
         }
         return;
       }
-      for (const h of worldHandlers) h(peerId, msg as WorldInboundMessage);
+      transport.deliver(peerId, msg as WorldInboundMessage);
     };
 
     onPeerLeftRef.current = (peerId) => {
@@ -267,7 +254,7 @@ export function ThreeCanvas({
 
     onPeerJoinedRef.current = (peerId) => {
       world.replayTo(peerId);
-      for (const h of worldPeerJoinHandlers) h(peerId);
+      transport.firePeerJoin(peerId);
     };
 
     // ── Animation loop ────────────────────────────────────────────────────
