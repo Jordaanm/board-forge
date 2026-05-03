@@ -47,6 +47,7 @@ interface Props {
   onObjectsChangeRef:  MutableRefObject<(objects: ObjectSummary[]) => void>;
   onSelectRef:         MutableRefObject<(id: string | null) => void>;
   setHighlightRef:     MutableRefObject<(id: string | null) => void>;
+  getEntityRef:        MutableRefObject<(id: string) => Entity | undefined>;
 }
 
 export function ThreeCanvas({
@@ -54,7 +55,7 @@ export function ThreeCanvas({
   onMsgRef, onPeerLeftRef, onPeerJoinedRef,
   spawnRef, rollRef, onContextMenuRef, deleteObjectRef,
   updatePropRef, updateTablePropRef, freeCameraRef, onObjectsChangeRef,
-  onSelectRef, setHighlightRef,
+  onSelectRef, setHighlightRef, getEntityRef,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -221,10 +222,12 @@ export function ThreeCanvas({
     );
 
     const contextCtrl = new ContextMenuController(
-      renderer.domElement, camera, isHost,
+      renderer.domElement, camera, isHost, world,
       () => getSelfSeatRef.current(),
       (req) => onContextMenuRef.current(req),
     );
+
+    getEntityRef.current = (id) => world.get(id)?.entity;
 
     if (isHost) {
       spawnRef.current        = (type) => { world.spawn(type); };
@@ -339,6 +342,7 @@ export function ThreeCanvas({
       updateTablePropRef.current = () => {};
       freeCameraRef.current      = () => {};
       setHighlightRef.current    = () => {};
+      getEntityRef.current       = () => undefined;
       renderer.dispose();
       container.removeChild(renderer.domElement);
     };
@@ -347,7 +351,7 @@ export function ThreeCanvas({
     onMsgRef, onPeerLeftRef, onPeerJoinedRef,
     spawnRef, rollRef, onContextMenuRef, deleteObjectRef,
     updatePropRef, updateTablePropRef, freeCameraRef, onObjectsChangeRef,
-    onSelectRef, setHighlightRef,
+    onSelectRef, setHighlightRef, getEntityRef,
   ]);
 
   return (

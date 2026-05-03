@@ -5,7 +5,7 @@ import { EditorPanel, type ObjectSummary } from '../components/EditorPanel';
 import { ContextMenu } from '../components/ContextMenu';
 import { PlayersPanel } from '../components/PlayersPanel';
 import { type ContextMenuRequest, dispatchMenuAction } from '../input/ContextMenuController';
-import { Scene } from '../entity/Scene';
+import { type Entity } from '../entity/Entity';
 import { type MenuItem } from '../entity/EntityComponent';
 import { type ChannelMessage, type SpawnableType } from '../net/SceneState';
 import { type SeatIndex } from '../seats/SeatLayout';
@@ -62,6 +62,7 @@ export function Room({ roomId, isHost }: Props) {
   const onObjectsChangeRef = useRef<(objs: ObjectSummary[]) => void>(noop);
   const onSelectRef        = useRef<(id: string | null) => void>(noop);
   const setHighlightRef    = useRef<(id: string | null) => void>(noop);
+  const getEntityRef       = useRef<(id: string) => Entity | undefined>(() => undefined);
   const claimSeatRef       = useRef<(seatIndex: SeatIndex) => void>(noop);
   const kickPeerRef        = useRef<(peerId: string) => void>(noop);
   const banPeerRef         = useRef<(peerId: string) => void>(noop);
@@ -213,7 +214,7 @@ export function Room({ roomId, isHost }: Props) {
     if (!contextMenu) return;
     dispatchMenuAction(item, args, contextMenu.entityId, {
       isHost,
-      entity:   Scene.getEntity(contextMenu.entityId),
+      entity:   getEntityRef.current(contextMenu.entityId),
       send:     (msg) => sendRef.current(msg),
       hostLocal: {
         delete: (id) => deleteObjectRef.current(id),
@@ -261,6 +262,7 @@ export function Room({ roomId, isHost }: Props) {
         onObjectsChangeRef={onObjectsChangeRef}
         onSelectRef={onSelectRef}
         setHighlightRef={setHighlightRef}
+        getEntityRef={getEntityRef}
       />
 
       <div className={`room__status room__status--${status}`}>

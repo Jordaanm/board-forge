@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Scene, findEntityByObject3D } from '../entity/Scene';
+import { type World } from '../entity/world';
 import { TransformComponent } from '../entity/components/TransformComponent';
 import { aggregateContextMenu } from '../entity/contextMenu';
 import { type Entity } from '../entity/Entity';
@@ -31,6 +31,7 @@ export class ContextMenuController {
     private readonly element:     HTMLElement,
     private readonly camera:      THREE.PerspectiveCamera,
     private readonly isHost:      boolean,
+    private readonly world:       World,
     private readonly getSelfSeat: () => SeatIndex | null,
     private readonly onOpen:      (req: ContextMenuRequest) => void,
   ) {
@@ -53,15 +54,16 @@ export class ContextMenuController {
     ray.setFromCamera(ptr, this.camera);
 
     const meshes: THREE.Object3D[] = [];
-    for (const ent of Scene.all()) {
-      const t = ent.getComponent(TransformComponent);
+    this.world.forEach((h) => {
+      const t = h.get(TransformComponent);
       if (t?.object3d) meshes.push(t.object3d);
-    }
+    });
     const hits = ray.intersectObjects(meshes, true);
     if (!hits.length) return;
 
-    const entity = findEntityByObject3D(hits[0].object);
-    if (!entity) return;
+    const handle = this.world.pickByObject3D(hits[0].object);
+    if (!handle) return;
+    const entity = handle.entity;
 
     const seat = this.getSelfSeat();
     const ctx: MenuContext = { recipientSeat: seat, isHost: this.isHost, entity };
