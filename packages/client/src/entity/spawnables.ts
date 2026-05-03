@@ -11,6 +11,7 @@ import { PhysicsComponent } from './components/PhysicsComponent';
 import { ValueComponent } from './components/ValueComponent';
 import { DiceComponent } from './components/DiceComponent';
 import { FlatViewComponent } from './components/FlatViewComponent';
+import { CardComponent } from './components/CardComponent';
 import { D6_FACE_MAP } from '../dice/d6';
 
 export function registerCorePrimitives(): void {
@@ -20,6 +21,7 @@ export function registerCorePrimitives(): void {
   if (!componentRegistry.has('value'))     componentRegistry.register(ValueComponent);
   if (!componentRegistry.has('dice'))      componentRegistry.register(DiceComponent);
   if (!componentRegistry.has('flatview'))  componentRegistry.register(FlatViewComponent);
+  if (!componentRegistry.has('card'))      componentRegistry.register(CardComponent);
 
   if (!getSpawnable('board')) registerSpawnable({
     type:        'board',
@@ -53,6 +55,20 @@ export function registerCorePrimitives(): void {
       { typeId: 'transform', state: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } },
       { typeId: 'mesh',      state: { meshRef: 'prim:meeple', textureRefs: { default: '' }, tint: '#2266cc', size: [0.5, 0.75, 0.5] } },
       { typeId: 'physics',   state: { mass: 0.1, friction: 0.5, restitution: 0.3 } },
+    ],
+  });
+
+  if (!getSpawnable('card')) registerSpawnable({
+    type:        'card',
+    label:       'Card',
+    defaultTags: ['card'],
+    components: [
+      { typeId: 'value',     state: { value: '', isNumeric: false } },
+      { typeId: 'transform', state: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } },
+      { typeId: 'mesh',      state: { meshRef: 'prim:card', textureRefs: { face: '', back: '' }, tint: '#fafafa', size: [0.63, 0.01, 0.88] } },
+      { typeId: 'physics',   state: { mass: 0.05, friction: 0.6, restitution: 0.1 } },
+      { typeId: 'flatview',  state: { textureRef: '' } },
+      { typeId: 'card',      state: { face: '', back: '', category: '' } },
     ],
   });
 }
