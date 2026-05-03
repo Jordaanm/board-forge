@@ -21,7 +21,7 @@ export {
   topoSortComponents,
 } from './ComponentRegistry';
 
-export { Scene, entityToSerialized, findEntityByObject3D } from './Scene';
+export { Scene, SceneImpl, entityToSerialized, findEntityByObject3D } from './Scene';
 export type { EntitySerialized } from './Scene';
 
 export type {
@@ -68,3 +68,15 @@ export type { SpawnableDef, ComponentInit } from './SpawnableRegistry';
 
 export { registerCorePrimitives } from './spawnables';
 export { SceneSystemV2 } from './SceneSystemV2';
+
+export { createWorld, createInMemoryBusPair } from './world';
+export type {
+  World,
+  WorldOptions,
+  WorldIdentity,
+  WorldTransport,
+  ReplicationPolicy,
+  EntityHandle,
+  SpawnOptions,
+  InMemoryBusOptions,
+} from './world';

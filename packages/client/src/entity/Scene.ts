@@ -21,7 +21,10 @@ export interface EntitySerialized {
   components:    Record<string, object>;  // typeId → component.toJSON()
 }
 
-class SceneImpl {
+// Exported so the World module can construct per-instance scenes alongside
+// the legacy singleton (issue #1 of issues--arch.md). Subsequent slices
+// retire the singleton entirely.
+export class SceneImpl {
   private entities = new Map<string, Entity>();
   private registry: ComponentRegistry = componentRegistry;
 
