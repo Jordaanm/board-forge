@@ -4,7 +4,7 @@
 // retired it so tests can run multiple Worlds in parallel without colliding.
 
 import { Entity, defaultEntityName } from './Entity';
-import { type SpawnContext } from './EntityComponent';
+import { type SpawnContext, type ComponentReplicator } from './EntityComponent';
 import { componentRegistry, type ComponentRegistry } from './ComponentRegistry';
 import { getSpawnable } from './SpawnableRegistry';
 import { type SeatIndex } from '../seats/SeatLayout';
@@ -25,6 +25,10 @@ export interface EntitySerialized {
 export class SceneImpl {
   private entities = new Map<string, Entity>();
   private registry: ComponentRegistry = componentRegistry;
+  // Set by World on host construction; null on guest. Components on entities
+  // added to this scene inherit this reference, which they use to enqueue
+  // replication patches. Issue #6 of issues--arch.md.
+  world: ComponentReplicator | null = null;
 
   getEntity(guid: string): Entity | undefined {
     return this.entities.get(guid);
@@ -43,10 +47,16 @@ export class SceneImpl {
       throw new Error(`Entity already in scene: ${entity.id}`);
     }
     this.entities.set(entity.id, entity);
+    entity.scene = this;
+    for (const comp of entity.components.values()) comp.world = this.world;
   }
 
   removeEntity(id: string): void {
+    const entity = this.entities.get(id);
+    if (!entity) return;
     this.entities.delete(id);
+    entity.scene = null;
+    for (const comp of entity.components.values()) comp.world = null;
   }
 
   // Test seam: swap the registry that load() consults. Production uses the
@@ -158,6 +168,8 @@ export class SceneImpl {
       if (parent) parent.children = parent.children.filter(c => c !== id);
     }
     this.entities.delete(id);
+    entity.scene = null;
+    for (const comp of entity.components.values()) comp.world = null;
     out.push(id);
   }
 }

@@ -4,6 +4,7 @@
 
 import { type SeatIndex } from '../seats/SeatLayout';
 import { type EntityComponent, type ComponentClass } from './EntityComponent';
+import { type SceneImpl } from './Scene';
 
 export interface EntityInit {
   id:             string;
@@ -28,6 +29,10 @@ export class Entity {
   components:    Map<string, EntityComponent<any>>;
   // Transient — not serialised.
   heldBy:        SeatIndex | null;
+  // Back-reference to the owning Scene. Set by SceneImpl.add and cleared on
+  // despawn. attachComponent uses it to inject the World's replicator into
+  // newly-attached components without a separate wire-up pass.
+  scene:         SceneImpl | null;
 
   constructor(init: EntityInit) {
     this.id            = init.id;
@@ -40,6 +45,7 @@ export class Entity {
     this.children      = init.children      ? [...init.children] : [];
     this.components    = new Map();
     this.heldBy        = null;
+    this.scene         = null;
   }
 
   getComponent<T extends EntityComponent<any>>(cls: ComponentClass<T>): T | undefined {
@@ -58,6 +64,10 @@ export class Entity {
     }
     this.components.set(ctor.typeId, comp);
     comp.entity = this;
+    // If the entity is already in a scene with a host World, the new component
+    // joins replication immediately. Pre-add attaches (the spawn / load path)
+    // get their world reference filled in by SceneImpl.add.
+    if (this.scene) comp.world = this.scene.world;
   }
 }
 

@@ -9,9 +9,17 @@ import * as THREE from 'three';
 import { type Entity } from './Entity';
 import { type SeatIndex } from '../seats/SeatLayout';
 import { type PhysicsWorld } from '../physics/PhysicsWorld';
-import { type HostReplicatorV2 } from './HostReplicatorV2';
+import { type ComponentPatch } from './wire';
 
 export type ReplicationChannel = 'reliable' | 'unreliable';
+
+// The narrow surface a component needs to push state mutations onto the wire.
+// Issue #6 of issues--arch.md retired the `EntityComponent.hostReplicator`
+// process-global static — components now hold a per-instance reference set
+// when their owning entity is added to a Scene that has a World.
+export interface ComponentReplicator {
+  enqueueComponentPatch(patch: ComponentPatch, channel: ReplicationChannel): void;
+}
 
 // Carried into every onSpawn / onDespawn call. Components own their view
 // artefacts and need the scene root + physics world to attach / detach them.
@@ -72,17 +80,14 @@ export abstract class EntityComponent<TState extends object> {
   static requires: readonly string[]  = [];
   static channel:  ReplicationChannel = 'reliable';
 
-  // Host-only — set at host runtime startup so setState pushes patches onto
-  // the wire. Stays null on the guest (where setState is never called by the
-  // engine; guests use applyRemoteState).
-  static hostReplicator: HostReplicatorV2 | null = null;
-
-  static setHostReplicator(r: HostReplicatorV2 | null): void {
-    EntityComponent.hostReplicator = r;
-  }
-
   state!:  TState;
   entity!: Entity;
+
+  // Host-only — points at the owning World's HostReplicatorV2. Set when the
+  // entity is added to a Scene that has a `world` (i.e. on host). Null on
+  // guest, on detached entities, and on entities owned by a guest World.
+  // setState reads this; applyRemoteState (the guest inbound path) does not.
+  world: ComponentReplicator | null = null;
 
   abstract onSpawn(ctx: SpawnContext): void;
   abstract onPropertiesChanged(changed: Partial<TState>): void;
@@ -95,14 +100,13 @@ export abstract class EntityComponent<TState extends object> {
   onAction        (_actionId: string, _args: object | undefined, _ctx: ActionContext):   void { }
 
   // Host-only at runtime. Merges into `state`, fires `onPropertiesChanged`,
-  // and queues a ComponentPatch on the host replicator (if registered).
+  // and queues a ComponentPatch on the owning World's replicator (if any).
   setState(patch: Partial<TState>): void {
     Object.assign(this.state as object, patch);
     this.onPropertiesChanged(patch);
-    const r = EntityComponent.hostReplicator;
-    if (r && this.entity) {
+    if (this.world && this.entity) {
       const ctor = this.constructor as ComponentClass;
-      r.enqueueComponentPatch(
+      this.world.enqueueComponentPatch(
         { entityId: this.entity.id, typeId: ctor.typeId, partial: patch as Record<string, unknown> },
         ctor.channel,
       );

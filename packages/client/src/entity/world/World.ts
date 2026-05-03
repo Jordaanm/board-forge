@@ -7,12 +7,13 @@
 // `entityScene` so existing DragController / findEntityByObject3D consumers
 // continue to see the same entities.
 //
-// `EntityComponent.hostReplicator` is still a process-global static. World
-// sets it on host construction and clears on dispose. Issue #6 retires it.
+// Components hold a per-instance `world` reference (issue #6) injected by
+// SceneImpl.add when they join a scene with a non-null `world`. World wires
+// `scene.world = this.replicator` on host construction; guests leave it null.
 
 import * as THREE from 'three';
 import { type Entity } from '../Entity';
-import { EntityComponent, type SpawnContext } from '../EntityComponent';
+import { type SpawnContext } from '../EntityComponent';
 import { SceneImpl, entityToSerialized, type EntitySerialized } from '../Scene';
 import { HostReplicatorV2 } from '../HostReplicatorV2';
 import { HoldService } from '../HoldService';
@@ -108,7 +109,7 @@ class WorldImpl implements World, HandleRouter {
     if (opts.role === 'host') {
       this.physics    = opts.physics ?? new PhysicsWorld();
       this.replicator = new HostReplicatorV2();
-      EntityComponent.setHostReplicator(this.replicator);
+      this.scene.world = this.replicator;
       this.hold       = new HoldService(this.replicator, this.scene);
       this.hostInput  = new HostInputDispatcher(this.hold, this.getPeerSeat, this.scene);
       this.guestInput = new GuestInputHandler(this.hold, this.getPeerSeat, this.scene);
@@ -523,9 +524,7 @@ class WorldImpl implements World, HandleRouter {
     this.unsubscribeMessage();
     this.unsubscribePeerJoin();
 
-    if (this.role === 'host' && EntityComponent.hostReplicator === this.replicator) {
-      EntityComponent.setHostReplicator(null);
-    }
+    this.scene.world = null;
 
     const ctx: SpawnContext = { scene: this.threeScene, physics: this.physics, entityScene: this.scene };
     for (const id of this.scene.all().map(e => e.id)) {

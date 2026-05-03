@@ -8,6 +8,10 @@ import { HoldService } from './HoldService';
 import { HostInputDispatcher } from './HostInputDispatcher';
 import { type SeatIndex } from '../seats/SeatLayout';
 
+// Per-component this.world is injected by SceneImpl.add (issue #6 of arch.md);
+// the test rig sets scene.world to the replicator before adding entities so
+// setState calls inside ValueComp.onPropertiesChanged still queue patches.
+
 interface ValueState { v: number }
 class ValueComp extends EntityComponent<ValueState> {
   static typeId = 'value';
@@ -40,9 +44,9 @@ beforeEach(() => {
   scene.setRegistry(new ComponentRegistry());
   PEERS.clear();
   r = new HostReplicatorV2();
+  scene.world = r;
   svc = new HoldService(r, scene);
   dispatcher = new HostInputDispatcher(svc, (peerId) => PEERS.get(peerId) ?? null, scene);
-  EntityComponent.setHostReplicator(r);
 });
 
 describe('HostInputDispatcher.handleHoldClaim — OwnershipPolicy gating', () => {
