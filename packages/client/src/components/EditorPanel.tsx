@@ -29,9 +29,6 @@ interface Props {
 }
 
 const PANEL: React.CSSProperties = {
-  position:    'absolute',
-  top:         12,
-  left:        12,
   width:       280,
   background:  'rgba(20,20,32,0.92)',
   border:      '1px solid rgba(255,255,255,0.15)',
@@ -39,7 +36,6 @@ const PANEL: React.CSSProperties = {
   color:       '#e8e8e8',
   fontFamily:  'sans-serif',
   fontSize:    13,
-  zIndex:      100,
   boxShadow:   '0 4px 20px rgba(0,0,0,0.5)',
 };
 

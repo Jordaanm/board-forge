@@ -304,36 +304,41 @@ export function Room({ roomId, isHost }: Props) {
       </div>
 
       {isHost && (
-        <>
-          <HostActionBar onSpawn={(t) => spawnRef.current(t)} />
-          <EditorPanel
-            objects={objects}
-            selectedId={selectedId}
-            isFreeCamera={isFreeCamera}
-            tableProps={tableProps}
-            skydomeProps={skydomeProps}
-            keyLightProps={keyLightProps}
-            onSelect={setSelectedId}
-            onRollDice={() => rollRef.current()}
-            onUpdateProp={(id, key, value) => updatePropRef.current(id, key, value)}
-            onUpdateTableProp={handleUpdateTableProp}
-            onUpdateSkydomeProp={handleUpdateSkydomeProp}
-            onUpdateKeyLightProp={handleUpdateKeyLightProp}
-            onToggleFreeCamera={handleToggleFreeCamera}
-          />
-        </>
+        <HostActionBar onSpawn={(t) => spawnRef.current(t)} />
       )}
 
-      <PlayersPanel
-        snapshot={roomSnapshot}
-        selfPeerId={selfPeerId}
-        isHost={isHost}
-        onClaimSeat={(idx) => claimSeatRef.current(idx)}
-        onKick={(id) => kickPeerRef.current(id)}
-        onBan={(id) => banPeerRef.current(id)}
-      />
-
       <AnchorLayout>
+        {isHost && (
+          <UIPanel anchor="top-left" order={10}>
+            <EditorPanel
+              objects={objects}
+              selectedId={selectedId}
+              isFreeCamera={isFreeCamera}
+              tableProps={tableProps}
+              skydomeProps={skydomeProps}
+              keyLightProps={keyLightProps}
+              onSelect={setSelectedId}
+              onRollDice={() => rollRef.current()}
+              onUpdateProp={(id, key, value) => updatePropRef.current(id, key, value)}
+              onUpdateTableProp={handleUpdateTableProp}
+              onUpdateSkydomeProp={handleUpdateSkydomeProp}
+              onUpdateKeyLightProp={handleUpdateKeyLightProp}
+              onToggleFreeCamera={handleToggleFreeCamera}
+            />
+          </UIPanel>
+        )}
+
+        <UIPanel anchor="top-right" order={10}>
+          <PlayersPanel
+            snapshot={roomSnapshot}
+            selfPeerId={selfPeerId}
+            isHost={isHost}
+            onClaimSeat={(idx) => claimSeatRef.current(idx)}
+            onKick={(id) => kickPeerRef.current(id)}
+            onBan={(id) => banPeerRef.current(id)}
+          />
+        </UIPanel>
+
         <UIPanel anchor="bottom-left" order={10}>
           <Toolbar activeToolId={activeToolId} onSelectTool={handleSelectTool} />
         </UIPanel>

@@ -1,7 +1,4 @@
 .players-panel {
-  position: absolute;
-  top: 12px;
-  right: 12px;
   width: 240px;
   background: rgba(20, 20, 32, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -9,7 +6,6 @@
   color: #e8e8e8;
   font-family: sans-serif;
   font-size: 13px;
-  z-index: 100;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 }
 
