@@ -30,7 +30,9 @@
       "Bash(pnpm --filter @virtual-table/client tsc --noEmit)",
       "Bash('$_.Name')",
       "Bash(powershell -Command ' *)",
-      "Bash(echo \"exit=$?\")"
+      "Bash(echo \"exit=$?\")",
+      "PowerShell(New-Item *)",
+      "Bash(bun add *)"
     ]
   }
 }

@@ -8,7 +8,9 @@ import type { SceneMessage } from '../entity/wire';
 import type { SeatIndex } from '../seats/SeatLayout';
 import type { TableProps } from '../scene/Table';
 
-export type SpawnableType = 'board' | 'die' | 'token';
+// Open string type — the spawnable registry is the source of truth. The old
+// closed union became fiction once `card` shipped and won't survive scripting.
+export type SpawnableType = string;
 
 // Table is a scene fixture (not an entity), so its props replicate through
 // this dedicated envelope rather than the entity/component wire. Sent by

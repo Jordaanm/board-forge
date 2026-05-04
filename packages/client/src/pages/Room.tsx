@@ -5,6 +5,7 @@ import { EditorPanel, type ObjectSummary } from '../components/EditorPanel';
 import { ContextMenu } from '../components/ContextMenu';
 import { PlayersPanel } from '../components/PlayersPanel';
 import { Toolbar } from '../components/Toolbar';
+import { HostActionBar } from '../components/HostActionBar';
 import { TOOL_CATALOGUE } from '../input/tools';
 import { type ContextMenuRequest, dispatchMenuAction } from '../input/ContextMenuController';
 import { type Entity } from '../entity/Entity';
@@ -301,22 +302,24 @@ export function Room({ roomId, isHost }: Props) {
       </div>
 
       {isHost && (
-        <EditorPanel
-          objects={objects}
-          selectedId={selectedId}
-          isFreeCamera={isFreeCamera}
-          tableProps={tableProps}
-          skydomeProps={skydomeProps}
-          keyLightProps={keyLightProps}
-          onSelect={setSelectedId}
-          onSpawn={(t) => spawnRef.current(t)}
-          onRollDice={() => rollRef.current()}
-          onUpdateProp={(id, key, value) => updatePropRef.current(id, key, value)}
-          onUpdateTableProp={handleUpdateTableProp}
-          onUpdateSkydomeProp={handleUpdateSkydomeProp}
-          onUpdateKeyLightProp={handleUpdateKeyLightProp}
-          onToggleFreeCamera={handleToggleFreeCamera}
-        />
+        <>
+          <HostActionBar onSpawn={(t) => spawnRef.current(t)} />
+          <EditorPanel
+            objects={objects}
+            selectedId={selectedId}
+            isFreeCamera={isFreeCamera}
+            tableProps={tableProps}
+            skydomeProps={skydomeProps}
+            keyLightProps={keyLightProps}
+            onSelect={setSelectedId}
+            onRollDice={() => rollRef.current()}
+            onUpdateProp={(id, key, value) => updatePropRef.current(id, key, value)}
+            onUpdateTableProp={handleUpdateTableProp}
+            onUpdateSkydomeProp={handleUpdateSkydomeProp}
+            onUpdateKeyLightProp={handleUpdateKeyLightProp}
+            onToggleFreeCamera={handleToggleFreeCamera}
+          />
+        </>
       )}
 
       <PlayersPanel

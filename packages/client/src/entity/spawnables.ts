@@ -26,6 +26,7 @@ export function registerCorePrimitives(): void {
   if (!getSpawnable('board')) registerSpawnable({
     type:        'board',
     label:       'Board',
+    category:    'Boards',
     defaultTags: ['board'],
     components: [
       { typeId: 'transform', state: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } },
@@ -37,6 +38,7 @@ export function registerCorePrimitives(): void {
   if (!getSpawnable('die')) registerSpawnable({
     type:        'die',
     label:       'Die (D6)',
+    category:    'Dice',
     defaultTags: ['die'],
     components: [
       { typeId: 'transform', state: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } },
@@ -50,6 +52,7 @@ export function registerCorePrimitives(): void {
   if (!getSpawnable('token')) registerSpawnable({
     type:        'token',
     label:       'Token',
+    category:    'Tokens',
     defaultTags: ['token'],
     components: [
       { typeId: 'transform', state: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } },
@@ -61,6 +64,7 @@ export function registerCorePrimitives(): void {
   if (!getSpawnable('card')) registerSpawnable({
     type:        'card',
     label:       'Card',
+    category:    'Cards',
     defaultTags: ['card'],
     components: [
       { typeId: 'value',     state: { value: '', isNumeric: false } },

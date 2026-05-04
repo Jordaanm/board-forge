@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { type SpawnableType } from '../net/SceneState';
-import { OBJECT_META, type PropertyDef } from '../scene/objectMeta';
+import { resolveObjectMeta, type PropertyDef } from '../scene/objectMeta';
 import { type TableProps } from '../scene/Table';
 import { type SkydomeProps } from '../scene/Skydome';
 import { type KeyLightProps } from '../scene/KeyLight';
@@ -20,7 +20,6 @@ interface Props {
   skydomeProps:         SkydomeProps;
   keyLightProps:        KeyLightProps;
   onSelect:             (id: string | null) => void;
-  onSpawn:              (type: SpawnableType) => void;
   onRollDice:           () => void;
   onUpdateProp:         (id: string, key: string, value: unknown) => void;
   onUpdateTableProp:    (key: keyof TableProps, value: unknown) => void;
@@ -28,8 +27,6 @@ interface Props {
   onUpdateKeyLightProp: (key: keyof KeyLightProps, value: unknown) => void;
   onToggleFreeCamera:   (on: boolean) => void;
 }
-
-const SPAWN_TYPES: SpawnableType[] = ['board', 'die', 'token'];
 
 const PANEL: React.CSSProperties = {
   position:    'absolute',
@@ -123,7 +120,7 @@ const CHIP_X: React.CSSProperties = {
 
 export function EditorPanel({
   objects, selectedId, isFreeCamera, tableProps, skydomeProps, keyLightProps,
-  onSelect, onSpawn, onRollDice, onUpdateProp,
+  onSelect, onRollDice, onUpdateProp,
   onUpdateTableProp, onUpdateSkydomeProp, onUpdateKeyLightProp, onToggleFreeCamera,
 }: Props) {
   const [open, setOpen]           = useState(true);
@@ -162,7 +159,7 @@ export function EditorPanel({
           <TableSection tableProps={tableProps} onUpdateTableProp={onUpdateTableProp} />
           <SkydomeSection skydomeProps={skydomeProps} onUpdateSkydomeProp={onUpdateSkydomeProp} />
           <KeyLightSection keyLightProps={keyLightProps} onUpdateKeyLightProp={onUpdateKeyLightProp} />
-          <SpawnSection onSpawn={onSpawn} onRollDice={onRollDice} />
+          <RollSection onRollDice={onRollDice} />
           <CameraSection isFreeCamera={isFreeCamera} onToggleFreeCamera={onToggleFreeCamera} />
         </>
       )}
@@ -272,7 +269,7 @@ function SceneGraphList({
             onClick={() => onSelect(isSel ? null : o.id)}
           >
             <span>{o.id}</span>
-            <span style={{ color: '#888' }}>{OBJECT_META[o.objectType].label}</span>
+            <span style={{ color: '#888' }}>{resolveObjectMeta(o.objectType).label}</span>
           </div>
         );
       })}
@@ -292,7 +289,7 @@ function PropertyEditor({
     );
   }
 
-  const def = OBJECT_META[selected.objectType];
+  const def = resolveObjectMeta(selected.objectType);
   return (
     <div style={SECTION}>
       <div style={SECTION_LABEL}>Properties — {selected.id}</div>
@@ -393,19 +390,10 @@ function PropertyRow({
   );
 }
 
-function SpawnSection({
-  onSpawn, onRollDice,
-}: { onSpawn: (type: SpawnableType) => void; onRollDice: () => void }) {
+function RollSection({ onRollDice }: { onRollDice: () => void }) {
   return (
     <div style={SECTION}>
-      <div style={SECTION_LABEL}>Spawn</div>
-      <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
-        {SPAWN_TYPES.map(t => (
-          <button key={t} style={SPAWN_BTN} onClick={() => onSpawn(t)}>
-            + {OBJECT_META[t].label}
-          </button>
-        ))}
-      </div>
+      <div style={SECTION_LABEL}>Dice</div>
       <button
         style={{ ...SPAWN_BTN, borderColor: 'rgba(255,200,0,0.4)', color: '#ffd740', width: '100%' }}
         onClick={onRollDice}

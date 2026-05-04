@@ -13,6 +13,7 @@ export interface ComponentInit {
 export interface SpawnableDef {
   type:        string;
   label:       string;
+  category:    string;
   defaultTags: string[];
   components:  ComponentInit[];
 }

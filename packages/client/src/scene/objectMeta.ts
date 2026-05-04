@@ -1,4 +1,5 @@
 import { type SpawnableType } from '../net/SceneState';
+import { getSpawnable } from '../entity/SpawnableRegistry';
 
 // Metadata used by EditorPanel + ContextMenuController. Keeps only display
 // labels, editable property schemas, and spawnable actions — the v1
@@ -16,7 +17,7 @@ export interface ObjectMeta {
   actions:        ActionDef[];
 }
 
-export const OBJECT_META: Record<SpawnableType, ObjectMeta> = {
+export const OBJECT_META: Record<string, ObjectMeta> = {
   board: {
     type:  'board',
     label: 'Board',
@@ -46,3 +47,17 @@ export const OBJECT_META: Record<SpawnableType, ObjectMeta> = {
     actions: [],
   },
 };
+
+// Resolves a spawnable's display metadata, falling back to the registry's
+// SpawnableDef.label when the type isn't in OBJECT_META. Used by EditorPanel
+// so newly-registered types (e.g. `card`) don't crash the property editor.
+export function resolveObjectMeta(type: SpawnableType): ObjectMeta {
+  const m = OBJECT_META[type];
+  if (m) return m;
+  return {
+    type,
+    label:          getSpawnable(type)?.label ?? type,
+    propertySchema: [{ key: 'name', label: 'Name', type: 'string' }],
+    actions:        [],
+  };
+}
