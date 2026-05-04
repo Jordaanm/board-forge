@@ -1,6 +1,7 @@
 import { useEffect, useRef, type MutableRefObject } from 'react';
 import * as THREE from 'three';
-import { createTable, applyTableProp, DEFAULT_TABLE_PROPS, type TableProps } from './scene/Table';
+import { createTable, applyTableProp, DEFAULT_TABLE_PROPS, type TableProps, type TableShape } from './scene/Table';
+import { PhysicsWorld } from './physics/PhysicsWorld';
 import { createSkydome, applySkydomeProp, type SkydomeProps } from './scene/Skydome';
 import { createKeyLight, applyKeyLightProp, type KeyLightProps } from './scene/KeyLight';
 import { createWorld } from './entity/world';
@@ -103,6 +104,8 @@ export function ThreeCanvas({
     const tableMesh = createTable();
     scene.add(tableMesh);
 
+    const physicsWorld = isHost ? new PhysicsWorld() : null;
+
     const camController = new CameraController(camera, renderer.domElement);
 
     const cursorTracker = new CursorTracker();
@@ -154,6 +157,7 @@ export function ThreeCanvas({
         selfPeerId: () => getSelfPeerIdRef.current(),
       },
       transport,
+      physics:     physicsWorld ?? undefined,
       getPeerSeat: isHost ? (peerId) => getPeerSeatRef.current(peerId) : undefined,
     });
     worldRef = world;
@@ -242,6 +246,7 @@ export function ThreeCanvas({
 
       updateTablePropRef.current = (key, value) => {
         applyTableProp(tableMesh, key, value);
+        if (key === 'shape') physicsWorld?.setTableShape(value as TableShape);
         sendRef.current({ type: 'table-update', partial: { [key]: value } as Partial<TableProps> }, { reliable: true });
       };
     }
