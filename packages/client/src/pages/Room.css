@@ -19,10 +19,6 @@
 .room__status--room-full    { color: #f44336; }
 
 .room__share {
-  position: absolute;
-  bottom: 72px;
-  left: 50%;
-  transform: translateX(-50%);
   background: rgba(0, 0, 0, 0.8);
   color: #e8e8e8;
   padding: 14px 22px;

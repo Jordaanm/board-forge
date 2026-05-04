@@ -346,14 +346,16 @@ export function Room({ roomId, isHost }: Props) {
         <UIPanel anchor="bottom-left" order={10}>
           <Toolbar activeToolId={activeToolId} onSelectTool={handleSelectTool} />
         </UIPanel>
-      </AnchorLayout>
 
-      {isHost && status === 'connecting' && (
-        <div className="room__share">
-          <div className="room__share-label">Share this link with your guest:</div>
-          <div className="room__share-url">{shareUrl}</div>
-        </div>
-      )}
+        {isHost && status === 'connecting' && (
+          <UIPanel anchor="bottom-center" order={10}>
+            <div className="room__share">
+              <div className="room__share-label">Share this link with your guest:</div>
+              <div className="room__share-url">{shareUrl}</div>
+            </div>
+          </UIPanel>
+        )}
+      </AnchorLayout>
 
       {contextMenu && (
         <ContextMenu
