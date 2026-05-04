@@ -6,6 +6,7 @@ import { forwardRef, useEffect, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { listSpawnables, type SpawnableDef } from '../entity/SpawnableRegistry';
 import { groupByCategory, searchSpawnables } from '../entity/spawnableSearch';
+import { useAnchorTarget } from './AnchorLayout';
 import './SpawnObjectModal.css';
 
 interface Props {
@@ -33,10 +34,6 @@ const OVERLAY: React.CSSProperties = {
 };
 
 const CONTENT: React.CSSProperties = {
-  position:    'fixed',
-  top:         '50%',
-  left:        '50%',
-  transform:   'translate(-50%, -50%)',
   width:       520,
   height:      600,
   background:  'rgba(20,20,32,0.98)',
@@ -120,12 +117,13 @@ const EMPTY: React.CSSProperties = {
 };
 
 export function SpawnObjectModal({ onSpawn }: Props) {
+  const centerAnchor = useAnchorTarget('center');
   return (
     <Dialog.Root>
       <Dialog.Trigger asChild>
         <button style={TRIGGER_BTN} type="button">+ Spawn Object</button>
       </Dialog.Trigger>
-      <Dialog.Portal>
+      <Dialog.Portal container={centerAnchor ?? undefined}>
         <Dialog.Overlay style={OVERLAY} />
         <Dialog.Content style={CONTENT} aria-describedby={undefined}>
           <div style={HEADER}>
