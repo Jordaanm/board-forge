@@ -18,8 +18,9 @@ interface ImpulseCall { x: number; y: number; z: number }
 
 class FakeEntityHandle {
   impulses: ImpulseCall[] = [];
-  constructor(public id: string, public obj: THREE.Object3D) {}
-  get(_cls: unknown): unknown {
+  constructor(public id: string, public obj: THREE.Object3D, public mass = 1) {}
+  get(cls: { typeId: string }): unknown {
+    if (cls?.typeId === 'physics') return { state: { mass: this.mass, isLocked: false } };
     return { object3d: this.obj };
   }
   applyImpulse(v: ImpulseCall) { this.impulses.push(v); }
@@ -212,6 +213,37 @@ describe('FlickTool — Escape cancellation', () => {
     tool.onDeactivate(ctx);
     expect(attachment.isAttached()).toBe(false);
     expect(handle.impulses).toHaveLength(0);
+  });
+});
+
+describe('FlickTool — mass scaling', () => {
+  test('click impulse scales linearly with target mass (constant Δv)', () => {
+    const lightObj = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));
+    lightObj.position.set(0, 0, 0);
+    lightObj.updateMatrixWorld(true);
+    const heavyObj = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));
+    heavyObj.position.set(0, 0, 0);
+    heavyObj.updateMatrixWorld(true);
+    const light = new FakeEntityHandle('light', lightObj, 0.1);
+    const heavy = new FakeEntityHandle('heavy', heavyObj, 1.0);
+
+    const fireOn = (h: FakeEntityHandle) => {
+      const w  = makeWorld([h]);
+      const c  = makeCtx(w, camera, scene);
+      const t  = new FlickTool(new FlickArrowAttachment(scene));
+      (t as unknown as { now: () => number }).now = () => nowMs;
+      nowMs = 1000;
+      t.onPress(pointerEvent(), c);
+      nowMs = 1100;
+      t.onRelease(pointerEvent(), c);
+    };
+
+    fireOn(light);
+    fireOn(heavy);
+
+    const lightLen = Math.hypot(light.impulses[0].x, light.impulses[0].z);
+    const heavyLen = Math.hypot(heavy.impulses[0].x, heavy.impulses[0].z);
+    expect(heavyLen / lightLen).toBeCloseTo(10, 5);  // 1.0 / 0.1
   });
 });
 

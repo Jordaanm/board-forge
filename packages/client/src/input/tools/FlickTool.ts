@@ -13,6 +13,7 @@
 import * as THREE from 'three';
 import { TABLE_SURFACE_Y } from '../../scene/Table';
 import { TransformComponent } from '../../entity/components/TransformComponent';
+import { PhysicsComponent } from '../../entity/components/PhysicsComponent';
 import { FLICK_DEFAULT_MAGNITUDE, FLICK_MAX_MAGNITUDE } from '../../config/flickConfig';
 import { type EntityHandle } from '../../entity/world';
 import { type Tool, type ToolContext, type ToolPointerEvent } from './types';
@@ -20,7 +21,9 @@ import { type FlickArrowAttachment } from './FlickArrowAttachment';
 
 const HOLD_MS              = 150;
 const MOVE_PX              = 5;
-const DRAG_MAGNITUDE_SCALE = 1.0;   // impulse units per world-unit of drag
+// Target Δv per world-unit of drag. flickConfig magnitudes are Δv values
+// (m/s) — multiplied by the target mass at call time to equalise travel.
+const DRAG_VELOCITY_SCALE  = 20.0;
 
 interface Pending {
   handle:         EntityHandle;
@@ -112,16 +115,18 @@ export class FlickTool implements Tool {
       return;
     }
 
-    // Click mode: instant impulse along projected camera-forward.
+    // Click mode: instant impulse along projected camera-forward, scaled by
+    // mass so the resulting Δv is constant.
     const forward = new THREE.Vector3();
     ctx.camera.getWorldDirection(forward);
     forward.y = 0;
     if (forward.lengthSq() < 1e-6) return;
     forward.normalize();
+    const j = FLICK_DEFAULT_MAGNITUDE * massOf(p.handle);
     p.handle.applyImpulse({
-      x: forward.x * FLICK_DEFAULT_MAGNITUDE,
+      x: forward.x * j,
       y: 0,
-      z: forward.z * FLICK_DEFAULT_MAGNITUDE,
+      z: forward.z * j,
     });
   }
 
@@ -164,27 +169,34 @@ export class FlickTool implements Tool {
   }
 
   private fireAim(p: Pending): void {
-    const { direction, magnitude } = this.computeImpulse(p);
+    const { direction, magnitude } = this.computeImpulse(p);  // magnitude = Δv
     if (magnitude <= 0) return;
+    const j = magnitude * massOf(p.handle);
     p.handle.applyImpulse({
-      x: direction.x * magnitude,
+      x: direction.x * j,
       y: 0,
-      z: direction.z * magnitude,
+      z: direction.z * j,
     });
   }
 
-  // Returns the pull-semantics impulse direction (unit vector, opposite of
-  // pointer drag) and the projected magnitude (drag distance × scale, capped
-  // at FLICK_MAX_MAGNITUDE). Magnitude is 0 when the user never moved.
+  // Returns the pull-semantics direction (unit vector, opposite of pointer
+  // drag) and the projected Δv (drag distance × scale, capped at
+  // FLICK_MAX_MAGNITUDE). Mass scaling happens at the impulse-write site.
   private computeImpulse(p: Pending): { direction: THREE.Vector3; magnitude: number } {
     const dx = p.pointerOnTable.x - p.pressOnTable.x;
     const dz = p.pointerOnTable.z - p.pressOnTable.z;
     const len = Math.sqrt(dx * dx + dz * dz);
     if (len < 1e-6) return { direction: new THREE.Vector3(), magnitude: 0 };
     const direction = new THREE.Vector3(-dx / len, 0, -dz / len);
-    const magnitude = Math.min(len * DRAG_MAGNITUDE_SCALE, FLICK_MAX_MAGNITUDE);
+    const magnitude = Math.min(len * DRAG_VELOCITY_SCALE, FLICK_MAX_MAGNITUDE);
     return { direction, magnitude };
   }
+}
+
+function massOf(handle: EntityHandle): number {
+  const phys = handle.get(PhysicsComponent);
+  const m = phys?.state.mass;
+  return typeof m === 'number' && m > 0 ? m : 1;
 }
 
 function pickEntity(_e: ToolPointerEvent, ctx: ToolContext): EntityHandle | null {
