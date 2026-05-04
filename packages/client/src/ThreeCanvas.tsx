@@ -18,6 +18,7 @@ import { type ChannelMessage, type SpawnableType } from './net/SceneState';
 import { type SeatIndex } from './seats/SeatLayout';
 import { CursorTracker } from './cursor/CursorTracker';
 import { CursorOverlay } from './cursor/CursorOverlay';
+import { PingOverlay } from './cursor/PingOverlay';
 import { TABLE_SURFACE_Y } from './scene/Table';
 import { type ObjectSummary } from './components/EditorPanel';
 
@@ -110,6 +111,7 @@ export function ThreeCanvas({
 
     const cursorTracker = new CursorTracker();
     const cursorOverlay = new CursorOverlay(scene);
+    let   pingOverlay: PingOverlay | null = null;
 
     // Local pointer state — raycast onto the table plane and broadcast at
     // ~30Hz so peers see this user's cursor in real time.
@@ -159,6 +161,9 @@ export function ThreeCanvas({
       getPeerSeat: isHost ? (peerId) => getPeerSeatRef.current(peerId) : undefined,
     });
     worldRef = world;
+
+    pingOverlay = new PingOverlay(scene, world);
+    const unsubscribePing = world.onToolBroadcast((msg) => pingOverlay?.ingest(msg));
 
     // ── Selection highlight ─────────────────────────────────────────────
     // BoxHelper is tool-independent and renders directly from selection state.
@@ -304,6 +309,7 @@ export function ThreeCanvas({
         cursorPending  = null;
       }
       cursorOverlay.sync(cursorTracker.all());
+      pingOverlay?.update(dt);
 
       if (highlightHelper) highlightHelper.update();
 
@@ -323,6 +329,9 @@ export function ThreeCanvas({
       cancelAnimationFrame(animId);
       window.removeEventListener('resize', onResize);
       renderer.domElement.removeEventListener('pointermove', onCursorMove);
+      unsubscribePing();
+      pingOverlay?.dispose();
+      pingOverlay = null;
       cursorOverlay.dispose();
       cursorTracker.clear();
       unsubscribe();

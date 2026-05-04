@@ -6,11 +6,13 @@
 import * as THREE from 'three';
 import { type MoveGizmo } from '../../scene/MoveGizmo';
 import { GrabTool } from './GrabTool';
+import { PingTool } from './PingTool';
 import { AxisGizmoAttachment } from './AxisGizmoAttachment';
 import { type Tool } from './types';
 
 export { ToolDispatcher, type ToolDispatcherDeps } from './ToolDispatcher';
 export { GrabTool } from './GrabTool';
+export { PingTool } from './PingTool';
 export { AxisGizmoAttachment } from './AxisGizmoAttachment';
 export type { Tool, ToolContext, ToolPointerEvent, ToolAttachment } from './types';
 
@@ -38,5 +40,11 @@ export const TOOL_CATALOGUE: ToolFactory[] = [
       new AxisGizmoAttachment(deps.scene, deps.moveGizmo),
       deps.onSelect,
     ),
+  },
+  {
+    id:     'ping',
+    label:  'Ping',
+    hotkey: '2',
+    create: () => new PingTool(),
   },
 ];

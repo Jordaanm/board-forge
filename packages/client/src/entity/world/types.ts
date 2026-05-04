@@ -11,7 +11,7 @@ import * as THREE from 'three';
 import { type Entity } from '../Entity';
 import { type EntityComponent, type ComponentClass } from '../EntityComponent';
 import { type EntitySerialized } from '../Scene';
-import { type SceneMessage } from '../wire';
+import { type SceneMessage, type ToolBroadcast } from '../wire';
 import { type SeatIndex } from '../../seats/SeatLayout';
 import { type PhysicsWorld } from '../../physics/PhysicsWorld';
 import { type GuestInputMessage } from '../../net/SceneState';
@@ -94,6 +94,12 @@ export interface World {
   // owned by World. Late-join (formerly `replayTo`) is now driven internally
   // by transport.onPeerJoin (issue #8).
   releasePeer(peerId: string): void;
+
+  // Cosmetic broadcast from a Tool — issue #4 of issues--tools.md. Routes on
+  // the unreliable channel; fires local subscribers immediately so the sender
+  // sees their own ping. On host inbound, relays to other peers.
+  broadcastToolMessage(toolId: string, payload: unknown): void;
+  onToolBroadcast(handler: (msg: ToolBroadcast) => void): () => void;
 
   dispose(): void;
 }

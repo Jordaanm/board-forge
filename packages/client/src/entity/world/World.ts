@@ -40,7 +40,7 @@ import {
   type SpawnOptions,
   type ReplicationPolicy,
 } from './types';
-import { type HoldRelease } from '../wire';
+import { type HoldRelease, type ToolBroadcast } from '../wire';
 
 // Bounds-enforcement constants — mirror SceneSystemV2 so behaviour is identical
 // during the parity slice. Issue #5 deletes the duplicate.
@@ -90,6 +90,7 @@ class WorldImpl implements World, HandleRouter {
   private readonly handles   = new Map<string, EntityHandleImpl>();
   private readonly restPoses = new Map<string, RestPose>();
   private listeners: Array<() => void> = [];
+  private toolBroadcastHandlers: Array<(msg: ToolBroadcast) => void> = [];
 
   private readonly unsubscribeMessage:  () => void;
   private readonly unsubscribePeerJoin: () => void;
@@ -381,6 +382,36 @@ class WorldImpl implements World, HandleRouter {
     this.transport.send(msg, { reliable: true });
   }
 
+  // ── Cosmetic tool broadcasts (issue #4 of issues--tools.md) ─────────────
+  // Sender path: fire local subscribers immediately (so the sender sees its
+  // own ping) and put the envelope on the unreliable channel. On the host,
+  // RtcTransport.send fans the envelope out to every connected guest. Guests
+  // route through the host (single peer); the host relay in handleInboundHost
+  // bounces it to all other guests.
+  broadcastToolMessage(toolId: string, payload: unknown): void {
+    if (this.disposed) return;
+    const msg: ToolBroadcast = {
+      type:    'tool-broadcast',
+      toolId,
+      peerId:  this.identity.selfPeerId() ?? '',
+      seat:    this.identity.selfSeat(),
+      payload,
+    };
+    this.fireToolBroadcast(msg);
+    this.transport.send(msg, { reliable: false });
+  }
+
+  onToolBroadcast(handler: (msg: ToolBroadcast) => void): () => void {
+    this.toolBroadcastHandlers.push(handler);
+    return () => {
+      this.toolBroadcastHandlers = this.toolBroadcastHandlers.filter(h => h !== handler);
+    };
+  }
+
+  private fireToolBroadcast(msg: ToolBroadcast): void {
+    for (const h of this.toolBroadcastHandlers) h(msg);
+  }
+
   // Peer-left hook — drops every hold owned by the leaving peer's seat.
   releasePeer(peerId: string): void {
     if (this.role !== 'host') return;
@@ -408,6 +439,14 @@ class WorldImpl implements World, HandleRouter {
       case 'guest-drag-start':
       case 'guest-drag-end':
         // Reserved by the wire schema but not produced today.
+        return;
+      case 'tool-broadcast':
+        // Notify local subscribers (host PingOverlay etc.), then relay to all
+        // connected peers via transport.send. The original sender filters
+        // its own peer id on inbound (handleInboundGuest) to avoid a
+        // double-render bouncing back through the relay.
+        this.fireToolBroadcast(msg);
+        this.transport.send(msg, { reliable: false });
         return;
       default:
         // entity-spawn / entity-patch / component-patches / despawn-batch are
@@ -486,6 +525,13 @@ class WorldImpl implements World, HandleRouter {
         if (!entity) return;
         entity.heldBy = null;
         this.notify();
+        return;
+      }
+
+      case 'tool-broadcast': {
+        // Filter own echo bouncing back through the host relay.
+        if (msg.peerId === this.identity.selfPeerId()) return;
+        this.fireToolBroadcast(msg);
         return;
       }
 
