@@ -4,6 +4,8 @@ import { ConnectionManager } from '../net/ConnectionManager';
 import { EditorPanel, type ObjectSummary } from '../components/EditorPanel';
 import { ContextMenu } from '../components/ContextMenu';
 import { PlayersPanel } from '../components/PlayersPanel';
+import { Toolbar } from '../components/Toolbar';
+import { TOOL_CATALOGUE } from '../input/tools';
 import { type ContextMenuRequest, dispatchMenuAction } from '../input/ContextMenuController';
 import { type Entity } from '../entity/Entity';
 import { type MenuItem } from '../entity/EntityComponent';
@@ -42,6 +44,7 @@ export function Room({ roomId, isHost }: Props) {
   const [tableProps,   setTableProps]   = useState<TableProps>(DEFAULT_TABLE_PROPS);
   const [roomSnapshot, setRoomSnapshot] = useState<RoomStateSnapshot | null>(null);
   const [selfPeerId,   setSelfPeerId]   = useState<string | null>(null);
+  const [activeToolId, setActiveToolId] = useState<string>(TOOL_CATALOGUE[0]?.id ?? 'grab');
 
   const sendRef            = useRef<(msg: ChannelMessage, opts?: { reliable?: boolean }) => void>(noop);
   const sendToRef          = useRef<(peerId: string, msg: ChannelMessage, opts?: { reliable?: boolean }) => void>(noop);
@@ -63,6 +66,7 @@ export function Room({ roomId, isHost }: Props) {
   const onSelectRef        = useRef<(id: string | null) => void>(noop);
   const setHighlightRef    = useRef<(id: string | null) => void>(noop);
   const getEntityRef       = useRef<(id: string) => Entity | undefined>(() => undefined);
+  const setActiveToolRef   = useRef<(toolId: string) => boolean>(() => false);
   const claimSeatRef       = useRef<(seatIndex: SeatIndex) => void>(noop);
   const kickPeerRef        = useRef<(peerId: string) => void>(noop);
   const banPeerRef         = useRef<(peerId: string) => void>(noop);
@@ -228,6 +232,11 @@ export function Room({ roomId, isHost }: Props) {
     freeCameraRef.current(on);
   };
 
+  const handleSelectTool = (toolId: string) => {
+    if (toolId === activeToolId) return;
+    if (setActiveToolRef.current(toolId)) setActiveToolId(toolId);
+  };
+
   const handleUpdateTableProp = (key: keyof TableProps, value: unknown) => {
     setTableProps(p => ({ ...p, [key]: value }));
     updateTablePropRef.current(key, value);
@@ -263,6 +272,7 @@ export function Room({ roomId, isHost }: Props) {
         onSelectRef={onSelectRef}
         setHighlightRef={setHighlightRef}
         getEntityRef={getEntityRef}
+        setActiveToolRef={setActiveToolRef}
       />
 
       <div className={`room__status room__status--${status}`}>
@@ -292,6 +302,8 @@ export function Room({ roomId, isHost }: Props) {
         onKick={(id) => kickPeerRef.current(id)}
         onBan={(id) => banPeerRef.current(id)}
       />
+
+      <Toolbar activeToolId={activeToolId} onSelectTool={handleSelectTool} />
 
       {isHost && status === 'connecting' && (
         <div className="room__share">
