@@ -1,6 +1,12 @@
 import * as CANNON from 'cannon-es';
 import { TABLE_SURFACE_Y, TABLE_WIDTH, TABLE_DEPTH, TABLE_THICKNESS, type TableShape } from '../scene/Table';
 
+// cannon-es has no CCD, so tunneling is bounded purely by step size.
+// 1/240s × FLICK_MAX_MAGNITUDE (30 m/s) = 0.125m max travel per step,
+// safely under the smallest collidable (token radius 0.5, height 0.15).
+const FIXED_STEP    = 1 / 240;
+const MAX_SUB_STEPS = 16;
+
 function buildTableShape(shape: TableShape): CANNON.Shape {
   if (shape === 'circle') {
     const radius = Math.min(TABLE_WIDTH, TABLE_DEPTH) / 2;
@@ -38,6 +44,6 @@ export class PhysicsWorld {
   }
 
   step(dt: number) {
-    this.world.step(1 / 60, dt, 3);
+    this.world.step(FIXED_STEP, dt, MAX_SUB_STEPS);
   }
 }

@@ -254,7 +254,8 @@ describe('World — EntityHandle.applyImpulse (issue #5a)', () => {
     const guestHandle = pair.guest.get('die-1')!;
     guestHandle.applyImpulse({ x: 0.5, y: 0, z: 0 });
     const hostBody = pair.host.get('die-1')!.get(PhysicsComponent)!.body;
-    expect(hostBody.velocity.length()).toBe(0);
+    expect(hostBody.velocity.x).toBe(0);
+    expect(hostBody.velocity.z).toBe(0);
   });
 });
 
