@@ -65,6 +65,12 @@ export interface EntityHandle {
   // Drop the hold. Host runs HoldService.release locally. Guest dispatches a
   // `hold-release` RPC. Velocity is the end-of-drag throw, optional.
   release(velocity?: { vx: number; vy: number; vz: number }): void;
+
+  // One-shot impulse on the entity's PhysicsComponent — issue #5a of
+  // issues--tools.md. Both paths gate on canManipulate + !isLocked. Host
+  // applies directly; guest dispatches `apply-impulse` RPC and the host
+  // validates again on receipt.
+  applyImpulse(v: { x: number; y: number; z: number }): void;
 }
 
 export interface World {

@@ -7,13 +7,17 @@ import * as THREE from 'three';
 import { type MoveGizmo } from '../../scene/MoveGizmo';
 import { GrabTool } from './GrabTool';
 import { PingTool } from './PingTool';
+import { FlickTool } from './FlickTool';
 import { AxisGizmoAttachment } from './AxisGizmoAttachment';
+import { FlickArrowAttachment } from './FlickArrowAttachment';
 import { type Tool } from './types';
 
 export { ToolDispatcher, type ToolDispatcherDeps } from './ToolDispatcher';
 export { GrabTool } from './GrabTool';
 export { PingTool } from './PingTool';
+export { FlickTool } from './FlickTool';
 export { AxisGizmoAttachment } from './AxisGizmoAttachment';
+export { FlickArrowAttachment } from './FlickArrowAttachment';
 export type { Tool, ToolContext, ToolPointerEvent, ToolAttachment } from './types';
 
 export interface ToolFactoryDeps {
@@ -46,5 +50,11 @@ export const TOOL_CATALOGUE: ToolFactory[] = [
     label:  'Ping',
     hotkey: '2',
     create: () => new PingTool(),
+  },
+  {
+    id:     'flick',
+    label:  'Flick',
+    hotkey: '3',
+    create: (deps) => new FlickTool(new FlickArrowAttachment(deps.scene)),
   },
 ];

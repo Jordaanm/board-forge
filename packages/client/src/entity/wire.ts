@@ -95,6 +95,17 @@ export interface RequestUpdate {
   partial:  Record<string, unknown>;
 }
 
+// Apply a one-shot impulse to an entity's physics body — issue #5a of
+// issues--tools.md. Reliable channel (single-shot, not coalesced). Host
+// validates `canManipulate` + `!isLocked` before applying.
+export interface ApplyImpulse {
+  type:     'apply-impulse';
+  entityId: string;
+  vx:       number;
+  vy:       number;
+  vz:       number;
+}
+
 // Cosmetic broadcast originated by a Tool (issue #3 of issues--tools.md).
 // Rides the unreliable channel — missed messages are not retried. Payload
 // schema is per-tool (e.g. ping carries `{ entityId }` or `{ point: [x,z] }`).
@@ -119,4 +130,5 @@ export type SceneMessage =
   | HoldClaim
   | HoldRelease
   | RequestUpdate
+  | ApplyImpulse
   | ToolBroadcast;

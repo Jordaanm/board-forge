@@ -22,6 +22,7 @@ export interface HandleRouter {
   setPosition(entity: Entity, x: number, y: number, z: number): void;
   tryHold(entity: Entity, seat: SeatIndex): boolean;
   release(entity: Entity, velocity?: { vx: number; vy: number; vz: number }): void;
+  applyImpulse(entity: Entity, v: { x: number; y: number; z: number }): void;
 }
 
 export class EntityHandleImpl implements EntityHandle {
@@ -71,5 +72,9 @@ export class EntityHandleImpl implements EntityHandle {
 
   release(velocity?: { vx: number; vy: number; vz: number }): void {
     this.router.release(this.entity, velocity);
+  }
+
+  applyImpulse(v: { x: number; y: number; z: number }): void {
+    this.router.applyImpulse(this.entity, v);
   }
 }

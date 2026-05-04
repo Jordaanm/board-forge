@@ -10,6 +10,7 @@ import {
   type HoldClaim,
   type HoldRelease,
   type RequestUpdate,
+  type ApplyImpulse,
   type ToolBroadcast,
   type SceneMessage,
 } from './wire';
@@ -104,6 +105,15 @@ describe('wire encode/decode round-trip', () => {
     expect(roundTrip(m)).toEqual(m);
   });
 
+  test('ApplyImpulse', () => {
+    const m: ApplyImpulse = {
+      type:     'apply-impulse',
+      entityId: 'e1',
+      vx:       1.5, vy: 0, vz: -0.5,
+    };
+    expect(roundTrip(m)).toEqual(m);
+  });
+
   test('ToolBroadcast — entity-anchored payload', () => {
     const m: ToolBroadcast = {
       type:    'tool-broadcast',
@@ -155,8 +165,9 @@ describe('wire encode/decode round-trip', () => {
       { type: 'hold-claim', entityId: 'e', seat: 0 },
       { type: 'hold-release', entityId: 'e' },
       { type: 'request-update', entityId: 'e', typeId: 't', partial: {} },
+      { type: 'apply-impulse',  entityId: 'e', vx: 0, vy: 0, vz: 0 },
       { type: 'tool-broadcast', toolId: 'ping', peerId: 'p', seat: null, payload: {} },
     ];
-    expect(messages).toHaveLength(10);
+    expect(messages).toHaveLength(11);
   });
 });

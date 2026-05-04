@@ -13,8 +13,9 @@ import { type SceneImpl } from './Scene';
 import { type SeatIndex } from '../seats/SeatLayout';
 import { canManipulate } from '../seats/OwnershipPolicy';
 import { type HoldService } from './HoldService';
-import { type HoldClaim, type HoldRelease, type InvokeAction, type RequestUpdate } from './wire';
+import { type HoldClaim, type HoldRelease, type InvokeAction, type RequestUpdate, type ApplyImpulse } from './wire';
 import { type ActionContext } from './EntityComponent';
+import { PhysicsComponent } from './components/PhysicsComponent';
 
 export class HostInputDispatcher {
   constructor(
@@ -66,6 +67,20 @@ export class HostInputDispatcher {
     if (!comp) return false;
     const ctx: ActionContext = { recipientSeat: senderSeat, isHost: false, entity };
     comp.onAction(msg.actionId, msg.args, ctx);
+    return true;
+  }
+
+  // Issue #5a of issues--tools.md — guest's FlickTool fires an impulse.
+  // Host re-validates `canManipulate` + `!isLocked` before applying.
+  handleApplyImpulse(peerId: string, msg: ApplyImpulse): boolean {
+    const entity = this.scene.getEntity(msg.entityId);
+    if (!entity) return false;
+    const senderSeat = this.getPeerSeat(peerId);
+    if (!canManipulate({ peerSeat: senderSeat, isHost: false }, entity.owner)) return false;
+    const phys = entity.getComponent(PhysicsComponent);
+    if (!phys) return false;
+    if (phys.state.isLocked) return false;
+    phys.applyImpulse({ x: msg.vx, y: msg.vy, z: msg.vz });
     return true;
   }
 }

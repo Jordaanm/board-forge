@@ -188,6 +188,76 @@ describe('World — locked entity gates tryHold / setPosition', () => {
   });
 });
 
+describe('World — EntityHandle.applyImpulse (issue #5a)', () => {
+  let pair: Pair | null = null;
+
+  afterEach(() => {
+    pair?.host.dispose();
+    pair?.guest.dispose();
+    pair = null;
+  });
+
+  test('host applyImpulse writes velocity onto the body', () => {
+    pair = setup();
+    pair.host.spawn('die', { id: 'die-1', position: [0, 5, 0] });
+    pair.host.tick(0.016);
+    const handle = pair.host.get('die-1')!;
+    handle.applyImpulse({ x: 0.5, y: 0, z: 0 });
+    expect(handle.get(PhysicsComponent)!.body.velocity.x).toBeGreaterThan(0);
+  });
+
+  test('host applyImpulse no-ops when entity is locked', () => {
+    pair = setup();
+    pair.host.spawn('die', { id: 'die-1', position: [0, 5, 0] });
+    pair.host.tick(0.016);
+    const handle = pair.host.get('die-1')!;
+    handle.get(PhysicsComponent)!.setState({ isLocked: true });
+    const before = handle.get(PhysicsComponent)!.body.velocity.length();
+    handle.applyImpulse({ x: 0.5, y: 0, z: 0 });
+    const after = handle.get(PhysicsComponent)!.body.velocity.length();
+    expect(after).toBe(before);
+  });
+
+  test('guest applyImpulse routes through host RPC', () => {
+    pair = setup();
+    pair.host.spawn('die', { id: 'die-1', position: [0, 5, 0] });
+    pair.host.tick(0.016);
+    const guestHandle = pair.guest.get('die-1')!;
+    guestHandle.applyImpulse({ x: 0.5, y: 0, z: 0 });
+    // Host writes synchronously inside HostInputDispatcher.handleApplyImpulse.
+    const hostBody = pair.host.get('die-1')!.get(PhysicsComponent)!.body;
+    expect(hostBody.velocity.x).toBeGreaterThan(0);
+  });
+
+  test('guest applyImpulse short-circuits client-side when locked (no RPC)', () => {
+    pair = setup();
+    pair.host.spawn('die', { id: 'die-1', position: [0, 5, 0] });
+    pair.host.tick(0.016);
+    pair.host.get('die-1')!.get(PhysicsComponent)!.setState({ isLocked: true });
+    pair.host.tick(0.016);
+
+    const guestHandle = pair.guest.get('die-1')!;
+    expect(guestHandle.get(PhysicsComponent)!.state.isLocked).toBe(true);
+    guestHandle.applyImpulse({ x: 5, y: 0, z: 0 });
+    pair.host.tick(0.016);
+    const hostBody = pair.host.get('die-1')!.get(PhysicsComponent)!.body;
+    expect(hostBody.velocity.length()).toBe(0);
+  });
+
+  test('guest applyImpulse refused when entity is owned by another seat', () => {
+    pair = setup();
+    pair.host.spawn('die', { id: 'die-1', position: [0, 5, 0] });
+    // Owner = host's seat (0). Guest is seat 1 → canManipulate denies.
+    pair.host.get('die-1')!.entity.owner = 0;
+    pair.host.tick(0.016);
+
+    const guestHandle = pair.guest.get('die-1')!;
+    guestHandle.applyImpulse({ x: 0.5, y: 0, z: 0 });
+    const hostBody = pair.host.get('die-1')!.get(PhysicsComponent)!.body;
+    expect(hostBody.velocity.length()).toBe(0);
+  });
+});
+
 describe('World — guest drag round-trip (issue #3)', () => {
   let pair: Pair | null = null;
 

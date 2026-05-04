@@ -382,6 +382,21 @@ class WorldImpl implements World, HandleRouter {
     this.transport.send(msg, { reliable: true });
   }
 
+  applyImpulse(entity: Entity, v: { x: number; y: number; z: number }): void {
+    if (!canManipulate({ peerSeat: this.identity.selfSeat(), isHost: this.role === 'host' }, entity.owner)) return;
+    const phys = entity.getComponent(PhysicsComponent);
+    if (phys?.state.isLocked) return;
+    if (this.role === 'host') {
+      phys?.applyImpulse(v);
+      return;
+    }
+    // Guest: dispatch RPC; host re-validates on receipt.
+    this.transport.send(
+      { type: 'apply-impulse', entityId: entity.id, vx: v.x, vy: v.y, vz: v.z },
+      { reliable: true },
+    );
+  }
+
   // ── Cosmetic tool broadcasts (issue #4 of issues--tools.md) ─────────────
   // Sender path: fire local subscribers immediately (so the sender sees its
   // own ping) and put the envelope on the unreliable channel. On the host,
@@ -435,6 +450,7 @@ class WorldImpl implements World, HandleRouter {
       case 'hold-release':     this.hostInput?.handleHoldRelease(peerId, msg);   return;
       case 'request-update':   this.hostInput?.handleRequestUpdate(peerId, msg); return;
       case 'invoke-action':    this.hostInput?.handleInvokeAction(peerId, msg);  return;
+      case 'apply-impulse':    this.hostInput?.handleApplyImpulse(peerId, msg);  return;
       case 'guest-drag-move':  this.guestInput?.handleMessage(peerId, msg);      return;
       case 'guest-drag-start':
       case 'guest-drag-end':
@@ -537,6 +553,7 @@ class WorldImpl implements World, HandleRouter {
 
       case 'invoke-action':
       case 'request-update':
+      case 'apply-impulse':
       case 'guest-drag-move':
       case 'guest-drag-start':
       case 'guest-drag-end':
