@@ -6,6 +6,8 @@ import { ContextMenu } from '../components/ContextMenu';
 import { PlayersPanel } from '../components/PlayersPanel';
 import { Toolbar } from '../components/Toolbar';
 import { HostActionBar } from '../components/HostActionBar';
+import { AnchorLayout } from '../components/AnchorLayout';
+import { UIPanel } from '../components/UIPanel';
 import { TOOL_CATALOGUE } from '../input/tools';
 import { type ContextMenuRequest, dispatchMenuAction } from '../input/ContextMenuController';
 import { type Entity } from '../entity/Entity';
@@ -331,7 +333,11 @@ export function Room({ roomId, isHost }: Props) {
         onBan={(id) => banPeerRef.current(id)}
       />
 
-      <Toolbar activeToolId={activeToolId} onSelectTool={handleSelectTool} />
+      <AnchorLayout>
+        <UIPanel anchor="bottom-left" order={10}>
+          <Toolbar activeToolId={activeToolId} onSelectTool={handleSelectTool} />
+        </UIPanel>
+      </AnchorLayout>
 
       {isHost && status === 'connecting' && (
         <div className="room__share">

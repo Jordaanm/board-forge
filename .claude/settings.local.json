@@ -32,7 +32,8 @@
       "Bash(powershell -Command ' *)",
       "Bash(echo \"exit=$?\")",
       "PowerShell(New-Item *)",
-      "Bash(bun add *)"
+      "Bash(bun add *)",
+      "Bash(npm install *)"
     ]
   }
 }
