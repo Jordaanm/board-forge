@@ -1,6 +1,6 @@
 import { useEffect, useRef, type MutableRefObject } from 'react';
 import * as THREE from 'three';
-import { createTable, applyTableProp, type TableProps } from './scene/Table';
+import { createTable, applyTableProp, DEFAULT_TABLE_PROPS, type TableProps } from './scene/Table';
 import { createSkydome, applySkydomeProp, type SkydomeProps } from './scene/Skydome';
 import { createKeyLight, applyKeyLightProp, type KeyLightProps } from './scene/KeyLight';
 import { createWorld } from './entity/world';
@@ -240,7 +240,10 @@ export function ThreeCanvas({
         world.forEach((h) => h.entity.getComponent(DiceComponent)?.roll());
       };
 
-      updateTablePropRef.current = (key, value) => applyTableProp(tableMesh, key, value);
+      updateTablePropRef.current = (key, value) => {
+        applyTableProp(tableMesh, key, value);
+        sendRef.current({ type: 'table-update', partial: { [key]: value } as Partial<TableProps> }, { reliable: true });
+      };
     }
 
     updateSkydomePropRef.current  = (key, value) => applySkydomeProp(skydomeMesh, key, value);
@@ -250,6 +253,12 @@ export function ThreeCanvas({
     // Cursor traffic stays here (not a SceneMessage). Everything else is
     // forwarded into worldTransport so World's inbound dispatch handles it.
     onMsgRef.current = (peerId, msg) => {
+      if (msg.type === 'table-update') {
+        for (const [k, v] of Object.entries(msg.partial)) {
+          applyTableProp(tableMesh, k as keyof TableProps, v);
+        }
+        return;
+      }
       if (msg.type === 'cursor-position') {
         if (isHost) {
           // Star topology: host relays each guest's cursor to all other peers.
@@ -274,6 +283,10 @@ export function ThreeCanvas({
 
     onPeerJoinedRef.current = (peerId) => {
       transport.firePeerJoin(peerId);
+      if (isHost) {
+        const props = (tableMesh.userData.tableProps ?? DEFAULT_TABLE_PROPS) as TableProps;
+        sendToRef.current(peerId, { type: 'table-update', partial: { ...props } }, { reliable: true });
+      }
     };
 
     // ── Animation loop ────────────────────────────────────────────────────

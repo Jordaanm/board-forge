@@ -6,8 +6,17 @@
 import type { RoomStateMessage } from '../seats/RoomState';
 import type { SceneMessage } from '../entity/wire';
 import type { SeatIndex } from '../seats/SeatLayout';
+import type { TableProps } from '../scene/Table';
 
 export type SpawnableType = 'board' | 'die' | 'token';
+
+// Table is a scene fixture (not an entity), so its props replicate through
+// this dedicated envelope rather than the entity/component wire. Sent by
+// the host on each prop change, and once on peer-join with the full state.
+export interface TableUpdate {
+  type:    'table-update';
+  partial: Partial<TableProps>;
+}
 
 export type GuestInputMessage =
   | { type: 'guest-drag-start'; objectId: string }
@@ -28,4 +37,4 @@ export interface CursorPosition {
   tool?:  string;
 }
 
-export type ChannelMessage = SceneMessage | GuestInputMessage | RoomStateMessage | CursorPosition;
+export type ChannelMessage = SceneMessage | GuestInputMessage | RoomStateMessage | CursorPosition | TableUpdate;
