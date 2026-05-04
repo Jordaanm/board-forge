@@ -11,7 +11,8 @@ import { ValueComponent } from './entity/components/ValueComponent';
 import { DiceComponent } from './entity/components/DiceComponent';
 import { MoveGizmo } from './scene/MoveGizmo';
 import { CameraController } from './camera/CameraController';
-import { DragController } from './input/DragController';
+import { ToolDispatcher, TOOL_CATALOGUE, type Tool } from './input/tools';
+import { GrabTool } from './input/tools/GrabTool';
 import { ContextMenuController, type ContextMenuRequest } from './input/ContextMenuController';
 import { type ChannelMessage, type SpawnableType } from './net/SceneState';
 import { type SeatIndex } from './seats/SeatLayout';
@@ -158,53 +159,60 @@ export function ThreeCanvas({
     worldRef = world;
 
     // ── Selection highlight ─────────────────────────────────────────────
+    // BoxHelper is tool-independent and renders directly from selection state.
+    // The MoveGizmo overlay is owned by GrabTool's AxisGizmoAttachment, which
+    // attaches/detaches as selection changes while the tool is active.
     let highlightHelper: THREE.BoxHelper | null = null;
     let highlightId:     string | null = null;
-    const moveGizmo = new MoveGizmo();
+    const moveGizmo     = new MoveGizmo();
 
-    const clearHighlight = () => {
+    const clearHighlightBox = () => {
       if (highlightHelper) {
         scene.remove(highlightHelper);
         highlightHelper.dispose();
         highlightHelper = null;
       }
-      if (moveGizmo.group.parent) scene.remove(moveGizmo.group);
-      moveGizmo.detach();
-    };
-
-    setHighlightRef.current = (id) => {
-      if (highlightId === id) return;
-      highlightId = id;
-      clearHighlight();
-      if (!id) return;
-      const handle = world.get(id);
-      const obj    = handle?.get(TransformComponent)?.object3d;
-      if (!obj) return;
-      highlightHelper = new THREE.BoxHelper(obj, 0xffd740);
-      (highlightHelper.material as THREE.LineBasicMaterial).linewidth = 2;
-      scene.add(highlightHelper);
-      moveGizmo.attach(obj);
-      scene.add(moveGizmo.group);
     };
 
     const selectCallback = (id: string | null) => onSelectRef.current(id);
 
+    // ── Input wiring ────────────────────────────────────────────────────
+    // ToolDispatcher owns pointer events and routes left-click to the active
+    // tool. Tool catalogue is a static array (issue 2a — only GrabTool today).
+    const tools: Tool[] = TOOL_CATALOGUE.map(f => f.create({
+      scene, moveGizmo, onSelect: selectCallback,
+    }));
+    const grabTool = tools.find(t => t.id === 'grab') as GrabTool;
+    const dispatcher = new ToolDispatcher({
+      world, scene, camera,
+      element: renderer.domElement,
+      getSelfSeat: () => getSelfSeatRef.current(),
+    });
+    dispatcher.setActiveTool(grabTool);
+
+    setHighlightRef.current = (id) => {
+      if (highlightId === id) return;
+      highlightId = id;
+      clearHighlightBox();
+      if (id) {
+        const obj = world.get(id)?.get(TransformComponent)?.object3d;
+        if (obj) {
+          highlightHelper = new THREE.BoxHelper(obj, 0xffd740);
+          (highlightHelper.material as THREE.LineBasicMaterial).linewidth = 2;
+          scene.add(highlightHelper);
+        }
+      }
+      grabTool.setSelection(id, dispatcher.getContext());
+    };
+
     const unsubscribe = world.subscribe(() => {
       if (highlightId && !world.get(highlightId)) {
         highlightId = null;
-        clearHighlight();
+        clearHighlightBox();
+        grabTool.setSelection(null, dispatcher.getContext());
       }
       onObjectsChangeRef.current(world.all().map(h => entityToObjectSummary(h.entity)));
     });
-
-    // ── Input wiring ────────────────────────────────────────────────────
-    // One DragController works for both roles — issue #3. EntityHandle's
-    // mutation verbs route to host body writes / HoldService directly on the
-    // host, and to RPCs + optimistic transform updates on the guest.
-    const dragCtrl = new DragController(
-      camera, renderer.domElement, world,
-      () => getSelfSeatRef.current(), moveGizmo, selectCallback,
-    );
 
     const contextCtrl = new ContextMenuController(
       renderer.domElement, camera, isHost, world,
@@ -268,7 +276,7 @@ export function ThreeCanvas({
       lastTime  = now;
 
       world.tick(dt);
-      dragCtrl.update();
+      dispatcher.update(dt);
 
       // ── Cursor: throttled send + render sync ───────────────────────────
       const cursorNow = performance.now();
@@ -289,7 +297,6 @@ export function ThreeCanvas({
       cursorOverlay.sync(cursorTracker.all());
 
       if (highlightHelper) highlightHelper.update();
-      moveGizmo.update();
 
       renderer.render(scene, camera);
     };
@@ -310,10 +317,10 @@ export function ThreeCanvas({
       cursorOverlay.dispose();
       cursorTracker.clear();
       unsubscribe();
-      clearHighlight();
+      clearHighlightBox();
+      dispatcher.dispose();
       moveGizmo.dispose();
       camController.dispose();
-      dragCtrl.dispose();
       contextCtrl.dispose();
       world.dispose();
       onMsgRef.current        = () => {};

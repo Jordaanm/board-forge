@@ -1,0 +1,42 @@
+// Tool catalogue — issue 2a of issues--tools.md.
+//
+// Static array seed for v1. A runtime ToolRegistry will be promoted from this
+// once scripting needs to author tools (see PRD § Out of Scope).
+
+import * as THREE from 'three';
+import { type MoveGizmo } from '../../scene/MoveGizmo';
+import { GrabTool } from './GrabTool';
+import { AxisGizmoAttachment } from './AxisGizmoAttachment';
+import { type Tool } from './types';
+
+export { ToolDispatcher, type ToolDispatcherDeps } from './ToolDispatcher';
+export { GrabTool } from './GrabTool';
+export { AxisGizmoAttachment } from './AxisGizmoAttachment';
+export type { Tool, ToolContext, ToolPointerEvent, ToolAttachment } from './types';
+
+export interface ToolFactoryDeps {
+  scene:     THREE.Scene;
+  moveGizmo: MoveGizmo;
+  onSelect:  (id: string | null) => void;
+}
+
+export interface ToolFactory {
+  readonly id:      string;
+  readonly label:   string;
+  readonly hotkey?: string;
+  create(deps: ToolFactoryDeps): Tool;
+}
+
+// Tool catalogue. Slot order maps to numeric hotkeys (#2b).
+export const TOOL_CATALOGUE: ToolFactory[] = [
+  {
+    id:     'grab',
+    label:  'Grab',
+    hotkey: '1',
+    create: (deps) => new GrabTool(
+      deps.moveGizmo,
+      new AxisGizmoAttachment(deps.scene, deps.moveGizmo),
+      deps.onSelect,
+    ),
+  },
+];
