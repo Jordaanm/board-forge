@@ -31,11 +31,13 @@ export class HoldService {
     private readonly scene:      SceneImpl,
   ) {}
 
-  // First-claimer-wins. Returns false if the entity is already held — the
-  // host drops the claim silently and the guest's optimistic drag UI times
-  // out / unwinds locally.
+  // First-claimer-wins. Returns false if the entity is already held or its
+  // PhysicsComponent is locked — the host drops the claim silently and the
+  // guest's optimistic drag UI times out / unwinds locally.
   tryClaim(entity: Entity, seat: SeatIndex): boolean {
     if (entity.heldBy !== null) return false;
+    const phys = entity.getComponent(PhysicsComponent);
+    if (phys?.state.isLocked) return false;
     entity.heldBy = seat;
 
     const body = entity.getComponent(PhysicsComponent)?.body;

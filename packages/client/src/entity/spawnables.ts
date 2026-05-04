@@ -30,7 +30,7 @@ export function registerCorePrimitives(): void {
     components: [
       { typeId: 'transform', state: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } },
       { typeId: 'mesh',      state: { meshRef: 'prim:cube', textureRefs: { default: '' }, tint: '#2d5a27', size: [4, 0.05, 3] } },
-      { typeId: 'physics',   state: { mass: 0.5, friction: 0.5, restitution: 0.3 } },
+      { typeId: 'physics',   state: { mass: 0.5, friction: 0.5, restitution: 0.3, isLocked: true } },
     ],
   });
 
@@ -41,7 +41,7 @@ export function registerCorePrimitives(): void {
     components: [
       { typeId: 'transform', state: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } },
       { typeId: 'mesh',      state: { meshRef: 'prim:d6', textureRefs: { default: '' }, tint: '#fafafa', size: 0.7 } },
-      { typeId: 'physics',   state: { mass: 0.2, friction: 0.5, restitution: 0.5 } },
+      { typeId: 'physics',   state: { mass: 0.2, friction: 0.5, restitution: 0.5, isLocked: false } },
       { typeId: 'value',     state: { value: '6', isNumeric: true } },
       { typeId: 'dice',      state: { maxValue: 6, faceMap: D6_FACE_MAP } },
     ],
@@ -54,7 +54,7 @@ export function registerCorePrimitives(): void {
     components: [
       { typeId: 'transform', state: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } },
       { typeId: 'mesh',      state: { meshRef: 'prim:meeple', textureRefs: { default: '' }, tint: '#2266cc', size: [0.5, 0.75, 0.5] } },
-      { typeId: 'physics',   state: { mass: 0.1, friction: 0.5, restitution: 0.3 } },
+      { typeId: 'physics',   state: { mass: 0.1, friction: 0.5, restitution: 0.3, isLocked: false } },
     ],
   });
 
@@ -66,7 +66,7 @@ export function registerCorePrimitives(): void {
       { typeId: 'value',     state: { value: '', isNumeric: false } },
       { typeId: 'transform', state: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } },
       { typeId: 'mesh',      state: { meshRef: 'prim:card', textureRefs: { face: '', back: '' }, tint: '#fafafa', size: [0.63, 0.01, 0.88] } },
-      { typeId: 'physics',   state: { mass: 0.05, friction: 0.6, restitution: 0.1 } },
+      { typeId: 'physics',   state: { mass: 0.05, friction: 0.6, restitution: 0.1, isLocked: false } },
       { typeId: 'flatview',  state: { textureRef: '' } },
       { typeId: 'card',      state: { face: '', back: '', category: '' } },
     ],

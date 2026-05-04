@@ -29,7 +29,8 @@
       "Bash(bun run *)",
       "Bash(pnpm --filter @virtual-table/client tsc --noEmit)",
       "Bash('$_.Name')",
-      "Bash(powershell -Command ' *)"
+      "Bash(powershell -Command ' *)",
+      "Bash(echo \"exit=$?\")"
     ]
   }
 }

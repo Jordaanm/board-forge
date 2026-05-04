@@ -131,7 +131,7 @@ export class DragController {
     if (axisName) {
       const target = this.gizmo.getTarget();
       const handle = target ? this.world.pickByObject3D(target) : undefined;
-      if (handle && handle.entity.type !== 'board') {
+      if (handle) {
         if (!handle.canStartDrag()) return;
         const seat = this.getSelfSeat();
         if (seat === null) return;

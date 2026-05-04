@@ -332,8 +332,9 @@ class WorldImpl implements World, HandleRouter {
   }
 
   setPosition(entity: Entity, x: number, y: number, z: number): void {
+    const phys = entity.getComponent(PhysicsComponent);
+    if (phys?.state.isLocked) return;
     if (this.role === 'host') {
-      const phys = entity.getComponent(PhysicsComponent);
       if (phys?.body) {
         phys.body.position.set(x, y, z);
         return;
@@ -355,6 +356,7 @@ class WorldImpl implements World, HandleRouter {
 
   tryHold(entity: Entity, seat: SeatIndex): boolean {
     if (entity.heldBy !== null) return false;
+    if (entity.getComponent(PhysicsComponent)?.state.isLocked) return false;
     if (!canManipulate({ peerSeat: seat, isHost: this.role === 'host' }, entity.owner)) return false;
 
     if (this.role === 'host') {

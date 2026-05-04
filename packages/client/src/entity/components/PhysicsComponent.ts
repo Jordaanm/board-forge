@@ -5,7 +5,15 @@
 // back into the TransformComponent's state.
 
 import * as CANNON from 'cannon-es';
-import { EntityComponent, type SpawnContext, type CollisionEvent, type EntityScene } from '../EntityComponent';
+import {
+  EntityComponent,
+  type SpawnContext,
+  type CollisionEvent,
+  type EntityScene,
+  type MenuContext,
+  type MenuItem,
+  type ActionContext,
+} from '../EntityComponent';
 import { type Entity } from '../Entity';
 import { TransformComponent } from './TransformComponent';
 import { MeshComponent } from './MeshComponent';
@@ -14,6 +22,7 @@ export interface PhysicsState {
   mass:        number;
   friction:    number;
   restitution: number;
+  isLocked:    boolean;
 }
 
 export interface Vec3Like { x: number; y: number; z: number }
@@ -31,6 +40,8 @@ export class PhysicsComponent extends EntityComponent<PhysicsState> {
   private stopMovingHandlers:  Array<() => void> = [];
   private collideHandler: ((e: { body: CANNON.Body; contact?: unknown }) => void) | null = null;
   private entityScene: EntityScene | null = null;
+  // Saved on first lock, restored on unlock. Null while unlocked.
+  private priorMass: number | null = null;
 
   onSpawn(ctx: SpawnContext): void {
     const transform = this.entity.getComponent(TransformComponent)!;
@@ -47,6 +58,8 @@ export class PhysicsComponent extends EntityComponent<PhysicsState> {
     this.body.addEventListener('collide', this.collideHandler);
 
     if (ctx.physics) ctx.physics.addBody(this.body);
+
+    if (this.state.isLocked) this.applyLockChange(true);
   }
 
   onDespawn(ctx: SpawnContext): void {
@@ -59,9 +72,34 @@ export class PhysicsComponent extends EntityComponent<PhysicsState> {
 
   onPropertiesChanged(changed: Partial<PhysicsState>): void {
     if (!this.body) return;
-    if (changed.mass        !== undefined) { this.body.mass        = changed.mass; this.body.updateMassProperties(); }
+    // Mass first so a paired isLocked change captures or restores the new value.
+    if (changed.mass !== undefined) {
+      if (this.priorMass !== null) {
+        this.priorMass = changed.mass;
+      } else {
+        this.body.mass = changed.mass;
+        this.body.updateMassProperties();
+      }
+    }
     if (changed.friction    !== undefined && this.body.material)    this.body.material.friction    = changed.friction;
     if (changed.restitution !== undefined && this.body.material)    this.body.material.restitution = changed.restitution;
+    if (changed.isLocked    !== undefined) this.applyLockChange(changed.isLocked);
+  }
+
+  private applyLockChange(locked: boolean): void {
+    if (!this.body) return;
+    if (locked && this.priorMass === null) {
+      this.priorMass = this.body.mass;
+      this.body.mass = 0;
+      this.body.updateMassProperties();
+      this.body.velocity.setZero();
+      this.body.angularVelocity.setZero();
+    } else if (!locked && this.priorMass !== null) {
+      this.body.mass = this.priorMass;
+      this.priorMass = null;
+      this.body.updateMassProperties();
+      this.body.wakeUp();
+    }
   }
 
   // ── Per-tick host loop ──────────────────────────────────────────────────
@@ -102,12 +140,31 @@ export class PhysicsComponent extends EntityComponent<PhysicsState> {
   }
 
   applyImpulse(i: Vec3Like): void {
+    if (this.state.isLocked) return;
     this.body.applyImpulse(new CANNON.Vec3(i.x, i.y, i.z));
     this.body.wakeUp();
   }
 
   isAtRest(): boolean {
     return this.body.velocity.length() + this.body.angularVelocity.length() < REST_VEL_THRESHOLD;
+  }
+
+  // ── Context menu ───────────────────────────────────────────────────────
+  // Lock toggle. Authority is enforced by dispatchMenuAction (host) and
+  // HostInputDispatcher.handleInvokeAction (guest RPC) — both gate on
+  // canManipulate, so the action body can flip state unconditionally.
+  onContextMenu(_ctx: MenuContext): MenuItem[] {
+    return [{
+      kind:  'action',
+      id:    'toggle-lock',
+      label: this.state.isLocked ? 'Unlock movement' : 'Lock movement',
+    }];
+  }
+
+  onAction(actionId: string, _args: object | undefined, _ctx: ActionContext): void {
+    if (actionId === 'toggle-lock') {
+      this.setState({ isLocked: !this.state.isLocked } as Partial<PhysicsState>);
+    }
   }
 
   // ── Events ──────────────────────────────────────────────────────────────

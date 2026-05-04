@@ -122,6 +122,72 @@ describe('World — host→guest round-trip', () => {
   });
 });
 
+describe('World — locked entity gates tryHold / setPosition', () => {
+  let pair: Pair | null = null;
+
+  afterEach(() => {
+    pair?.host.dispose();
+    pair?.guest.dispose();
+    pair = null;
+  });
+
+  test('host tryHold short-circuits on locked entity', () => {
+    pair = setup();
+    pair.host.spawn('die', { id: 'die-1', position: [0, 5, 0] });
+    pair.host.tick(0.016);
+    const hostHandle = pair.host.get('die-1')!;
+    hostHandle.get(PhysicsComponent)!.setState({ isLocked: true });
+    expect(hostHandle.tryHold(HOST_SEAT)).toBe(false);
+    expect(hostHandle.heldBy()).toBeNull();
+  });
+
+  test('guest tryHold short-circuits client-side on locked entity (no RPC sent)', () => {
+    pair = setup();
+    pair.host.spawn('die', { id: 'die-1', position: [0, 5, 0] });
+    pair.host.tick(0.016);  // replicate the spawn first
+    pair.host.get('die-1')!.get(PhysicsComponent)!.setState({ isLocked: true });
+    pair.host.tick(0.016);  // replicate the lock patch
+
+    const guestHandle = pair.guest.get('die-1')!;
+    expect(guestHandle.get(PhysicsComponent)!.state.isLocked).toBe(true);
+    expect(guestHandle.tryHold(GUEST_SEAT)).toBe(false);
+
+    pair.host.tick(0.016);
+    expect(pair.host.get('die-1')!.heldBy()).toBeNull();
+  });
+
+  test('host setPosition no-ops on locked entity', () => {
+    pair = setup();
+    pair.host.spawn('die', { id: 'die-1', position: [0, 5, 0] });
+    pair.host.tick(0.016);
+    const hostHandle = pair.host.get('die-1')!;
+    hostHandle.get(PhysicsComponent)!.setState({ isLocked: true });
+
+    const beforeX = hostHandle.get(PhysicsComponent)!.body.position.x;
+    hostHandle.setPosition(7, 7, 7);
+    const afterX = hostHandle.get(PhysicsComponent)!.body.position.x;
+    expect(afterX).toBe(beforeX);
+  });
+
+  test('guest setPosition no-ops on locked entity (no optimistic update, no RPC)', () => {
+    pair = setup();
+    pair.host.spawn('die', { id: 'die-1', position: [0, 5, 0] });
+    pair.host.tick(0.016);  // replicate spawn first
+    pair.host.get('die-1')!.get(PhysicsComponent)!.setState({ isLocked: true });
+    pair.host.tick(0.016);  // replicate lock patch
+
+    const guestHandle = pair.guest.get('die-1')!;
+    const beforeT = guestHandle.get(TransformComponent)!.state.position.slice();
+    guestHandle.setPosition(7, 7, 7);
+    const afterT = guestHandle.get(TransformComponent)!.state.position;
+    expect(afterT).toEqual(beforeT);
+
+    pair.host.tick(0.016);
+    const hostBody = pair.host.get('die-1')!.get(PhysicsComponent)!.body;
+    expect(hostBody.position.x).not.toBeCloseTo(7, 5);
+  });
+});
+
 describe('World — guest drag round-trip (issue #3)', () => {
   let pair: Pair | null = null;
 
