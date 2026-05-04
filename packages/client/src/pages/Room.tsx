@@ -12,6 +12,8 @@ import { type MenuItem } from '../entity/EntityComponent';
 import { type ChannelMessage, type SpawnableType } from '../net/SceneState';
 import { type SeatIndex } from '../seats/SeatLayout';
 import { DEFAULT_TABLE_PROPS, type TableProps } from '../scene/Table';
+import { DEFAULT_SKYDOME_PROPS, type SkydomeProps } from '../scene/Skydome';
+import { DEFAULT_KEY_LIGHT_PROPS, type KeyLightProps } from '../scene/KeyLight';
 import { RoomStateManager } from '../seats/RoomStateManager';
 import { RoomStateClient } from '../seats/RoomStateClient';
 import type { RoomStateMessage, RoomStateSnapshot } from '../seats/RoomState';
@@ -42,6 +44,8 @@ export function Room({ roomId, isHost }: Props) {
   const [selectedId,   setSelectedId]   = useState<string | null>(null);
   const [isFreeCamera, setIsFreeCamera] = useState(false);
   const [tableProps,   setTableProps]   = useState<TableProps>(DEFAULT_TABLE_PROPS);
+  const [skydomeProps, setSkydomeProps] = useState<SkydomeProps>(DEFAULT_SKYDOME_PROPS);
+  const [keyLightProps, setKeyLightProps] = useState<KeyLightProps>(DEFAULT_KEY_LIGHT_PROPS);
   const [roomSnapshot, setRoomSnapshot] = useState<RoomStateSnapshot | null>(null);
   const [selfPeerId,   setSelfPeerId]   = useState<string | null>(null);
   const [activeToolId, setActiveToolId] = useState<string>(TOOL_CATALOGUE[0]?.id ?? 'grab');
@@ -60,7 +64,9 @@ export function Room({ roomId, isHost }: Props) {
   const onContextMenuRef   = useRef<(req: ContextMenuRequest) => void>(noop);
   const deleteObjectRef    = useRef<(id: string) => void>(noop);
   const updatePropRef      = useRef<(id: string, key: string, value: unknown) => void>(noop);
-  const updateTablePropRef = useRef<(key: keyof TableProps, value: unknown) => void>(noop);
+  const updateTablePropRef    = useRef<(key: keyof TableProps, value: unknown) => void>(noop);
+  const updateSkydomePropRef  = useRef<(key: keyof SkydomeProps, value: unknown) => void>(noop);
+  const updateKeyLightPropRef = useRef<(key: keyof KeyLightProps, value: unknown) => void>(noop);
   const freeCameraRef      = useRef<(on: boolean) => void>(noop);
   const onObjectsChangeRef = useRef<(objs: ObjectSummary[]) => void>(noop);
   const onSelectRef        = useRef<(id: string | null) => void>(noop);
@@ -244,6 +250,16 @@ export function Room({ roomId, isHost }: Props) {
     updateTablePropRef.current(key, value);
   };
 
+  const handleUpdateSkydomeProp = (key: keyof SkydomeProps, value: unknown) => {
+    setSkydomeProps(p => ({ ...p, [key]: value as SkydomeProps[typeof key] }));
+    updateSkydomePropRef.current(key, value);
+  };
+
+  const handleUpdateKeyLightProp = (key: keyof KeyLightProps, value: unknown) => {
+    setKeyLightProps(p => ({ ...p, [key]: value as KeyLightProps[typeof key] }));
+    updateKeyLightPropRef.current(key, value);
+  };
+
   const shareUrl = (() => {
     const u = new URL(window.location.href);
     u.searchParams.delete('host');
@@ -269,6 +285,8 @@ export function Room({ roomId, isHost }: Props) {
         deleteObjectRef={deleteObjectRef}
         updatePropRef={updatePropRef}
         updateTablePropRef={updateTablePropRef}
+        updateSkydomePropRef={updateSkydomePropRef}
+        updateKeyLightPropRef={updateKeyLightPropRef}
         freeCameraRef={freeCameraRef}
         onObjectsChangeRef={onObjectsChangeRef}
         onSelectRef={onSelectRef}
@@ -288,11 +306,15 @@ export function Room({ roomId, isHost }: Props) {
           selectedId={selectedId}
           isFreeCamera={isFreeCamera}
           tableProps={tableProps}
+          skydomeProps={skydomeProps}
+          keyLightProps={keyLightProps}
           onSelect={setSelectedId}
           onSpawn={(t) => spawnRef.current(t)}
           onRollDice={() => rollRef.current()}
           onUpdateProp={(id, key, value) => updatePropRef.current(id, key, value)}
           onUpdateTableProp={handleUpdateTableProp}
+          onUpdateSkydomeProp={handleUpdateSkydomeProp}
+          onUpdateKeyLightProp={handleUpdateKeyLightProp}
           onToggleFreeCamera={handleToggleFreeCamera}
         />
       )}

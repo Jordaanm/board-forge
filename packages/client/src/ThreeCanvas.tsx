@@ -1,6 +1,8 @@
 import { useEffect, useRef, type MutableRefObject } from 'react';
 import * as THREE from 'three';
 import { createTable, applyTableProp, type TableProps } from './scene/Table';
+import { createSkydome, applySkydomeProp, type SkydomeProps } from './scene/Skydome';
+import { createKeyLight, applyKeyLightProp, type KeyLightProps } from './scene/KeyLight';
 import { createWorld } from './entity/world';
 import { type World, type WorldInboundMessage } from './entity/world';
 import { RtcTransport } from './entity/world';
@@ -44,7 +46,9 @@ interface Props {
   onContextMenuRef:    MutableRefObject<(req: ContextMenuRequest) => void>;
   deleteObjectRef:     MutableRefObject<(id: string) => void>;
   updatePropRef:       MutableRefObject<(id: string, key: string, value: unknown) => void>;
-  updateTablePropRef:  MutableRefObject<(key: keyof TableProps, value: unknown) => void>;
+  updateTablePropRef:    MutableRefObject<(key: keyof TableProps, value: unknown) => void>;
+  updateSkydomePropRef:  MutableRefObject<(key: keyof SkydomeProps, value: unknown) => void>;
+  updateKeyLightPropRef: MutableRefObject<(key: keyof KeyLightProps, value: unknown) => void>;
   freeCameraRef:       MutableRefObject<(on: boolean) => void>;
   onObjectsChangeRef:  MutableRefObject<(objects: ObjectSummary[]) => void>;
   onSelectRef:         MutableRefObject<(id: string | null) => void>;
@@ -58,7 +62,8 @@ export function ThreeCanvas({
   isHost, sendRef, sendToRef, getTargetsRef, getSelfSeatRef, getSelfPeerIdRef, getPeerSeatRef,
   onMsgRef, onPeerLeftRef, onPeerJoinedRef,
   spawnRef, rollRef, onContextMenuRef, deleteObjectRef,
-  updatePropRef, updateTablePropRef, freeCameraRef, onObjectsChangeRef,
+  updatePropRef, updateTablePropRef, updateSkydomePropRef, updateKeyLightPropRef,
+  freeCameraRef, onObjectsChangeRef,
   onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -85,20 +90,11 @@ export function ThreeCanvas({
     const hemiLight = new THREE.HemisphereLight(0xbfd9ff, 0x3a2e24, 0.55);
     scene.add(hemiLight);
 
-    const keyLight = new THREE.DirectionalLight(0xfff1dc, 1.1);
-    keyLight.position.set(6, 14, 4);
-    keyLight.castShadow = true;
-    keyLight.shadow.mapSize.set(2048, 2048);
-    keyLight.shadow.camera.near   =  0.5;
-    keyLight.shadow.camera.far    = 40;
-    keyLight.shadow.camera.left   = -10;
-    keyLight.shadow.camera.right  =  10;
-    keyLight.shadow.camera.top    =  8;
-    keyLight.shadow.camera.bottom = -8;
-    keyLight.shadow.bias       = -0.0005;
-    keyLight.shadow.normalBias =  0.02;
-    keyLight.shadow.radius     =  4;
+    const keyLight = createKeyLight();
     scene.add(keyLight);
+
+    const skydomeMesh = createSkydome();
+    scene.add(skydomeMesh);
 
     const rimLight = new THREE.DirectionalLight(0x9cc9ff, 0.35);
     rimLight.position.set(-6, 6, -4);
@@ -247,6 +243,9 @@ export function ThreeCanvas({
       updateTablePropRef.current = (key, value) => applyTableProp(tableMesh, key, value);
     }
 
+    updateSkydomePropRef.current  = (key, value) => applySkydomeProp(skydomeMesh, key, value);
+    updateKeyLightPropRef.current = (key, value) => applyKeyLightProp(keyLight, key, value);
+
     // ── Inbound message router ──────────────────────────────────────────
     // Cursor traffic stays here (not a SceneMessage). Everything else is
     // forwarded into worldTransport so World's inbound dispatch handles it.
@@ -348,7 +347,9 @@ export function ThreeCanvas({
       rollRef.current         = () => {};
       deleteObjectRef.current = () => {};
       updatePropRef.current      = () => {};
-      updateTablePropRef.current = () => {};
+      updateTablePropRef.current    = () => {};
+      updateSkydomePropRef.current  = () => {};
+      updateKeyLightPropRef.current = () => {};
       freeCameraRef.current      = () => {};
       setHighlightRef.current    = () => {};
       getEntityRef.current       = () => undefined;
@@ -361,7 +362,8 @@ export function ThreeCanvas({
     isHost, sendRef, sendToRef, getTargetsRef, getSelfSeatRef, getSelfPeerIdRef, getPeerSeatRef,
     onMsgRef, onPeerLeftRef, onPeerJoinedRef,
     spawnRef, rollRef, onContextMenuRef, deleteObjectRef,
-    updatePropRef, updateTablePropRef, freeCameraRef, onObjectsChangeRef,
+    updatePropRef, updateTablePropRef, updateSkydomePropRef, updateKeyLightPropRef,
+    freeCameraRef, onObjectsChangeRef,
     onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,
   ]);
 

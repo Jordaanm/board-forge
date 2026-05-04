@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { type SpawnableType } from '../net/SceneState';
 import { OBJECT_META, type PropertyDef } from '../scene/objectMeta';
 import { type TableProps } from '../scene/Table';
+import { type SkydomeProps } from '../scene/Skydome';
+import { type KeyLightProps } from '../scene/KeyLight';
 
 export interface ObjectSummary {
   id: string;
@@ -11,16 +13,20 @@ export interface ObjectSummary {
 }
 
 interface Props {
-  objects:            ObjectSummary[];
-  selectedId:         string | null;
-  isFreeCamera:       boolean;
-  tableProps:         TableProps;
-  onSelect:           (id: string | null) => void;
-  onSpawn:            (type: SpawnableType) => void;
-  onRollDice:         () => void;
-  onUpdateProp:       (id: string, key: string, value: unknown) => void;
-  onUpdateTableProp:  (key: keyof TableProps, value: unknown) => void;
-  onToggleFreeCamera: (on: boolean) => void;
+  objects:              ObjectSummary[];
+  selectedId:           string | null;
+  isFreeCamera:         boolean;
+  tableProps:           TableProps;
+  skydomeProps:         SkydomeProps;
+  keyLightProps:        KeyLightProps;
+  onSelect:             (id: string | null) => void;
+  onSpawn:              (type: SpawnableType) => void;
+  onRollDice:           () => void;
+  onUpdateProp:         (id: string, key: string, value: unknown) => void;
+  onUpdateTableProp:    (key: keyof TableProps, value: unknown) => void;
+  onUpdateSkydomeProp:  (key: keyof SkydomeProps, value: unknown) => void;
+  onUpdateKeyLightProp: (key: keyof KeyLightProps, value: unknown) => void;
+  onToggleFreeCamera:   (on: boolean) => void;
 }
 
 const SPAWN_TYPES: SpawnableType[] = ['board', 'die', 'token'];
@@ -116,8 +122,9 @@ const CHIP_X: React.CSSProperties = {
 };
 
 export function EditorPanel({
-  objects, selectedId, isFreeCamera, tableProps,
-  onSelect, onSpawn, onRollDice, onUpdateProp, onUpdateTableProp, onToggleFreeCamera,
+  objects, selectedId, isFreeCamera, tableProps, skydomeProps, keyLightProps,
+  onSelect, onSpawn, onRollDice, onUpdateProp,
+  onUpdateTableProp, onUpdateSkydomeProp, onUpdateKeyLightProp, onToggleFreeCamera,
 }: Props) {
   const [open, setOpen]           = useState(true);
   const [collapsed, setCollapsed] = useState(false);
@@ -153,6 +160,8 @@ export function EditorPanel({
           <SceneGraphList objects={objects} selectedId={selectedId} onSelect={onSelect} />
           <PropertyEditor selected={selected} onUpdateProp={onUpdateProp} />
           <TableSection tableProps={tableProps} onUpdateTableProp={onUpdateTableProp} />
+          <SkydomeSection skydomeProps={skydomeProps} onUpdateSkydomeProp={onUpdateSkydomeProp} />
+          <KeyLightSection keyLightProps={keyLightProps} onUpdateKeyLightProp={onUpdateKeyLightProp} />
           <SpawnSection onSpawn={onSpawn} onRollDice={onRollDice} />
           <CameraSection isFreeCamera={isFreeCamera} onToggleFreeCamera={onToggleFreeCamera} />
         </>
@@ -185,6 +194,59 @@ function TableSection({
           style={{ ...INPUT, padding: 2, height: 28 }}
           value={tableProps.color}
           onChange={e => onUpdateTableProp('color', e.target.value)}
+        />
+      </div>
+    </div>
+  );
+}
+
+function SkydomeSection({
+  skydomeProps, onUpdateSkydomeProp,
+}: { skydomeProps: SkydomeProps; onUpdateSkydomeProp: (key: keyof SkydomeProps, value: unknown) => void }) {
+  return (
+    <div style={SECTION}>
+      <div style={SECTION_LABEL}>Skydome</div>
+      <div>
+        <label style={{ display: 'block', color: '#aaa', fontSize: 11, marginBottom: 3 }}>Image URL</label>
+        <input
+          type="text"
+          style={INPUT}
+          placeholder="https://… (equirectangular)"
+          value={skydomeProps.textureUrl}
+          onChange={e => onUpdateSkydomeProp('textureUrl', e.target.value)}
+        />
+      </div>
+    </div>
+  );
+}
+
+function KeyLightSection({
+  keyLightProps, onUpdateKeyLightProp,
+}: { keyLightProps: KeyLightProps; onUpdateKeyLightProp: (key: keyof KeyLightProps, value: unknown) => void }) {
+  return (
+    <div style={SECTION}>
+      <div style={SECTION_LABEL}>Key Light</div>
+      <div style={{ marginBottom: 8 }}>
+        <label style={{ display: 'block', color: '#aaa', fontSize: 11, marginBottom: 3 }}>Color</label>
+        <input
+          type="color"
+          style={{ ...INPUT, padding: 2, height: 28 }}
+          value={keyLightProps.color}
+          onChange={e => onUpdateKeyLightProp('color', e.target.value)}
+        />
+      </div>
+      <div>
+        <label style={{ display: 'block', color: '#aaa', fontSize: 11, marginBottom: 3 }}>
+          Intensity ({keyLightProps.intensity.toFixed(2)})
+        </label>
+        <input
+          type="range"
+          min={0}
+          max={5}
+          step={0.05}
+          style={{ ...INPUT, padding: 0, height: 24 }}
+          value={keyLightProps.intensity}
+          onChange={e => onUpdateKeyLightProp('intensity', parseFloat(e.target.value))}
         />
       </div>
     </div>
