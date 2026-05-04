@@ -9,13 +9,8 @@ interface Props {
 }
 
 const BAR: React.CSSProperties = {
-  position:  'absolute',
-  top:       50,
-  left:      '50%',
-  transform: 'translateX(-50%)',
-  display:   'flex',
-  gap:       8,
-  zIndex:    150,
+  display: 'flex',
+  gap:     8,
 };
 
 export function HostActionBar({ onSpawn }: Props) {

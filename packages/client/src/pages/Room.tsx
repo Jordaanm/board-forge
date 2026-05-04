@@ -299,15 +299,19 @@ export function Room({ roomId, isHost }: Props) {
         getActiveToolRef={getActiveToolRef}
       />
 
-      <div className={`room__status room__status--${status}`}>
-        {STATUS_LABEL[status]}
-      </div>
-
-      {isHost && (
-        <HostActionBar onSpawn={(t) => spawnRef.current(t)} />
-      )}
-
       <AnchorLayout>
+        <UIPanel anchor="top-center" order={0}>
+          <div className={`room__status room__status--${status}`}>
+            {STATUS_LABEL[status]}
+          </div>
+        </UIPanel>
+
+        {isHost && (
+          <UIPanel anchor="top-center" order={10}>
+            <HostActionBar onSpawn={(t) => spawnRef.current(t)} />
+          </UIPanel>
+        )}
+
         {isHost && (
           <UIPanel anchor="top-left" order={10}>
             <EditorPanel
