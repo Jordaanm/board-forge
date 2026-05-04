@@ -95,6 +95,19 @@ export interface RequestUpdate {
   partial:  Record<string, unknown>;
 }
 
+// Cosmetic broadcast originated by a Tool (issue #3 of issues--tools.md).
+// Rides the unreliable channel — missed messages are not retried. Payload
+// schema is per-tool (e.g. ping carries `{ entityId }` or `{ point: [x,z] }`).
+// PingTool is the first consumer in the next slice; this slice only lays the
+// wire surface.
+export interface ToolBroadcast {
+  type:    'tool-broadcast';
+  toolId:  string;
+  peerId:  string;
+  seat:    SeatIndex | null;
+  payload: unknown;
+}
+
 // Discriminated union of every wire message that flows over a scene channel.
 export type SceneMessage =
   | ComponentPatchesMessage
@@ -105,4 +118,5 @@ export type SceneMessage =
   | InvokeAction
   | HoldClaim
   | HoldRelease
-  | RequestUpdate;
+  | RequestUpdate
+  | ToolBroadcast;

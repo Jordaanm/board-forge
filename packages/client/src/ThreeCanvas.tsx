@@ -50,6 +50,7 @@ interface Props {
   setHighlightRef:     MutableRefObject<(id: string | null) => void>;
   getEntityRef:        MutableRefObject<(id: string) => Entity | undefined>;
   setActiveToolRef:    MutableRefObject<(toolId: string) => boolean>;
+  getActiveToolRef:    MutableRefObject<() => string>;
 }
 
 export function ThreeCanvas({
@@ -57,7 +58,7 @@ export function ThreeCanvas({
   onMsgRef, onPeerLeftRef, onPeerJoinedRef,
   spawnRef, rollRef, onContextMenuRef, deleteObjectRef,
   updatePropRef, updateTablePropRef, freeCameraRef, onObjectsChangeRef,
-  onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef,
+  onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -248,14 +249,14 @@ export function ThreeCanvas({
       if (msg.type === 'cursor-position') {
         if (isHost) {
           // Star topology: host relays each guest's cursor to all other peers.
-          cursorTracker.update(msg.peerId, msg.seat, msg.x, msg.z);
+          cursorTracker.update(msg.peerId, msg.seat, msg.x, msg.z, msg.tool);
           for (const t of getTargetsRef.current()) {
             if (t.peerId === peerId) continue;
             sendToRef.current(t.peerId, msg);
           }
         } else {
           if (msg.peerId === getSelfPeerIdRef.current()) return; // skip echo
-          cursorTracker.update(msg.peerId, msg.seat, msg.x, msg.z);
+          cursorTracker.update(msg.peerId, msg.seat, msg.x, msg.z, msg.tool);
         }
         return;
       }
@@ -296,6 +297,7 @@ export function ThreeCanvas({
             seat:   getSelfSeatRef.current(),
             x:      cursorPending.x,
             z:      cursorPending.z,
+            tool:   getActiveToolRef.current(),
           });
         }
         cursorLastSent = cursorNow;
@@ -342,6 +344,7 @@ export function ThreeCanvas({
       setHighlightRef.current    = () => {};
       getEntityRef.current       = () => undefined;
       setActiveToolRef.current   = () => false;
+      getActiveToolRef.current   = () => 'grab';
       renderer.dispose();
       container.removeChild(renderer.domElement);
     };
@@ -350,7 +353,7 @@ export function ThreeCanvas({
     onMsgRef, onPeerLeftRef, onPeerJoinedRef,
     spawnRef, rollRef, onContextMenuRef, deleteObjectRef,
     updatePropRef, updateTablePropRef, freeCameraRef, onObjectsChangeRef,
-    onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef,
+    onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,
   ]);
 
   return (

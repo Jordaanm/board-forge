@@ -10,6 +10,7 @@ import {
   type HoldClaim,
   type HoldRelease,
   type RequestUpdate,
+  type ToolBroadcast,
   type SceneMessage,
 } from './wire';
 
@@ -103,6 +104,28 @@ describe('wire encode/decode round-trip', () => {
     expect(roundTrip(m)).toEqual(m);
   });
 
+  test('ToolBroadcast — entity-anchored payload', () => {
+    const m: ToolBroadcast = {
+      type:    'tool-broadcast',
+      toolId:  'ping',
+      peerId:  'p1',
+      seat:    2,
+      payload: { entityId: 'e1' },
+    };
+    expect(roundTrip(m)).toEqual(m);
+  });
+
+  test('ToolBroadcast — point payload + spectator (seat null)', () => {
+    const m: ToolBroadcast = {
+      type:    'tool-broadcast',
+      toolId:  'ping',
+      peerId:  'p2',
+      seat:    null,
+      payload: { point: [1.5, -2.0] },
+    };
+    expect(roundTrip(m)).toEqual(m);
+  });
+
   test('SceneSnapshot', () => {
     const m: SceneSnapshot = {
       type: 'scene-snapshot',
@@ -132,7 +155,8 @@ describe('wire encode/decode round-trip', () => {
       { type: 'hold-claim', entityId: 'e', seat: 0 },
       { type: 'hold-release', entityId: 'e' },
       { type: 'request-update', entityId: 'e', typeId: 't', partial: {} },
+      { type: 'tool-broadcast', toolId: 'ping', peerId: 'p', seat: null, payload: {} },
     ];
-    expect(messages).toHaveLength(9);
+    expect(messages).toHaveLength(10);
   });
 });

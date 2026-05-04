@@ -16,12 +16,16 @@ export type GuestInputMessage =
 
 // Live pointer position broadcast to all peers. Sent ~30Hz while the pointer
 // is over the table; receivers render a circle in the sender's seat colour.
+// `tool` is a cosmetic decoration hint (issue #3 of issues--tools.md) — it's
+// the sender's currently active tool id, used by CursorOverlay to draw a
+// per-tool decoration on the peer's cursor. Optional for backward compat.
 export interface CursorPosition {
   type:   'cursor-position';
   peerId: string;
   seat:   SeatIndex | null;
   x:      number;
   z:      number;
+  tool?:  string;
 }
 
 export type ChannelMessage = SceneMessage | GuestInputMessage | RoomStateMessage | CursorPosition;

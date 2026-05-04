@@ -67,6 +67,7 @@ export function Room({ roomId, isHost }: Props) {
   const setHighlightRef    = useRef<(id: string | null) => void>(noop);
   const getEntityRef       = useRef<(id: string) => Entity | undefined>(() => undefined);
   const setActiveToolRef   = useRef<(toolId: string) => boolean>(() => false);
+  const getActiveToolRef   = useRef<() => string>(() => activeToolId);
   const claimSeatRef       = useRef<(seatIndex: SeatIndex) => void>(noop);
   const kickPeerRef        = useRef<(peerId: string) => void>(noop);
   const banPeerRef         = useRef<(peerId: string) => void>(noop);
@@ -75,6 +76,7 @@ export function Room({ roomId, isHost }: Props) {
   onContextMenuRef.current   = (req) => setContextMenu(req);
   onObjectsChangeRef.current = (objs) => setObjects(objs);
   onSelectRef.current        = (id) => setSelectedId(id);
+  getActiveToolRef.current   = () => activeToolId;
 
   useEffect(() => {
     let manager: RoomStateManager | null = null;
@@ -273,6 +275,7 @@ export function Room({ roomId, isHost }: Props) {
         setHighlightRef={setHighlightRef}
         getEntityRef={getEntityRef}
         setActiveToolRef={setActiveToolRef}
+        getActiveToolRef={getActiveToolRef}
       />
 
       <div className={`room__status room__status--${status}`}>
