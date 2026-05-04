@@ -1,10 +1,11 @@
-// Host-only modal listing every registered spawnable. Bare-bones for slice 1
-// of issues--spawn-menu.md: flat alphabetical list, click-to-spawn, modal
-// stays open for batch spawning. Search / grouping / keyboard nav land in
-// slice 2.
+// Host-only modal listing every registered spawnable. Search by label /
+// category / type / tag with ranked results; arrow keys + Enter for keyboard
+// nav; spawned rows flash briefly. Modal stays open for batch spawning.
 
+import { forwardRef, useEffect, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { listSpawnables } from '../entity/SpawnableRegistry';
+import { listSpawnables, type SpawnableDef } from '../entity/SpawnableRegistry';
+import { groupByCategory, searchSpawnables } from '../entity/spawnableSearch';
 import './SpawnObjectModal.css';
 
 interface Props {
@@ -74,21 +75,49 @@ const CLOSE_BTN: React.CSSProperties = {
   padding:    '0 4px',
 };
 
-const LIST: React.CSSProperties = {
-  flex:        1,
-  overflowY:   'auto',
-  padding:     '8px 0',
-  margin:      0,
-  listStyle:   'none',
+const SEARCH_WRAP: React.CSSProperties = {
+  padding:     '10px 16px',
+  borderBottom: '1px solid rgba(255,255,255,0.08)',
 };
 
-const ROW: React.CSSProperties = {
-  padding:    '10px 20px',
-  cursor:     'pointer',
-  userSelect: 'none',
+const SEARCH_INPUT: React.CSSProperties = {
+  width:        '100%',
+  background:   'rgba(0,0,0,0.4)',
+  border:       '1px solid rgba(255,255,255,0.2)',
+  color:        '#e8e8e8',
+  padding:      '6px 10px',
+  borderRadius: 4,
+  fontSize:     13,
+  fontFamily:   'sans-serif',
+  boxSizing:    'border-box',
+  outline:      'none',
 };
 
-const ROW_HOVER_CLASS = 'spawn-modal__row';
+const SCROLL: React.CSSProperties = {
+  flex:      1,
+  overflowY: 'auto',
+  padding:   '6px 0',
+};
+
+const SECTION_LABEL: React.CSSProperties = {
+  fontSize:      10,
+  textTransform: 'uppercase',
+  letterSpacing: 1,
+  color:         '#888',
+  margin:        '8px 16px 4px',
+};
+
+const ROW_CATEGORY: React.CSSProperties = {
+  color:    '#777',
+  fontSize: 11,
+};
+
+const EMPTY: React.CSSProperties = {
+  color:      '#666',
+  fontSize:   12,
+  textAlign:  'center',
+  padding:    '24px 16px',
+};
 
 export function SpawnObjectModal({ onSpawn }: Props) {
   return (
@@ -105,7 +134,7 @@ export function SpawnObjectModal({ onSpawn }: Props) {
               <button style={CLOSE_BTN} type="button" aria-label="Close">×</button>
             </Dialog.Close>
           </div>
-          <ModalList onSpawn={onSpawn} />
+          <ModalBody onSpawn={onSpawn} />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
@@ -115,20 +144,149 @@ export function SpawnObjectModal({ onSpawn }: Props) {
 // Reads the registry on mount. The Radix Portal/Content only mounts children
 // when the dialog opens, so by the time this renders, the World constructor
 // in ThreeCanvas has already run registerCorePrimitives().
-function ModalList({ onSpawn }: { onSpawn: (type: string) => void }) {
-  const items = [...listSpawnables()].sort((a, b) => a.label.localeCompare(b.label));
+function ModalBody({ onSpawn }: { onSpawn: (type: string) => void }) {
+  const allDefs = listSpawnables();
+  const [query, setQuery]     = useState('');
+  const [focusIdx, setFocusIdx] = useState(0);
+  const [flashType, setFlashType] = useState<string | null>(null);
+  const flashTimer = useRef<number | null>(null);
+  const focusedRowRef = useRef<HTMLLIElement | null>(null);
+
+  const isSearching = query.trim() !== '';
+  const groups      = isSearching ? null : groupByCategory(allDefs);
+  const flatItems: SpawnableDef[] = isSearching
+    ? searchSpawnables(allDefs, query)
+    : (groups ?? []).flatMap(g => g.items);
+
+  // Reset focus when query changes; clamp when list shrinks below current idx.
+  useEffect(() => { setFocusIdx(0); }, [query]);
+  useEffect(() => {
+    if (flatItems.length > 0 && focusIdx >= flatItems.length) setFocusIdx(0);
+  }, [flatItems.length, focusIdx]);
+
+  // Scroll the focused row into view as it changes.
+  useEffect(() => {
+    focusedRowRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [focusIdx]);
+
+  // Cleanup the flash timer on unmount.
+  useEffect(() => () => {
+    if (flashTimer.current !== null) window.clearTimeout(flashTimer.current);
+  }, []);
+
+  const triggerSpawn = (def: SpawnableDef) => {
+    onSpawn(def.type);
+    setFlashType(def.type);
+    if (flashTimer.current !== null) window.clearTimeout(flashTimer.current);
+    flashTimer.current = window.setTimeout(() => setFlashType(null), 200);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (flatItems.length === 0) return;
+      setFocusIdx(i => (i + 1) % flatItems.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (flatItems.length === 0) return;
+      setFocusIdx(i => (i - 1 + flatItems.length) % flatItems.length);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const def = flatItems[focusIdx];
+      if (def) triggerSpawn(def);
+    }
+  };
+
   return (
-    <ul style={LIST}>
-      {items.map(def => (
-        <li
-          key={def.type}
-          className={ROW_HOVER_CLASS}
-          style={ROW}
-          onClick={() => onSpawn(def.type)}
-        >
-          {def.label}
-        </li>
-      ))}
-    </ul>
+    <>
+      <div style={SEARCH_WRAP}>
+        <input
+          style={SEARCH_INPUT}
+          type="text"
+          autoFocus
+          placeholder="Search spawnables…"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={handleKeyDown}
+        />
+      </div>
+      <div style={SCROLL}>
+        {flatItems.length === 0 && (
+          <div style={EMPTY}>No spawnables match “{query}”.</div>
+        )}
+
+        {isSearching && flatItems.map((def, i) => (
+          <Row
+            key={def.type}
+            def={def}
+            focused={i === focusIdx}
+            flashing={flashType === def.type}
+            showCategory
+            ref={i === focusIdx ? focusedRowRef : null}
+            onClick={() => triggerSpawn(def)}
+          />
+        ))}
+
+        {!isSearching && groups?.map((group) => (
+          <section key={group.category}>
+            <div style={SECTION_LABEL}>{group.category}</div>
+            <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+              {group.items.map((def) => {
+                const idx = flatItems.indexOf(def);
+                return (
+                  <Row
+                    key={def.type}
+                    def={def}
+                    focused={idx === focusIdx}
+                    flashing={flashType === def.type}
+                    showCategory={false}
+                    ref={idx === focusIdx ? focusedRowRef : null}
+                    onClick={() => triggerSpawn(def)}
+                  />
+                );
+              })}
+            </ul>
+          </section>
+        ))}
+      </div>
+    </>
   );
 }
+
+interface RowProps {
+  def:          SpawnableDef;
+  focused:      boolean;
+  flashing:     boolean;
+  showCategory: boolean;
+  onClick:      () => void;
+}
+
+const ROW_BASE: React.CSSProperties = {
+  display:        'flex',
+  alignItems:     'center',
+  justifyContent: 'space-between',
+  padding:        '10px 20px',
+  cursor:         'pointer',
+  userSelect:     'none',
+  transition:     'background 0.15s ease',
+};
+
+const Row = forwardRef<HTMLLIElement, RowProps>(function Row(
+  { def, focused, flashing, showCategory, onClick },
+  ref,
+) {
+  const classes = ['spawn-modal__row'];
+  if (focused)  classes.push('spawn-modal__row--focused');
+  if (flashing) classes.push('spawn-modal__row--flash');
+  return (
+    <li
+      ref={ref}
+      className={classes.join(' ')}
+      style={ROW_BASE}
+      onClick={onClick}
+    >
+      <span>{def.label}</span>
+      {showCategory && <span style={ROW_CATEGORY}>{def.category}</span>}
+    </li>
+  );
+});

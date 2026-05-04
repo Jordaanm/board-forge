@@ -1,3 +1,15 @@
 .spawn-modal__row:hover {
   background: rgba(255, 255, 255, 0.08);
 }
+
+.spawn-modal__row--focused {
+  background: rgba(80, 140, 220, 0.25);
+}
+
+.spawn-modal__row--focused:hover {
+  background: rgba(80, 140, 220, 0.32);
+}
+
+.spawn-modal__row--flash {
+  background: rgba(120, 220, 140, 0.45) !important;
+}
