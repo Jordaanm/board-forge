@@ -145,6 +145,27 @@ describe('DeckService.maybeDissolve', () => {
   });
 });
 
+describe('DeckService.shuffleDeck', () => {
+  test('permutes cards (same set, possibly different order)', () => {
+    const deck = buildDeckOf('t', ['a', 'b', 'c', 'd', 'e']);
+    const before = [...deck.getComponent(DeckComponent)!.state.cards];
+    decks.shuffleDeck(deck.id);
+    const after = deck.getComponent(DeckComponent)!.state.cards;
+    expect(after).toHaveLength(before.length);
+    expect(new Set(after)).toEqual(new Set(before));
+  });
+
+  test('plays a rotation jitter tween on the deck', () => {
+    const deck = buildDeckOf('t', ['a', 'b', 'c']);
+    decks.shuffleDeck(deck.id);
+    expect(deck.getComponent(TweenComponent)!.isActive()).toBe(true);
+  });
+
+  test('returns false for an unknown deck', () => {
+    expect(decks.shuffleDeck('nope')).toBe(false);
+  });
+});
+
 describe('DeckService.drawFromDeck — singleton dissolution', () => {
   test('drawing down to 1 card triggers dissolve', () => {
     const hand = scene.spawn('hand', ctx);

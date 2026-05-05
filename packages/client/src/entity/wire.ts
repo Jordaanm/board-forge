@@ -147,6 +147,14 @@ export interface DrawFromDeck {
   count:  number;
 }
 
+// Right-click "Shuffle" on a deck. Issue #7 of issues--deck.md. Reliable
+// channel. Host validates `canManipulate(deck.owner)`, runs Fisher-Yates on
+// the deck's `cards`, and plays a 200ms rotation jitter tween for feedback.
+export interface ShuffleDeck {
+  type:   'shuffle-deck';
+  deckId: string;
+}
+
 // Cosmetic broadcast originated by a Tool (issue #3 of issues--tools.md).
 // Rides the unreliable channel — missed messages are not retried. Payload
 // schema is per-tool (e.g. ping carries `{ entityId }` or `{ point: [x,z] }`).
@@ -176,4 +184,5 @@ export type SceneMessage =
   | ReorderHand
   | TweenIntoHand
   | DrawFromDeck
+  | ShuffleDeck
   | ToolBroadcast;

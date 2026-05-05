@@ -157,7 +157,7 @@ Wire: new `{ type: 'draw-from-deck', deckId, count: 1 }` RPC. Host validates, ru
 
 ---
 
-## Issue #7 — Shuffle + wiggle
+## Issue #7 — Shuffle + wiggle ✅ Completed
 
 ### What to build
 
@@ -167,13 +167,13 @@ Gates on `canManipulate(ctx, deck.owner)`. Wire: `{ type: 'shuffle-deck', deckId
 
 ### Acceptance criteria
 
-- [ ] `DeckComponent.onContextMenu` returns a `Shuffle` action item.
-- [ ] Action gates on `canManipulate(ctx, entity.owner)`.
-- [ ] Host `shuffleDeck(deckId)`: Fisher-Yates on `cards`, `setState({ cards: shuffled })`.
-- [ ] 200ms `TweenComponent` rotation jitter plays after the patch.
-- [ ] Visible top texture changes match the new top card after shuffle.
-- [ ] Guest emits `{ type: 'shuffle-deck', deckId }`; host validates.
-- [ ] `DeckComponent.test.ts`: shuffle smoke-test — array is permuted, all original ids remain.
+- [x] `DeckComponent.onContextMenu` returns a `Shuffle` action item.
+- [x] Action gates on `canManipulate(ctx, entity.owner)`.
+- [x] Host `shuffleDeck(deckId)`: Fisher-Yates on `cards`, `setState({ cards: shuffled })`.
+- [x] 200ms `TweenComponent` rotation jitter plays after the patch.
+- [x] Visible top texture changes match the new top card after shuffle.
+- [x] Guest emits `{ type: 'shuffle-deck', deckId }`; host validates.
+- [x] `DeckComponent.test.ts`: shuffle smoke-test — array is permuted, all original ids remain.
 
 ### Blocked by
 

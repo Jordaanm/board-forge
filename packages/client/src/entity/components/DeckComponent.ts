@@ -48,12 +48,10 @@ export class DeckComponent extends EntityComponent<DeckState> {
     const handId = ctx.recipientSeat !== null
       ? findMainHandId(this.entity.scene, ctx.recipientSeat)
       : null;
-    return [{
-      kind:     'action',
-      id:       'draw',
-      label:    'Draw',
-      disabled: handId === null,
-    }];
+    return [
+      { kind: 'action', id: 'draw',    label: 'Draw',    disabled: handId === null },
+      { kind: 'action', id: 'shuffle', label: 'Shuffle' },
+    ];
   }
 
   private applyCardsToSiblings(): void {

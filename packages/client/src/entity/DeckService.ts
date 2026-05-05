@@ -6,6 +6,7 @@
 // happens at the call site (HostInputDispatcher / dispatchMenuAction) before
 // reaching this service.
 
+import * as THREE from 'three';
 import { type SceneImpl } from './Scene';
 import { type Entity } from './Entity';
 import { type SeatIndex } from '../seats/SeatLayout';
@@ -22,6 +23,9 @@ export interface DeckHostFacade {
 }
 
 const TWEEN_INTO_HAND_MS = 250;
+const SHUFFLE_JITTER_MS  = 200;
+// Y-axis rotation magnitude for the shuffle jitter (radians). ~10 degrees.
+const SHUFFLE_JITTER_RAD = 0.18;
 
 export class DeckService {
   constructor(
@@ -73,6 +77,39 @@ export class DeckService {
 
     this.maybeDissolve(deckId);
     return popN;
+  }
+
+  // Fisher-Yates shuffle on the deck's `cards`, plus a brief rotation jitter
+  // tween for visual feedback. Issue #7 of issues--deck.md.
+  shuffleDeck(deckId: string): boolean {
+    const deck = this.scene.getEntity(deckId);
+    if (!deck) return false;
+    const deckC = deck.getComponent(DeckComponent);
+    if (!deckC) return false;
+    if (deckC.state.cards.length < 2) {
+      // Nothing meaningful to shuffle; still play the jitter for parity.
+      this.playShuffleJitter(deck);
+      return true;
+    }
+    const shuffled = fisherYates([...deckC.state.cards]);
+    deckC.setState({ cards: shuffled });
+    this.playShuffleJitter(deck);
+    return true;
+  }
+
+  private playShuffleJitter(deck: Entity): void {
+    const transform = deck.getComponent(TransformComponent);
+    const tween     = deck.getComponent(TweenComponent);
+    if (!transform || !tween) return;
+    const [qx, qy, qz, qw] = transform.state.rotation;
+    const cur = new THREE.Quaternion(qx, qy, qz, qw);
+    const dq  = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), SHUFFLE_JITTER_RAD);
+    const target = cur.clone().multiply(dq);
+    const pos = transform.state.position;
+    tween.tweenTo({
+      position: [pos[0], pos[1], pos[2]],
+      rotation: [target.x, target.y, target.z, target.w],
+    }, SHUFFLE_JITTER_MS);
   }
 
   // If the deck has exactly 1 card left, un-hide that card at the deck's
@@ -141,6 +178,14 @@ export class DeckService {
       cardC.setState({ face: cardC.state.face, back: cardC.state.back });
     }
   }
+}
+
+function fisherYates<T>(arr: T[]): T[] {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
 }
 
 // Returns the entity id of the seat's main hand, or null if none exists.

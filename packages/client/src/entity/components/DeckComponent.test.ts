@@ -66,17 +66,18 @@ describe('DeckComponent — patches mesh on cards change', () => {
 });
 
 describe('DeckComponent — context menu', () => {
-  test('returns "Draw" action; greyed out when caller has no main hand', () => {
+  test('returns "Draw" action greyed out when caller has no main hand, plus Shuffle', () => {
     const deck = scene.spawn('deck', ctx);
     const items = deck.getComponent(DeckComponent)!.onContextMenu({
       recipientSeat: 0, isHost: true, entity: deck,
     });
-    expect(items).toHaveLength(1);
-    const item = items[0] as { kind: string; id: string; label: string; disabled?: boolean };
-    expect(item.kind).toBe('action');
-    expect(item.id).toBe('draw');
-    expect(item.label).toBe('Draw');
-    expect(item.disabled).toBe(true);
+    const draw = items.find(i => i.kind === 'action' && (i as { id: string }).id === 'draw') as
+      | { kind: string; id: string; label: string; disabled?: boolean }
+      | undefined;
+    expect(draw).toBeDefined();
+    expect(draw!.label).toBe('Draw');
+    expect(draw!.disabled).toBe(true);
+    expect(items.some(i => i.kind === 'action' && (i as { id: string }).id === 'shuffle')).toBe(true);
   });
 
   test('"Draw" is enabled when caller has a main hand', () => {
@@ -87,8 +88,10 @@ describe('DeckComponent — context menu', () => {
     const items = deck.getComponent(DeckComponent)!.onContextMenu({
       recipientSeat: 0, isHost: true, entity: deck,
     });
-    const item = items[0] as { disabled?: boolean };
-    expect(item.disabled).toBe(false);
+    const draw = items.find(i => i.kind === 'action' && (i as { id: string }).id === 'draw') as
+      | { disabled?: boolean }
+      | undefined;
+    expect(draw?.disabled).toBe(false);
   });
 
   test('"Draw" is greyed out when recipientSeat is null', () => {
@@ -96,8 +99,21 @@ describe('DeckComponent — context menu', () => {
     const items = deck.getComponent(DeckComponent)!.onContextMenu({
       recipientSeat: null, isHost: true, entity: deck,
     });
-    const item = items[0] as { disabled?: boolean };
-    expect(item.disabled).toBe(true);
+    const draw = items.find(i => i.kind === 'action' && (i as { id: string }).id === 'draw') as
+      | { disabled?: boolean }
+      | undefined;
+    expect(draw?.disabled).toBe(true);
+  });
+
+  test('always includes a "Shuffle" action', () => {
+    const deck = scene.spawn('deck', ctx);
+    const items = deck.getComponent(DeckComponent)!.onContextMenu({
+      recipientSeat: null, isHost: true, entity: deck,
+    });
+    const shuf = items.find(i => i.kind === 'action' && (i as { id: string }).id === 'shuffle') as
+      | { label: string }
+      | undefined;
+    expect(shuf?.label).toBe('Shuffle');
   });
 });
 

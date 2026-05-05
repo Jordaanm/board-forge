@@ -129,6 +129,10 @@ export interface World {
   // directly; guest dispatches `draw-from-deck` for the host to validate.
   drawFromDeck(deckId: string, count: number, callerSeat: SeatIndex | null): void;
 
+  // Fisher-Yates the deck's `cards` and play a brief rotation jitter tween.
+  // Issue #7 of issues--deck.md.
+  shuffleDeck(deckId: string): void;
+
   dispose(): void;
 }
 

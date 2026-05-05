@@ -559,6 +559,15 @@ class WorldImpl implements World, HandleRouter {
     this.transport.send({ type: 'draw-from-deck', deckId, count }, { reliable: true });
   }
 
+  // Right-click Shuffle on a deck. Issue #7 of issues--deck.md.
+  shuffleDeck(deckId: string): void {
+    if (this.role === 'host') {
+      this.decks?.shuffleDeck(deckId);
+      return;
+    }
+    this.transport.send({ type: 'shuffle-deck', deckId }, { reliable: true });
+  }
+
   applyImpulse(entity: Entity, v: { x: number; y: number; z: number }): void {
     if (!canManipulate({ peerSeat: this.identity.selfSeat(), isHost: this.role === 'host' }, entity.owner)) return;
     const phys = entity.getComponent(PhysicsComponent);
@@ -632,6 +641,7 @@ class WorldImpl implements World, HandleRouter {
       case 'reorder-hand':       this.hostInput?.handleReorderHand(peerId, msg);      return;
       case 'tween-into-hand':    this.hostInput?.handleTweenIntoHand(peerId, msg);    return;
       case 'draw-from-deck':     this.hostInput?.handleDrawFromDeck(peerId, msg);     return;
+      case 'shuffle-deck':       this.hostInput?.handleShuffleDeck(peerId, msg);      return;
       case 'guest-drag-move':  this.guestInput?.handleMessage(peerId, msg);      return;
       case 'guest-drag-start':
       case 'guest-drag-end':
@@ -739,6 +749,7 @@ class WorldImpl implements World, HandleRouter {
       case 'reorder-hand':
       case 'tween-into-hand':
       case 'draw-from-deck':
+      case 'shuffle-deck':
       case 'guest-drag-move':
       case 'guest-drag-start':
       case 'guest-drag-end':

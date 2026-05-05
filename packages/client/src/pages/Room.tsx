@@ -70,6 +70,7 @@ export function Room({ roomId, isHost }: Props) {
   const onContextMenuRef   = useRef<(req: ContextMenuRequest) => void>(noop);
   const deleteObjectRef    = useRef<(id: string) => void>(noop);
   const drawFromDeckRef    = useRef<(deckId: string, count: number, callerSeat: SeatIndex | null) => void>(noop);
+  const shuffleDeckRef     = useRef<(deckId: string) => void>(noop);
   const updatePropRef      = useRef<(id: string, key: string, value: unknown) => void>(noop);
   const updateTablePropRef    = useRef<(key: keyof TableProps, value: unknown) => void>(noop);
   const updateSkydomePropRef  = useRef<(key: keyof SkydomeProps, value: unknown) => void>(noop);
@@ -244,6 +245,7 @@ export function Room({ roomId, isHost }: Props) {
       hostLocal: {
         delete:        (id) => deleteObjectRef.current(id),
         drawFromDeck:  (deckId, count, seat) => drawFromDeckRef.current(deckId, count, seat),
+        shuffleDeck:   (deckId) => shuffleDeckRef.current(deckId),
       },
       selfSeat: getSelfSeatRef.current(),
     });
@@ -303,6 +305,7 @@ export function Room({ roomId, isHost }: Props) {
         onContextMenuRef={onContextMenuRef}
         deleteObjectRef={deleteObjectRef}
         drawFromDeckRef={drawFromDeckRef}
+        shuffleDeckRef={shuffleDeckRef}
         updatePropRef={updatePropRef}
         updateTablePropRef={updateTablePropRef}
         updateSkydomePropRef={updateSkydomePropRef}

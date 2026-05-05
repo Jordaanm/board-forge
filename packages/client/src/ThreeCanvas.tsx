@@ -53,6 +53,7 @@ interface Props {
   onContextMenuRef:    MutableRefObject<(req: ContextMenuRequest) => void>;
   deleteObjectRef:     MutableRefObject<(id: string) => void>;
   drawFromDeckRef:     MutableRefObject<(deckId: string, count: number, callerSeat: SeatIndex | null) => void>;
+  shuffleDeckRef:      MutableRefObject<(deckId: string) => void>;
   updatePropRef:       MutableRefObject<(id: string, key: string, value: unknown) => void>;
   updateTablePropRef:    MutableRefObject<(key: keyof TableProps, value: unknown) => void>;
   updateSkydomePropRef:  MutableRefObject<(key: keyof SkydomeProps, value: unknown) => void>;
@@ -79,7 +80,7 @@ export interface HandView {
 export function ThreeCanvas({
   isHost, sendRef, sendToRef, getTargetsRef, getSelfSeatRef, getSelfPeerIdRef, getPeerSeatRef,
   onMsgRef, onPeerLeftRef, onPeerJoinedRef,
-  spawnRef, rollRef, onContextMenuRef, deleteObjectRef, drawFromDeckRef,
+  spawnRef, rollRef, onContextMenuRef, deleteObjectRef, drawFromDeckRef, shuffleDeckRef,
   updatePropRef, updateTablePropRef, updateSkydomePropRef, updateKeyLightPropRef,
   freeCameraRef, onObjectsChangeRef,
   onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,
@@ -308,6 +309,7 @@ export function ThreeCanvas({
       spawnRef.current        = (type) => { world.spawn(type); };
       deleteObjectRef.current = (id)   => world.despawn(id);
       drawFromDeckRef.current = (deckId, count, seat) => world.drawFromDeck(deckId, count, seat);
+      shuffleDeckRef.current  = (deckId) => world.shuffleDeck(deckId);
       updatePropRef.current   = (id, key, value) => world.updateProp(id, key, value);
 
       rollRef.current = () => {
@@ -448,6 +450,7 @@ export function ThreeCanvas({
       rollRef.current         = () => {};
       deleteObjectRef.current = () => {};
       drawFromDeckRef.current = () => {};
+      shuffleDeckRef.current  = () => {};
       updatePropRef.current      = () => {};
       updateTablePropRef.current    = () => {};
       updateSkydomePropRef.current  = () => {};
@@ -465,7 +468,7 @@ export function ThreeCanvas({
   }, [
     isHost, sendRef, sendToRef, getTargetsRef, getSelfSeatRef, getSelfPeerIdRef, getPeerSeatRef,
     onMsgRef, onPeerLeftRef, onPeerJoinedRef,
-    spawnRef, rollRef, onContextMenuRef, deleteObjectRef, drawFromDeckRef,
+    spawnRef, rollRef, onContextMenuRef, deleteObjectRef, drawFromDeckRef, shuffleDeckRef,
     updatePropRef, updateTablePropRef, updateSkydomePropRef, updateKeyLightPropRef,
     freeCameraRef, onObjectsChangeRef,
     onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,

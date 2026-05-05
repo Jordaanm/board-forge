@@ -119,6 +119,7 @@ export interface MenuActionDeps {
   hostLocal: {
     delete:        (entityId: string) => void;
     drawFromDeck?: (deckId: string, count: number, callerSeat: SeatIndex | null) => void;
+    shuffleDeck?:  (deckId: string) => void;
   };
   selfSeat:      SeatIndex | null;
 }
@@ -143,6 +144,16 @@ export function dispatchMenuAction(
       deps.hostLocal.drawFromDeck?.(entityId, count, deps.selfSeat);
     } else {
       deps.send({ type: 'draw-from-deck', deckId: entityId, count });
+    }
+    return;
+  }
+
+  // Deck shuffle — issue #7 of issues--deck.md.
+  if (item.kind === 'action' && item.id === 'shuffle' && item.componentTypeId === 'deck') {
+    if (deps.isHost) {
+      deps.hostLocal.shuffleDeck?.(entityId);
+    } else {
+      deps.send({ type: 'shuffle-deck', deckId: entityId });
     }
     return;
   }
