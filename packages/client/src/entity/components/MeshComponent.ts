@@ -40,6 +40,7 @@ export class MeshComponent extends EntityComponent<MeshState> {
     const transform = this.entity.getComponent(TransformComponent)!;
     this.group = new THREE.Group();
     this.rebuild();
+    this.group.visible = !this.entity.isContained;
     transform.object3d.add(this.group);
   }
 
@@ -55,6 +56,11 @@ export class MeshComponent extends EntityComponent<MeshState> {
     } else if (changed.textureRefs !== undefined || changed.tint !== undefined) {
       this.applyMaterialAttributes();
     }
+  }
+
+  onIsContainedChanged(isContained: boolean): void {
+    if (!this.group) return;
+    this.group.visible = !isContained;
   }
 
   // Half-extents in world units, for PhysicsComponent to derive a hitbox.

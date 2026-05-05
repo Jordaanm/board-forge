@@ -15,6 +15,7 @@ export interface EntityInit {
   privateToSeat?: SeatIndex | null;
   parentId?:      string | null;
   children?:      readonly string[];
+  isContained?:   boolean;
 }
 
 export class Entity {
@@ -26,6 +27,10 @@ export class Entity {
   privateToSeat: SeatIndex | null;
   parentId:      string | null;
   children:      string[];
+  // Generic "this entity is hidden inside a container" flag (issue #1 of
+  // issues--deck.md). MeshComponent toggles `group.visible`; PhysicsComponent
+  // adds/removes its body from the world. Replicated via entity-patch.
+  isContained:   boolean;
   components:    Map<string, EntityComponent<any>>;
   // Transient — not serialised.
   heldBy:        SeatIndex | null;
@@ -43,6 +48,7 @@ export class Entity {
     this.privateToSeat = init.privateToSeat ?? null;
     this.parentId      = init.parentId      ?? null;
     this.children      = init.children      ? [...init.children] : [];
+    this.isContained   = init.isContained   ?? false;
     this.components    = new Map();
     this.heldBy        = null;
     this.scene         = null;

@@ -19,6 +19,7 @@ export type EntityFieldsPartial = Partial<{
   privateToSeat: SeatIndex | null;
   parentId:      string | null;
   children:      string[];
+  isContained:   boolean;
 }>;
 
 // Per-component patch — payload inside a `component-patches` envelope.

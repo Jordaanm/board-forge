@@ -42,6 +42,11 @@ export class PhysicsComponent extends EntityComponent<PhysicsState> {
   private entityScene: EntityScene | null = null;
   // Saved on first lock, restored on unlock. Null while unlocked.
   private priorMass: number | null = null;
+  // Cannon world reference used when this component's body is removed from the
+  // world while the entity is contained. Held so onIsContainedChanged can
+  // re-add the same body without rebuilding it.
+  private physicsWorld: CANNON.World | null = null;
+  private bodyInWorld = false;
 
   onSpawn(ctx: SpawnContext): void {
     const transform = this.entity.getComponent(TransformComponent)!;
@@ -57,7 +62,13 @@ export class PhysicsComponent extends EntityComponent<PhysicsState> {
     this.collideHandler = (e) => this.handleCollide(e.body);
     this.body.addEventListener('collide', this.collideHandler);
 
-    if (ctx.physics) ctx.physics.addBody(this.body);
+    if (ctx.physics) {
+      this.physicsWorld = ctx.physics.world;
+      if (!this.entity.isContained) {
+        ctx.physics.addBody(this.body);
+        this.bodyInWorld = true;
+      }
+    }
 
     if (this.state.isLocked) this.applyLockChange(true);
   }
@@ -67,7 +78,24 @@ export class PhysicsComponent extends EntityComponent<PhysicsState> {
       this.body.removeEventListener('collide', this.collideHandler);
       this.collideHandler = null;
     }
-    if (ctx.physics) ctx.physics.world.removeBody(this.body);
+    if (ctx.physics && this.bodyInWorld) {
+      ctx.physics.world.removeBody(this.body);
+      this.bodyInWorld = false;
+    }
+    this.physicsWorld = null;
+  }
+
+  onIsContainedChanged(isContained: boolean): void {
+    if (!this.body || !this.physicsWorld) return;
+    if (isContained && this.bodyInWorld) {
+      this.body.velocity.setZero();
+      this.body.angularVelocity.setZero();
+      this.physicsWorld.removeBody(this.body);
+      this.bodyInWorld = false;
+    } else if (!isContained && !this.bodyInWorld) {
+      this.physicsWorld.addBody(this.body);
+      this.bodyInWorld = true;
+    }
   }
 
   onPropertiesChanged(changed: Partial<PhysicsState>): void {

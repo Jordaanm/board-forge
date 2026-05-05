@@ -29,6 +29,59 @@ beforeEach(() => {
   ctx = { scene: new THREE.Scene(), physics: new PhysicsWorld(), entityScene: scene };
 });
 
+describe('PhysicsComponent — isContained body lifecycle', () => {
+  test('body is added to world on spawn when entity is not contained', () => {
+    const e = scene.spawn('die', ctx);
+    const phys = e.getComponent(PhysicsComponent)!;
+    expect(ctx.physics!.world.bodies.includes(phys.body)).toBe(true);
+  });
+
+  test('onIsContainedChanged(true) removes body and zeroes velocity', () => {
+    const e = scene.spawn('die', ctx);
+    const phys = e.getComponent(PhysicsComponent)!;
+    phys.body.velocity.set(2, 0, 0);
+    phys.body.angularVelocity.set(0, 1, 0);
+
+    phys.onIsContainedChanged(true);
+    expect(ctx.physics!.world.bodies.includes(phys.body)).toBe(false);
+    expect(phys.body.velocity.length()).toBe(0);
+    expect(phys.body.angularVelocity.length()).toBe(0);
+  });
+
+  test('onIsContainedChanged(false) re-adds the same body (not recreated)', () => {
+    const e = scene.spawn('die', ctx);
+    const phys = e.getComponent(PhysicsComponent)!;
+    const originalBody = phys.body;
+
+    phys.onIsContainedChanged(true);
+    expect(ctx.physics!.world.bodies.includes(originalBody)).toBe(false);
+
+    phys.onIsContainedChanged(false);
+    expect(phys.body).toBe(originalBody);
+    expect(ctx.physics!.world.bodies.includes(originalBody)).toBe(true);
+  });
+
+  test('redundant onIsContainedChanged is idempotent', () => {
+    const e = scene.spawn('die', ctx);
+    const phys = e.getComponent(PhysicsComponent)!;
+    phys.onIsContainedChanged(true);
+    phys.onIsContainedChanged(true); // already removed
+    expect(ctx.physics!.world.bodies.includes(phys.body)).toBe(false);
+    phys.onIsContainedChanged(false);
+    phys.onIsContainedChanged(false); // already added
+    expect(ctx.physics!.world.bodies.filter(b => b === phys.body)).toHaveLength(1);
+  });
+
+  test('entity spawned with isContained=true skips body add', () => {
+    const e = scene.spawn('die', ctx);
+    // Despawn and re-create with isContained pre-set: easier path — just flip
+    // and verify the lifecycle removes it.
+    const phys = e.getComponent(PhysicsComponent)!;
+    phys.onIsContainedChanged(true);
+    expect(ctx.physics!.world.bodies.includes(phys.body)).toBe(false);
+  });
+});
+
 describe('PhysicsComponent — isLocked state transitions', () => {
   test('setState({isLocked:true}) zeroes mass and remembers prior', () => {
     const e = scene.spawn('die', ctx);

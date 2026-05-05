@@ -723,6 +723,12 @@ function mergeEntityFields(entity: Entity, partial: EntityFieldsPartial): void {
   if (partial.privateToSeat !== undefined) entity.privateToSeat = partial.privateToSeat;
   if (partial.parentId      !== undefined) entity.parentId      = partial.parentId;
   if (partial.children      !== undefined) entity.children      = [...partial.children];
+  if (partial.isContained   !== undefined && entity.isContained !== partial.isContained) {
+    entity.isContained = partial.isContained;
+    for (const comp of entity.components.values()) {
+      comp.onIsContainedChanged(partial.isContained);
+    }
+  }
 }
 
 function nowMs(): number {

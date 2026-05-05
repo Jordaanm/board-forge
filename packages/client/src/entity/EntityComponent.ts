@@ -98,12 +98,13 @@ export abstract class EntityComponent<TState extends object> {
   abstract onSpawn(ctx: SpawnContext): void;
   abstract onPropertiesChanged(changed: Partial<TState>): void;
 
-  onDespawn       (_ctx: SpawnContext):                                                  void { }
-  onContextMenu   (_ctx: MenuContext):                                                   MenuItem[] { return []; }
-  onCollision     (_other: Entity, _event: CollisionEvent):                              void { }
-  onParentChanged (_newParentId: string | null, _oldParentId: string | null):            void { }
-  onOwnerChanged  (_newOwner: SeatIndex | null, _oldOwner: SeatIndex | null):            void { }
-  onAction        (_actionId: string, _args: object | undefined, _ctx: ActionContext):   void { }
+  onDespawn            (_ctx: SpawnContext):                                                  void { }
+  onContextMenu        (_ctx: MenuContext):                                                   MenuItem[] { return []; }
+  onCollision          (_other: Entity, _event: CollisionEvent):                              void { }
+  onParentChanged      (_newParentId: string | null, _oldParentId: string | null):            void { }
+  onOwnerChanged       (_newOwner: SeatIndex | null, _oldOwner: SeatIndex | null):            void { }
+  onIsContainedChanged (_isContained: boolean):                                               void { }
+  onAction             (_actionId: string, _args: object | undefined, _ctx: ActionContext):   void { }
 
   // Host-only at runtime. Merges into `state`, fires `onPropertiesChanged`,
   // and queues a ComponentPatch on the owning World's replicator (if any).

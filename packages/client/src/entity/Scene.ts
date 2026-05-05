@@ -19,6 +19,7 @@ export interface EntitySerialized {
   privateToSeat: SeatIndex | null;
   parentId:      string | null;
   children:      string[];
+  isContained?:  boolean;  // optional in serialised form for back-compat with pre-deck snapshots
   components:    Record<string, object>;  // typeId → component.toJSON()
 }
 
@@ -85,6 +86,7 @@ export class SceneImpl {
         privateToSeat: snap.privateToSeat,
         parentId:      snap.parentId,
         children:      snap.children,
+        isContained:   snap.isContained,
       });
       for (const [typeId, state] of Object.entries(snap.components)) {
         const cls = this.registry.get(typeId);
@@ -202,6 +204,7 @@ export function entityToSerialized(e: Entity): EntitySerialized {
     privateToSeat: e.privateToSeat,
     parentId:      e.parentId,
     children:      [...e.children],
+    isContained:   e.isContained,
     components,
   };
 }
