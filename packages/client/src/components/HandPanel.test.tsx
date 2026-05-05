@@ -101,3 +101,71 @@ describe('HandPanel — anchor placement', () => {
     expect(anchor.querySelector('[data-testid="hand-panel"]')).not.toBeNull();
   });
 });
+
+describe('HandPanel — drag-to-canvas (issue #5)', () => {
+  function setupPanel() {
+    const onPlay = vi.fn();
+    const result = render(
+      <HandPanel
+        cards={SAMPLE}
+        selectedId={null}
+        onSelectTile={noop}
+        onTileContextMenu={noop}
+        onPlayCardToTable={onPlay}
+      />,
+    );
+    const tile  = result.getByTestId('hand-panel-tile-c1');
+    const panel = result.getByTestId('hand-panel');
+    // jsdom returns zeroed rects for layout-less DOM; spoof the panel rect to
+    // a known box so the inside/outside check is deterministic.
+    panel.getBoundingClientRect = () => ({
+      x: 100, y: 500, left: 100, top: 500, right: 300, bottom: 600,
+      width: 200, height: 100, toJSON: () => ({}),
+    } as DOMRect);
+    return { onPlay, tile };
+  }
+
+  // jsdom doesn't ship PointerEvent. MouseEvent with the right type matches
+  // React's onPointerDown listener and the document-level addEventListener
+  // hooks the panel sets up.
+  function dispatchPointer(target: EventTarget, type: string, x: number, y: number, button = 0): void {
+    const ev = new MouseEvent(type, {
+      bubbles: true, cancelable: true, button, clientX: x, clientY: y,
+    });
+    target.dispatchEvent(ev);
+  }
+  const pointerDown    = (t: Element, x: number, y: number, button = 0) => dispatchPointer(t, 'pointerdown', x, y, button);
+  const docPointerMove = (x: number, y: number) => dispatchPointer(document, 'pointermove', x, y);
+  const docPointerUp   = (x: number, y: number) => dispatchPointer(document, 'pointerup',   x, y);
+
+  test('release outside panel after a drag fires onPlayCardToTable with id + coords', () => {
+    const { onPlay, tile } = setupPanel();
+    pointerDown(tile, 150, 550);     // inside panel
+    docPointerMove(800, 200);        // dragged far away (above panel)
+    docPointerUp(800, 200);          // released outside panel
+    expect(onPlay).toHaveBeenCalledWith('c1', 800, 200);
+  });
+
+  test('release inside panel does NOT fire onPlayCardToTable (reorder is issue #6)', () => {
+    const { onPlay, tile } = setupPanel();
+    pointerDown(tile, 150, 550);
+    docPointerMove(220, 540);        // moved within panel beyond drag threshold
+    docPointerUp(220, 540);          // still inside panel
+    expect(onPlay).not.toHaveBeenCalled();
+  });
+
+  test('press-and-release without movement does not fire (treated as click)', () => {
+    const { onPlay, tile } = setupPanel();
+    pointerDown(tile, 150, 550);
+    docPointerUp(151, 551);          // < drag threshold, no pointermove
+    expect(onPlay).not.toHaveBeenCalled();
+  });
+
+  test('right-click pointerdown is ignored (only left button starts a drag)', () => {
+    const { onPlay, tile } = setupPanel();
+    pointerDown(tile, 150, 550, 2);  // right button
+    docPointerMove(800, 200);
+    docPointerUp(800, 200);
+    expect(onPlay).not.toHaveBeenCalled();
+  });
+});

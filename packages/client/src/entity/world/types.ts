@@ -107,6 +107,11 @@ export interface World {
   broadcastToolMessage(toolId: string, payload: unknown): void;
   onToolBroadcast(handler: (msg: ToolBroadcast) => void): () => void;
 
+  // Drag-from-hand-panel-onto-canvas (issue #5 of issues--hand.md). Host runs
+  // the tween directly; guest dispatches `play-card-to-table` and the host
+  // validates the request originates from the hand's owner before applying.
+  playCardToTable(entity: Entity, position: [number, number, number]): void;
+
   dispose(): void;
 }
 

@@ -10,12 +10,18 @@
 //                          request-update) that do gate on OwnershipPolicy.
 
 import { type SceneImpl } from './Scene';
+import { type Entity } from './Entity';
 import { type SeatIndex } from '../seats/SeatLayout';
 import { canManipulate } from '../seats/OwnershipPolicy';
 import { type HoldService } from './HoldService';
-import { type HoldClaim, type HoldRelease, type InvokeAction, type RequestUpdate, type ApplyImpulse } from './wire';
+import { type HoldClaim, type HoldRelease, type InvokeAction, type RequestUpdate, type ApplyImpulse, type PlayCardToTable } from './wire';
 import { type ActionContext } from './EntityComponent';
 import { PhysicsComponent } from './components/PhysicsComponent';
+import { TweenComponent } from './components/TweenComponent';
+import { ZoneComponent } from './components/ZoneComponent';
+import { HandComponent } from './components/HandComponent';
+
+const PLAY_TO_TABLE_TWEEN_MS = 250;
 
 export class HostInputDispatcher {
   constructor(
@@ -83,4 +89,33 @@ export class HostInputDispatcher {
     phys.applyImpulse({ x: msg.vx, y: msg.vy, z: msg.vz });
     return true;
   }
+
+  // Issue #5 of issues--hand.md — guest drags a tile out of the hand panel
+  // onto the canvas. Sender's seat must own the containing hand (or the hand
+  // is shared / null-owner) and the entity must have a TweenComponent.
+  handlePlayCardToTable(peerId: string, msg: PlayCardToTable): boolean {
+    const senderSeat = this.getPeerSeat(peerId);
+    if (senderSeat === null) return false;
+    const entity = this.scene.getEntity(msg.entityId);
+    if (!entity) return false;
+    const hand = findContainingHand(this.scene, entity.id);
+    if (!hand) return false;
+    if (hand.owner !== null && hand.owner !== senderSeat) return false;
+    const tween = entity.getComponent(TweenComponent);
+    if (!tween) return false;
+    tween.tweenTo({ position: [msg.x, msg.y, msg.z] }, PLAY_TO_TABLE_TWEEN_MS);
+    return true;
+  }
+}
+
+// Walks every Hand entity and returns the one whose zone currently contains
+// `cardId`. Returns null if the card is not in any hand. Linear scan; fine
+// for PoC scale.
+export function findContainingHand(scene: SceneImpl, cardId: string): Entity | null {
+  for (const e of scene.all()) {
+    if (!e.getComponent(HandComponent)) continue;
+    const zone = e.getComponent(ZoneComponent);
+    if (zone?.state.containedIds.includes(cardId)) return e;
+  }
+  return null;
 }

@@ -106,6 +106,17 @@ export interface ApplyImpulse {
   vz:       number;
 }
 
+// Drag-from-hand-panel-onto-canvas (issue #5 of issues--hand.md). Reliable
+// channel (single-shot). Host validates that the request originates from the
+// hand's owner (or anyone for a null-owner shared hand) before tweening.
+export interface PlayCardToTable {
+  type:     'play-card-to-table';
+  entityId: string;
+  x:        number;
+  y:        number;
+  z:        number;
+}
+
 // Cosmetic broadcast originated by a Tool (issue #3 of issues--tools.md).
 // Rides the unreliable channel — missed messages are not retried. Payload
 // schema is per-tool (e.g. ping carries `{ entityId }` or `{ point: [x,z] }`).
@@ -131,4 +142,5 @@ export type SceneMessage =
   | HoldRelease
   | RequestUpdate
   | ApplyImpulse
+  | PlayCardToTable
   | ToolBroadcast;

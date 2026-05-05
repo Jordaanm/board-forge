@@ -43,7 +43,7 @@ import {
   type SpawnOptions,
   type ReplicationPolicy,
 } from './types';
-import { type HoldRelease, type ToolBroadcast } from '../wire';
+import { type HoldRelease, type ToolBroadcast, type PlayCardToTable } from '../wire';
 
 // Bounds-enforcement constants — mirror SceneSystemV2 so behaviour is identical
 // during the parity slice. Issue #5 deletes the duplicate.
@@ -437,6 +437,24 @@ class WorldImpl implements World, HandleRouter {
     this.transport.send(msg, { reliable: true });
   }
 
+  // Drag-from-panel-onto-canvas. Host runs the tween directly; guest fires an
+  // RPC and lets the host validate + apply (issue #5 of issues--hand.md).
+  playCardToTable(entity: Entity, position: [number, number, number]): void {
+    if (this.role === 'host') {
+      const tween = entity.getComponent(TweenComponent);
+      if (tween) tween.tweenTo({ position }, 250);
+      return;
+    }
+    const msg: PlayCardToTable = {
+      type:     'play-card-to-table',
+      entityId: entity.id,
+      x:        position[0],
+      y:        position[1],
+      z:        position[2],
+    };
+    this.transport.send(msg, { reliable: true });
+  }
+
   applyImpulse(entity: Entity, v: { x: number; y: number; z: number }): void {
     if (!canManipulate({ peerSeat: this.identity.selfSeat(), isHost: this.role === 'host' }, entity.owner)) return;
     const phys = entity.getComponent(PhysicsComponent);
@@ -506,6 +524,7 @@ class WorldImpl implements World, HandleRouter {
       case 'request-update':   this.hostInput?.handleRequestUpdate(peerId, msg); return;
       case 'invoke-action':    this.hostInput?.handleInvokeAction(peerId, msg);  return;
       case 'apply-impulse':    this.hostInput?.handleApplyImpulse(peerId, msg);  return;
+      case 'play-card-to-table': this.hostInput?.handlePlayCardToTable(peerId, msg); return;
       case 'guest-drag-move':  this.guestInput?.handleMessage(peerId, msg);      return;
       case 'guest-drag-start':
       case 'guest-drag-end':
@@ -609,6 +628,7 @@ class WorldImpl implements World, HandleRouter {
       case 'invoke-action':
       case 'request-update':
       case 'apply-impulse':
+      case 'play-card-to-table':
       case 'guest-drag-move':
       case 'guest-drag-start':
       case 'guest-drag-end':

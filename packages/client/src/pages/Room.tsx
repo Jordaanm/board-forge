@@ -83,6 +83,7 @@ export function Room({ roomId, isHost }: Props) {
   const setShowAllZonesRef = useRef<(on: boolean) => void>(noop);
   const setHandViewRef     = useRef<(view: HandView | null) => void>(noop);
   const requestHandTileMenuRef = useRef<(entityId: string, x: number, y: number) => void>(noop);
+  const playCardToTableRef = useRef<(entityId: string, x: number, y: number) => void>(noop);
   const claimSeatRef       = useRef<(seatIndex: SeatIndex) => void>(noop);
   const kickPeerRef        = useRef<(peerId: string) => void>(noop);
   const banPeerRef         = useRef<(peerId: string) => void>(noop);
@@ -312,6 +313,7 @@ export function Room({ roomId, isHost }: Props) {
         setShowAllZonesRef={setShowAllZonesRef}
         setHandViewRef={setHandViewRef}
         requestHandTileMenuRef={requestHandTileMenuRef}
+        playCardToTableRef={playCardToTableRef}
       />
 
       <AnchorLayout>
@@ -382,6 +384,7 @@ export function Room({ roomId, isHost }: Props) {
               selectedId={selectedId}
               onSelectTile={(id) => setSelectedId(id)}
               onTileContextMenu={(id, x, y) => requestHandTileMenuRef.current(id, x, y)}
+              onPlayCardToTable={(id, x, y) => playCardToTableRef.current(id, x, y)}
             />
           </UIPanel>
         )}

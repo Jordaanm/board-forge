@@ -65,6 +65,7 @@ interface Props {
   setShowAllZonesRef:  MutableRefObject<(on: boolean) => void>;
   setHandViewRef:      MutableRefObject<(view: HandView | null) => void>;
   requestHandTileMenuRef: MutableRefObject<(entityId: string, x: number, y: number) => void>;
+  playCardToTableRef:  MutableRefObject<(entityId: string, clientX: number, clientY: number) => void>;
 }
 
 export interface HandView {
@@ -80,7 +81,7 @@ export function ThreeCanvas({
   freeCameraRef, onObjectsChangeRef,
   onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,
   setShowAllZonesRef,
-  setHandViewRef, requestHandTileMenuRef,
+  setHandViewRef, requestHandTileMenuRef, playCardToTableRef,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -235,6 +236,27 @@ export function ThreeCanvas({
     };
 
     setShowAllZonesRef.current = (on) => { ZoneComponent.showAllZones = on; };
+
+    // Hand panel "play to table". Raycasts the screen pointer to the table
+    // surface and dispatches via the World facade — host runs the tween,
+    // guest fires the play-card-to-table RPC. Y is lifted just above the
+    // table so the card doesn't z-fight on landing; gravity settles it.
+    const playRay   = new THREE.Raycaster();
+    const playNDC   = new THREE.Vector2();
+    const playHit   = new THREE.Vector3();
+    const tablePlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -TABLE_SURFACE_Y);
+    playCardToTableRef.current = (entityId, clientX, clientY) => {
+      const handle = world.get(entityId);
+      if (!handle) return;
+      const rect = renderer.domElement.getBoundingClientRect();
+      playNDC.set(
+         ((clientX - rect.left) / rect.width)  * 2 - 1,
+        -((clientY - rect.top)  / rect.height) * 2 + 1,
+      );
+      playRay.setFromCamera(playNDC, camera);
+      if (!playRay.ray.intersectPlane(tablePlane, playHit)) return;
+      world.playCardToTable(handle.entity, [playHit.x, playHit.y + 0.05, playHit.z]);
+    };
 
     // Compose a ContextMenuRequest for a hand-panel tile right-click. Reuses
     // the same aggregation pipeline as 3D right-clicks so component-contributed
@@ -437,7 +459,7 @@ export function ThreeCanvas({
     updatePropRef, updateTablePropRef, updateSkydomePropRef, updateKeyLightPropRef,
     freeCameraRef, onObjectsChangeRef,
     onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,
-    setShowAllZonesRef, setHandViewRef, requestHandTileMenuRef,
+    setShowAllZonesRef, setHandViewRef, requestHandTileMenuRef, playCardToTableRef,
   ]);
 
   return (
