@@ -25,6 +25,7 @@ import { TransformComponent } from '../components/TransformComponent';
 import { PhysicsComponent } from '../components/PhysicsComponent';
 import { MeshComponent } from '../components/MeshComponent';
 import { ZoneComponent } from '../components/ZoneComponent';
+import { TweenComponent } from '../components/TweenComponent';
 import { registerCorePrimitives } from '../spawnables';
 import { PhysicsWorld } from '../../physics/PhysicsWorld';
 import { TABLE_SURFACE_Y, TABLE_WIDTH, TABLE_DEPTH } from '../../scene/Table';
@@ -231,6 +232,7 @@ class WorldImpl implements World, HandleRouter {
     if (this.disposed) return;
 
     if (this.role === 'host' && this.physics && this.replicator) {
+      this.tickTweens(dtSeconds);
       this.syncZoneBodies();
       this.physics.step(dtSeconds);
       this.enforceTableBounds();
@@ -294,6 +296,15 @@ class WorldImpl implements World, HandleRouter {
     }
   }
 
+  // Advance every active tween by dt before physics integrates. Tweens write
+  // interpolated pose into both TransformComponent and the physics body so
+  // sensor AABBs (zones) track the motion.
+  private tickTweens(dtSeconds: number): void {
+    for (const entity of this.scene.all()) {
+      entity.getComponent(TweenComponent)?.tick(dtSeconds);
+    }
+  }
+
   // ── Read surface ─────────────────────────────────────────────────────────
   get(id: string): EntityHandle | undefined {
     const entity = this.scene.getEntity(id);
@@ -335,6 +346,13 @@ class WorldImpl implements World, HandleRouter {
 
   // ── Snapshot / load ──────────────────────────────────────────────────────
   snapshot(): EntitySerialized[] {
+    // Snap any active tweens to their target pose so the snapshot captures
+    // the destination — tween internals are transient and would otherwise be
+    // lost across a save / load round-trip.
+    for (const entity of this.scene.all()) {
+      const tween = entity.getComponent(TweenComponent);
+      if (tween?.isActive()) tween.snapToTarget();
+    }
     return this.scene.all().map(entityToSerialized);
   }
 

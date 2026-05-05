@@ -39,6 +39,7 @@ export class HoldService {
     if (entity.heldBy !== null) return false;
     const phys = entity.getComponent(PhysicsComponent);
     if (phys?.state.isLocked) return false;
+    entity.cancelTween();
     entity.heldBy = seat;
 
     const body = entity.getComponent(PhysicsComponent)?.body;

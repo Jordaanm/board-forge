@@ -69,6 +69,14 @@ export class Entity {
     // get their world reference filled in by SceneImpl.add.
     if (this.scene) comp.world = this.scene.world;
   }
+
+  // Cancel any active tween on this entity. No-op if no TweenComponent is
+  // attached. Duck-typed to avoid a static dependency on TweenComponent so
+  // Entity stays a pure data class.
+  cancelTween(): void {
+    const tween = this.components.get('tween') as { cancel?: () => void } | undefined;
+    tween?.cancel?.();
+  }
 }
 
 // Default display name: `${label}-${guid.slice(0, 8)}`.

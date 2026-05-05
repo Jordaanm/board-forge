@@ -141,6 +141,7 @@ export class PhysicsComponent extends EntityComponent<PhysicsState> {
 
   applyImpulse(i: Vec3Like): void {
     if (this.state.isLocked) return;
+    this.entity.cancelTween();
     this.body.applyImpulse(new CANNON.Vec3(i.x, i.y, i.z));
     this.body.wakeUp();
   }

@@ -13,6 +13,7 @@ import { DiceComponent } from './components/DiceComponent';
 import { FlatViewComponent } from './components/FlatViewComponent';
 import { CardComponent } from './components/CardComponent';
 import { ZoneComponent } from './components/ZoneComponent';
+import { TweenComponent } from './components/TweenComponent';
 import { D6_FACE_MAP } from '../dice/d6';
 
 export function registerCorePrimitives(): void {
@@ -24,6 +25,7 @@ export function registerCorePrimitives(): void {
   if (!componentRegistry.has('flatview'))  componentRegistry.register(FlatViewComponent);
   if (!componentRegistry.has('card'))      componentRegistry.register(CardComponent);
   if (!componentRegistry.has('zone'))      componentRegistry.register(ZoneComponent);
+  if (!componentRegistry.has('tween'))     componentRegistry.register(TweenComponent);
 
   if (!getSpawnable('board')) registerSpawnable({
     type:        'board',
@@ -48,6 +50,7 @@ export function registerCorePrimitives(): void {
       { typeId: 'physics',   state: { mass: 0.2, friction: 0.5, restitution: 0.5, isLocked: false } },
       { typeId: 'value',     state: { value: '6', isNumeric: true } },
       { typeId: 'dice',      state: { maxValue: 6, faceMap: D6_FACE_MAP } },
+      { typeId: 'tween',     state: {} },
     ],
   });
 
@@ -60,6 +63,7 @@ export function registerCorePrimitives(): void {
       { typeId: 'transform', state: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } },
       { typeId: 'mesh',      state: { meshRef: 'prim:meeple', textureRefs: { default: '' }, tint: '#2266cc', size: [0.5, 0.75, 0.5] } },
       { typeId: 'physics',   state: { mass: 0.1, friction: 0.5, restitution: 0.3, isLocked: false } },
+      { typeId: 'tween',     state: {} },
     ],
   });
 
@@ -75,6 +79,7 @@ export function registerCorePrimitives(): void {
       { typeId: 'physics',   state: { mass: 0.05, friction: 0.6, restitution: 0.1, isLocked: false } },
       { typeId: 'flatview',  state: { textureRef: '' } },
       { typeId: 'card',      state: { face: '', back: '', category: '' } },
+      { typeId: 'tween',     state: {} },
     ],
   });
 
