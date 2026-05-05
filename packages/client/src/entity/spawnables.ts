@@ -12,6 +12,7 @@ import { ValueComponent } from './components/ValueComponent';
 import { DiceComponent } from './components/DiceComponent';
 import { FlatViewComponent } from './components/FlatViewComponent';
 import { CardComponent } from './components/CardComponent';
+import { ZoneComponent } from './components/ZoneComponent';
 import { D6_FACE_MAP } from '../dice/d6';
 
 export function registerCorePrimitives(): void {
@@ -22,6 +23,7 @@ export function registerCorePrimitives(): void {
   if (!componentRegistry.has('dice'))      componentRegistry.register(DiceComponent);
   if (!componentRegistry.has('flatview'))  componentRegistry.register(FlatViewComponent);
   if (!componentRegistry.has('card'))      componentRegistry.register(CardComponent);
+  if (!componentRegistry.has('zone'))      componentRegistry.register(ZoneComponent);
 
   if (!getSpawnable('board')) registerSpawnable({
     type:        'board',
@@ -73,6 +75,17 @@ export function registerCorePrimitives(): void {
       { typeId: 'physics',   state: { mass: 0.05, friction: 0.6, restitution: 0.1, isLocked: false } },
       { typeId: 'flatview',  state: { textureRef: '' } },
       { typeId: 'card',      state: { face: '', back: '', category: '' } },
+    ],
+  });
+
+  if (!getSpawnable('zone')) registerSpawnable({
+    type:        'zone',
+    label:       'Zone',
+    category:    'Zones',
+    defaultTags: ['zone'],
+    components: [
+      { typeId: 'transform', state: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } },
+      { typeId: 'zone',      state: { halfExtents: [0.5, 0.1, 0.5], containedIds: [], isVisible: true } },
     ],
   });
 }

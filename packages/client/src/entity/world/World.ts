@@ -24,6 +24,7 @@ import { type SceneMessage, type EntityFieldsPartial } from '../wire';
 import { TransformComponent } from '../components/TransformComponent';
 import { PhysicsComponent } from '../components/PhysicsComponent';
 import { MeshComponent } from '../components/MeshComponent';
+import { ZoneComponent } from '../components/ZoneComponent';
 import { registerCorePrimitives } from '../spawnables';
 import { PhysicsWorld } from '../../physics/PhysicsWorld';
 import { TABLE_SURFACE_Y, TABLE_WIDTH, TABLE_DEPTH } from '../../scene/Table';
@@ -199,8 +200,20 @@ class WorldImpl implements World, HandleRouter {
       return;
     }
 
+    const zone = entity.getComponent(ZoneComponent);
+    if (zone) {
+      const cur = zone.state.halfExtents;
+      if      (key === 'halfExtentsX') zone.setState({ halfExtents: [Number(value), cur[1], cur[2]] });
+      else if (key === 'halfExtentsY') zone.setState({ halfExtents: [cur[0], Number(value), cur[2]] });
+      else if (key === 'halfExtentsZ') zone.setState({ halfExtents: [cur[0], cur[1], Number(value)] });
+      else if (key === 'isVisible')    zone.setState({ isVisible: Boolean(value) });
+    }
+
     const mesh = entity.getComponent(MeshComponent);
-    if (!mesh) return;
+    if (!mesh) {
+      this.notify();
+      return;
+    }
 
     if (entity.type === 'board') {
       const cur = mesh.state.size as [number, number, number];
@@ -218,6 +231,7 @@ class WorldImpl implements World, HandleRouter {
     if (this.disposed) return;
 
     if (this.role === 'host' && this.physics && this.replicator) {
+      this.syncZoneBodies();
       this.physics.step(dtSeconds);
       this.enforceTableBounds();
       this.syncFromPhysics();
@@ -269,6 +283,14 @@ class WorldImpl implements World, HandleRouter {
   private syncFromPhysics(): void {
     for (const entity of this.scene.all()) {
       entity.getComponent(PhysicsComponent)?.syncToTransform();
+    }
+  }
+
+  // Push each zone's TransformComponent pose into its sensor body before the
+  // physics step so contact events fire against the correct world-space AABB.
+  private syncZoneBodies(): void {
+    for (const entity of this.scene.all()) {
+      entity.getComponent(ZoneComponent)?.syncBodyFromTransform();
     }
   }
 

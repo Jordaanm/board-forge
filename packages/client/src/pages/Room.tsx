@@ -52,6 +52,7 @@ export function Room({ roomId, isHost }: Props) {
   const [roomSnapshot, setRoomSnapshot] = useState<RoomStateSnapshot | null>(null);
   const [selfPeerId,   setSelfPeerId]   = useState<string | null>(null);
   const [activeToolId, setActiveToolId] = useState<string>(TOOL_CATALOGUE[0]?.id ?? 'grab');
+  const [showAllZones, setShowAllZones] = useState(false);
 
   const sendRef            = useRef<(msg: ChannelMessage, opts?: { reliable?: boolean }) => void>(noop);
   const sendToRef          = useRef<(peerId: string, msg: ChannelMessage, opts?: { reliable?: boolean }) => void>(noop);
@@ -77,6 +78,7 @@ export function Room({ roomId, isHost }: Props) {
   const getEntityRef       = useRef<(id: string) => Entity | undefined>(() => undefined);
   const setActiveToolRef   = useRef<(toolId: string) => boolean>(() => false);
   const getActiveToolRef   = useRef<() => string>(() => activeToolId);
+  const setShowAllZonesRef = useRef<(on: boolean) => void>(noop);
   const claimSeatRef       = useRef<(seatIndex: SeatIndex) => void>(noop);
   const kickPeerRef        = useRef<(peerId: string) => void>(noop);
   const banPeerRef         = useRef<(peerId: string) => void>(noop);
@@ -248,6 +250,11 @@ export function Room({ roomId, isHost }: Props) {
     if (setActiveToolRef.current(toolId)) setActiveToolId(toolId);
   };
 
+  const handleToggleShowAllZones = (on: boolean) => {
+    setShowAllZones(on);
+    setShowAllZonesRef.current(on);
+  };
+
   const handleUpdateTableProp = (key: keyof TableProps, value: unknown) => {
     setTableProps(p => ({ ...p, [key]: value }));
     updateTablePropRef.current(key, value);
@@ -297,6 +304,7 @@ export function Room({ roomId, isHost }: Props) {
         getEntityRef={getEntityRef}
         setActiveToolRef={setActiveToolRef}
         getActiveToolRef={getActiveToolRef}
+        setShowAllZonesRef={setShowAllZonesRef}
       />
 
       <AnchorLayout>
@@ -308,7 +316,11 @@ export function Room({ roomId, isHost }: Props) {
 
         {isHost && (
           <UIPanel anchor="top-center" order={10}>
-            <HostActionBar onSpawn={(t) => spawnRef.current(t)} />
+            <HostActionBar
+              onSpawn={(t) => spawnRef.current(t)}
+              showAllZones={showAllZones}
+              onToggleShowAllZones={handleToggleShowAllZones}
+            />
           </UIPanel>
         )}
 

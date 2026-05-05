@@ -12,6 +12,7 @@ import { TransformComponent } from './entity/components/TransformComponent';
 import { MeshComponent } from './entity/components/MeshComponent';
 import { ValueComponent } from './entity/components/ValueComponent';
 import { DiceComponent } from './entity/components/DiceComponent';
+import { ZoneComponent } from './entity/components/ZoneComponent';
 import { MoveGizmo } from './scene/MoveGizmo';
 import { CameraController } from './camera/CameraController';
 import { ToolDispatcher, TOOL_CATALOGUE, type Tool } from './input/tools';
@@ -57,6 +58,7 @@ interface Props {
   getEntityRef:        MutableRefObject<(id: string) => Entity | undefined>;
   setActiveToolRef:    MutableRefObject<(toolId: string) => boolean>;
   getActiveToolRef:    MutableRefObject<() => string>;
+  setShowAllZonesRef:  MutableRefObject<(on: boolean) => void>;
 }
 
 export function ThreeCanvas({
@@ -66,6 +68,7 @@ export function ThreeCanvas({
   updatePropRef, updateTablePropRef, updateSkydomePropRef, updateKeyLightPropRef,
   freeCameraRef, onObjectsChangeRef,
   onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,
+  setShowAllZonesRef,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -206,6 +209,7 @@ export function ThreeCanvas({
     setHighlightRef.current = (id) => {
       if (highlightId === id) return;
       highlightId = id;
+      ZoneComponent.selectedEntityId = id;
       clearHighlightBox();
       if (id) {
         const obj = world.get(id)?.get(TransformComponent)?.object3d;
@@ -217,6 +221,8 @@ export function ThreeCanvas({
       }
       grabTool.setSelection(id, dispatcher.getContext());
     };
+
+    setShowAllZonesRef.current = (on) => { ZoneComponent.showAllZones = on; };
 
     const unsubscribe = world.subscribe(() => {
       if (highlightId && !world.get(highlightId)) {
@@ -328,6 +334,9 @@ export function ThreeCanvas({
       cursorOverlay.sync(cursorTracker.all());
       pingOverlay?.update(dt);
 
+      // Drive zone debug-mesh visibility from selection + global toggle.
+      world.forEach((h) => h.entity.getComponent(ZoneComponent)?.updateDebugVisibility());
+
       if (highlightHelper) highlightHelper.update();
 
       renderer.render(scene, camera);
@@ -375,6 +384,8 @@ export function ThreeCanvas({
       getActiveToolRef.current   = () => 'grab';
       renderer.dispose();
       container.removeChild(renderer.domElement);
+      ZoneComponent.selectedEntityId = null;
+      ZoneComponent.showAllZones     = false;
     };
   }, [
     isHost, sendRef, sendToRef, getTargetsRef, getSelfSeatRef, getSelfPeerIdRef, getPeerSeatRef,
@@ -383,6 +394,7 @@ export function ThreeCanvas({
     updatePropRef, updateTablePropRef, updateSkydomePropRef, updateKeyLightPropRef,
     freeCameraRef, onObjectsChangeRef,
     onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,
+    setShowAllZonesRef,
   ]);
 
   return (
@@ -397,6 +409,7 @@ export function ThreeCanvas({
 function entityToObjectSummary(entity: Entity): ObjectSummary {
   const mesh  = entity.getComponent(MeshComponent);
   const value = entity.getComponent(ValueComponent);
+  const zone  = entity.getComponent(ZoneComponent);
   const props: Record<string, unknown> = { name: entity.name };
   if (entity.type === 'board' && mesh) {
     const sz = mesh.state.size as [number, number, number];
@@ -407,6 +420,13 @@ function entityToObjectSummary(entity: Entity): ObjectSummary {
     props.color = mesh.state.tint;
   } else if (entity.type === 'die' && value) {
     props.value = value.state.value;
+  }
+  if (zone) {
+    const [hx, hy, hz] = zone.state.halfExtents;
+    props.halfExtentsX = hx;
+    props.halfExtentsY = hy;
+    props.halfExtentsZ = hz;
+    props.isVisible    = zone.state.isVisible;
   }
   return {
     id:         entity.id,

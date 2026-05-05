@@ -8,7 +8,7 @@ import { getSpawnable } from '../entity/SpawnableRegistry';
 // table goes away.
 
 export type ActionDef   = { id: string; label: string };
-export type PropertyDef = { key: string; label: string; type: 'number' | 'string' | 'color' };
+export type PropertyDef = { key: string; label: string; type: 'number' | 'string' | 'color' | 'boolean' };
 
 export interface ObjectMeta {
   type:           SpawnableType;
@@ -43,6 +43,18 @@ export const OBJECT_META: Record<string, ObjectMeta> = {
     propertySchema: [
       { key: 'name',  label: 'Name',  type: 'string' },
       { key: 'color', label: 'Color', type: 'color' },
+    ],
+    actions: [],
+  },
+  zone: {
+    type:  'zone',
+    label: 'Zone',
+    propertySchema: [
+      { key: 'name',         label: 'Name',           type: 'string'  },
+      { key: 'halfExtentsX', label: 'Half-extent X',  type: 'number'  },
+      { key: 'halfExtentsY', label: 'Half-extent Y',  type: 'number'  },
+      { key: 'halfExtentsZ', label: 'Half-extent Z',  type: 'number'  },
+      { key: 'isVisible',    label: 'Show debug box', type: 'boolean' },
     ],
     actions: [],
   },

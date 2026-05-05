@@ -382,6 +382,13 @@ function PropertyRow({
           onChange={e => onChange(e.target.value)}
         />
       )}
+      {def.type === 'boolean' && (
+        <input
+          type="checkbox"
+          checked={Boolean(value)}
+          onChange={e => onChange(e.target.checked)}
+        />
+      )}
     </div>
   );
 }

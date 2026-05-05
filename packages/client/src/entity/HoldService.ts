@@ -15,6 +15,7 @@ import { type Entity } from './Entity';
 import { type SeatIndex } from '../seats/SeatLayout';
 import { type HostReplicatorV2 } from './HostReplicatorV2';
 import { PhysicsComponent } from './components/PhysicsComponent';
+import { ZoneComponent } from './components/ZoneComponent';
 
 export interface ReleaseVelocity {
   vx: number;
@@ -73,6 +74,13 @@ export class HoldService {
         ? { entityId: entity.id, vx: vel.vx, vy: vel.vy, vz: vel.vz }
         : { entityId: entity.id },
     );
+
+    // Held-state filter excludes carried entities from zone membership; on
+    // release any zone whose AABB still overlaps the body must include it.
+    for (const z of this.scene.all()) {
+      const zone = z.getComponent(ZoneComponent);
+      if (zone) zone.recomputeMembership();
+    }
   }
 
   // Peer disconnect: drop every hold owned by the leaving seat. No final
