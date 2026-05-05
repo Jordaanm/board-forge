@@ -62,7 +62,7 @@ Three subsystems land together because each is incomplete without the others:
 
 ---
 
-## Issue #3 — Card↔deck merge
+## Issue #3 — Card↔deck merge ✅ Completed
 
 ### What to build
 
@@ -74,11 +74,11 @@ This also covers user story 11 (drag a card from the hand panel onto a deck on t
 
 ### Acceptance criteria
 
-- [ ] `MergeService.merge` handles `(card, deck)` — card inserted at `cards[0]`, deck transform unchanged.
-- [ ] Deck mesh re-renders with the new card's face on top after merge.
-- [ ] Mismatched-category card colliding with a deck does not merge.
-- [ ] Card dragged from a hand panel onto a deck (via `playCardToTable`) lands and merges via the same code path.
-- [ ] Test in `MergeService.test.ts`: merging a card with a deck produces `cards = [newCardId, ...oldCards]`.
+- [x] `MergeService.merge` handles `(card, deck)` — card inserted at `cards[0]`, deck transform unchanged.
+- [x] Deck mesh re-renders with the new card's face on top after merge.
+- [x] Mismatched-category card colliding with a deck does not merge.
+- [x] Card dragged from a hand panel onto a deck (via `playCardToTable`) lands and merges via the same code path.
+- [x] Test in `MergeService.test.ts`: merging a card with a deck produces `cards = [newCardId, ...oldCards]`.
 
 ### Blocked by
 

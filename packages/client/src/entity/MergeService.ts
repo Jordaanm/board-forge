@@ -72,9 +72,17 @@ export class MergeService {
 
     const aCard = a.getComponent(CardComponent);
     const bCard = b.getComponent(CardComponent);
+    const aDeck = a.getComponent(DeckComponent);
+    const bDeck = b.getComponent(DeckComponent);
 
     if (aCard && bCard) {
       return aCard.state.category === bCard.state.category;
+    }
+    if (aCard && bDeck) {
+      return aCard.state.category === bDeck.state.category;
+    }
+    if (aDeck && bCard) {
+      return bCard.state.category === aDeck.state.category;
     }
     return false;
   }
@@ -83,8 +91,16 @@ export class MergeService {
     if (!this.canMerge(a, b)) return null;
     const aCard = a.getComponent(CardComponent);
     const bCard = b.getComponent(CardComponent);
+    const aDeck = a.getComponent(DeckComponent);
+    const bDeck = b.getComponent(DeckComponent);
     if (aCard && bCard) {
       return this.mergeCardCard(a, b);
+    }
+    if (aCard && bDeck) {
+      return this.mergeCardIntoDeck(a, b);
+    }
+    if (aDeck && bCard) {
+      return this.mergeCardIntoDeck(b, a);
     }
     return null;
   }
@@ -93,6 +109,20 @@ export class MergeService {
   // enqueueContact + processQueued to keep mutations out of the physics step.
   tryMergeOnContact(a: Entity, b: Entity): Entity | null {
     return this.merge(a, b);
+  }
+
+  private mergeCardIntoDeck(card: Entity, deck: Entity): Entity {
+    const deckC = deck.getComponent(DeckComponent)!;
+    const cards = [card.id, ...deckC.state.cards];
+
+    deck.children = [...cards];
+    this.replicator.enqueueEntityPatch(deck.id, { children: [...cards] });
+
+    deckC.setState({ cards });
+
+    setEntityIsContained(card, true,    this.replicator);
+    setEntityParentId   (card, deck.id, this.replicator);
+    return deck;
   }
 
   private mergeCardCard(a: Entity, b: Entity): Entity {

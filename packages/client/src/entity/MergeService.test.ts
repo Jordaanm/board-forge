@@ -204,6 +204,74 @@ describe('MergeService — queued contact processing', () => {
   });
 });
 
+describe('MergeService.merge — card↔deck', () => {
+  function spawnDeckWith(deckPos: [number, number, number], cards: string[], category: string) {
+    const deck = scene.spawn('deck', ctx);
+    const t = deck.getComponent(TransformComponent)!;
+    t.setState({ position: deckPos, rotation: t.state.rotation, scale: t.state.scale });
+    deck.getComponent(DeckComponent)!.setState({ cards, category });
+    deck.children = [...cards];
+    return deck;
+  }
+
+  test('card joins deck at index 0; deck transform unchanged', () => {
+    const c1 = spawnCard({ id: 'c1', category: 'tarot', face: 'f1', back: 'b1' });
+    const c2 = spawnCard({ id: 'c2', category: 'tarot', face: 'f2', back: 'b2' });
+    // Pre-merge into a deck.
+    const deck = merge.merge(c1, c2)!;
+    const deckPosBefore = [...deck.getComponent(TransformComponent)!.state.position] as [number, number, number];
+
+    // New card lands.
+    const newer = spawnCard({ id: 'newer', pos: [0, 1, 0], category: 'tarot', face: 'fNEW', back: 'bNEW' });
+    const result = merge.merge(newer, deck);
+    expect(result).toBe(deck);
+
+    const deckC = deck.getComponent(DeckComponent)!;
+    expect(deckC.state.cards[0]).toBe('newer');
+    expect(deckC.state.cards.length).toBe(3);
+
+    const deckPosAfter = deck.getComponent(TransformComponent)!.state.position;
+    expect(deckPosAfter).toEqual(deckPosBefore);
+  });
+
+  test('mismatched-category card vs deck → no merge', () => {
+    const c1 = spawnCard({ category: 'tarot' });
+    const c2 = spawnCard({ category: 'tarot' });
+    const deck = merge.merge(c1, c2)!;
+    const odd = spawnCard({ category: 'pinochle' });
+    expect(merge.merge(odd, deck)).toBeNull();
+    expect(merge.canMerge(odd, deck)).toBe(false);
+  });
+
+  test('argument order is symmetric', () => {
+    const c1 = spawnCard({ category: 'x' });
+    const c2 = spawnCard({ category: 'x' });
+    const deck = merge.merge(c1, c2)!;
+    const newer = spawnCard({ id: 'n', category: 'x' });
+    const result = merge.merge(deck, newer);  // deck first
+    expect(result).toBe(deck);
+    expect(deck.getComponent(DeckComponent)!.state.cards[0]).toBe('n');
+  });
+
+  test('held card cannot merge with a deck', () => {
+    const c1 = spawnCard({ category: 'x' });
+    const c2 = spawnCard({ category: 'x' });
+    const deck = merge.merge(c1, c2)!;
+    const newer = spawnCard({ category: 'x' });
+    newer.heldBy = 0;
+    expect(merge.canMerge(newer, deck)).toBe(false);
+  });
+
+  test('held deck cannot merge with a card', () => {
+    const c1 = spawnCard({ category: 'x' });
+    const c2 = spawnCard({ category: 'x' });
+    const deck = merge.merge(c1, c2)!;
+    deck.heldBy = 0;
+    const newer = spawnCard({ category: 'x' });
+    expect(merge.canMerge(newer, deck)).toBe(false);
+  });
+});
+
 describe('MergeService — public spawnable filter', () => {
   test('deck spawnable is registered as internal', async () => {
     const { getSpawnable, listPublicSpawnables } = await import('./SpawnableRegistry');
