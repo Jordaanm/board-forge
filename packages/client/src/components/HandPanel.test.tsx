@@ -169,3 +169,107 @@ describe('HandPanel — drag-to-canvas (issue #5)', () => {
     expect(onPlay).not.toHaveBeenCalled();
   });
 });
+
+describe('HandPanel — drag-within-panel reorder (issue #6)', () => {
+  // Spoofed tile rects: c1 at [110..160], c2 at [170..220], c3 at [230..280].
+  function setupReorderPanel() {
+    const onReorder = vi.fn();
+    const result = render(
+      <HandPanel
+        cards={SAMPLE}
+        selectedId={null}
+        onSelectTile={noop}
+        onTileContextMenu={noop}
+        onReorderHand={onReorder}
+      />,
+    );
+    const panel = result.getByTestId('hand-panel');
+    panel.getBoundingClientRect = () => ({
+      x: 100, y: 500, left: 100, top: 500, right: 290, bottom: 600,
+      width: 190, height: 100, toJSON: () => ({}),
+    } as DOMRect);
+    const tiles = SAMPLE.map((card, i) => {
+      const t = result.getByTestId(`hand-panel-tile-${card.id}`);
+      const left = 110 + i * 60;
+      t.getBoundingClientRect = () => ({
+        x: left, y: 510, left, top: 510, right: left + 50, bottom: 590,
+        width: 50, height: 80, toJSON: () => ({}),
+      } as DOMRect);
+      return t;
+    });
+    return { onReorder, panel, tiles };
+  }
+
+  function dispatchPointer(target: EventTarget, type: string, x: number, y: number, button = 0): void {
+    target.dispatchEvent(new MouseEvent(type, {
+      bubbles: true, cancelable: true, button, clientX: x, clientY: y,
+    }));
+  }
+  const pointerDown    = (t: Element, x: number, y: number) => dispatchPointer(t, 'pointerdown', x, y);
+  const docPointerMove = (x: number, y: number) => dispatchPointer(document, 'pointermove', x, y);
+  const docPointerUp   = (x: number, y: number) => dispatchPointer(document, 'pointerup',   x, y);
+
+  test('drop on another tile swaps the two', () => {
+    const { onReorder, tiles } = setupReorderPanel();
+    // Stub elementFromPoint so the drop hits c3's tile.
+    document.elementFromPoint = (() => tiles[2]) as Document['elementFromPoint'];
+
+    pointerDown(tiles[0], 135, 550);   // press on c1
+    docPointerMove(255, 550);          // drag toward c3
+    docPointerUp  (255, 550);          // release on c3
+
+    expect(onReorder).toHaveBeenCalledWith(['c3', 'c2', 'c1']);
+  });
+
+  test('drop on a gap inserts at that index', () => {
+    const { onReorder, tiles } = setupReorderPanel();
+    // No tile under the pointer — drop is in the gap between c2 and c3.
+    document.elementFromPoint = (() => null) as Document['elementFromPoint'];
+
+    pointerDown(tiles[0], 135, 550);   // press on c1
+    docPointerMove(225, 550);          // drag past c2
+    docPointerUp  (225, 550);          // release between c2 and c3 (gap idx = 2)
+
+    // Removing c1 from front and inserting at gap idx 2 - 1 = 1 → [c2, c1, c3]
+    expect(onReorder).toHaveBeenCalledWith(['c2', 'c1', 'c3']);
+  });
+
+  test('drop on the dragged tile itself is a no-op', () => {
+    const { onReorder, tiles } = setupReorderPanel();
+    document.elementFromPoint = (() => tiles[0]) as Document['elementFromPoint'];
+
+    pointerDown(tiles[0], 135, 550);
+    docPointerMove(140, 552);
+    docPointerUp  (140, 552);
+
+    expect(onReorder).not.toHaveBeenCalled();
+  });
+
+  test('drop outside panel still routes to onPlayCardToTable, not onReorderHand', () => {
+    const onPlay    = vi.fn();
+    const onReorder = vi.fn();
+    const result = render(
+      <HandPanel
+        cards={SAMPLE}
+        selectedId={null}
+        onSelectTile={noop}
+        onTileContextMenu={noop}
+        onPlayCardToTable={onPlay}
+        onReorderHand={onReorder}
+      />,
+    );
+    const panel = result.getByTestId('hand-panel');
+    panel.getBoundingClientRect = () => ({
+      x: 100, y: 500, left: 100, top: 500, right: 290, bottom: 600,
+      width: 190, height: 100, toJSON: () => ({}),
+    } as DOMRect);
+    const tile = result.getByTestId('hand-panel-tile-c1');
+
+    pointerDown(tile, 130, 550);
+    docPointerMove(700, 200);
+    docPointerUp  (700, 200);
+
+    expect(onPlay).toHaveBeenCalledWith('c1', 700, 200);
+    expect(onReorder).not.toHaveBeenCalled();
+  });
+});

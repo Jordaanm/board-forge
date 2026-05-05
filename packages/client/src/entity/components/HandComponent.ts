@@ -70,6 +70,21 @@ export class HandComponent extends EntityComponent<HandState> {
   }
 
   // ── Public API ─────────────────────────────────────────────────────────
+  // Reorder the contained cards. `newOrder` must be a permutation of the
+  // current `containedIds` — anything else is rejected. Mutates the zone's
+  // ordered membership and re-arranges 3D slots to match. Returns true on
+  // success. Issue #6 of issues--hand.md.
+  reorderContents(newOrder: readonly string[]): boolean {
+    const zone = this.entity.getComponent(ZoneComponent);
+    if (!zone) return false;
+    const current = zone.state.containedIds;
+    if (!isPermutation(current, newOrder)) return false;
+    if (sameArrayOrder(current, newOrder)) return false;
+    zone.setState({ containedIds: [...newOrder] });
+    this.arrangeContents();
+    return true;
+  }
+
   // Re-tween every current content into its computed slot pose. Wired to the
   // "Tidy hand" context-menu action and called whenever membership changes.
   arrangeContents(): void {
@@ -152,6 +167,8 @@ export class HandComponent extends EntityComponent<HandState> {
     return result;
   }
 
+  // ── Helpers ─────────────────────────────────────────────────────────
+
   // ── isMainHand uniqueness ────────────────────────────────────────────
   // Host-side: when this hand becomes main, clear the flag on every sibling
   // hand owned by the same seat. Sibling.setState will replicate the clear.
@@ -168,4 +185,17 @@ export class HandComponent extends EntityComponent<HandState> {
       sibling.setState({ isMainHand: false });
     }
   }
+}
+
+function isPermutation(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  const seen = new Set(a);
+  for (const x of b) if (!seen.has(x)) return false;
+  return true;
+}
+
+function sameArrayOrder(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
 }

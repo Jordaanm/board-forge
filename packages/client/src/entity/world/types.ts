@@ -112,6 +112,12 @@ export interface World {
   // validates the request originates from the hand's owner before applying.
   playCardToTable(entity: Entity, position: [number, number, number]): void;
 
+  // Drag-within-panel reorder (issue #6 of issues--hand.md). `newOrder` must
+  // be a permutation of the hand's current `containedIds`. Host applies via
+  // HandComponent.reorderContents; guest dispatches `reorder-hand` for the
+  // host to validate and apply.
+  reorderHand(handEntityId: string, newOrder: readonly string[]): void;
+
   dispose(): void;
 }
 

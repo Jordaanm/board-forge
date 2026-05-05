@@ -117,6 +117,15 @@ export interface PlayCardToTable {
   z:        number;
 }
 
+// Drag-within-hand-panel reorder (issue #6 of issues--hand.md). `newOrder`
+// must be a permutation of the hand's current `containedIds`. Host validates
+// owner-match and permutation membership before applying.
+export interface ReorderHand {
+  type:         'reorder-hand';
+  handEntityId: string;
+  newOrder:     string[];
+}
+
 // Cosmetic broadcast originated by a Tool (issue #3 of issues--tools.md).
 // Rides the unreliable channel — missed messages are not retried. Payload
 // schema is per-tool (e.g. ping carries `{ entityId }` or `{ point: [x,z] }`).
@@ -143,4 +152,5 @@ export type SceneMessage =
   | RequestUpdate
   | ApplyImpulse
   | PlayCardToTable
+  | ReorderHand
   | ToolBroadcast;

@@ -66,6 +66,7 @@ interface Props {
   setHandViewRef:      MutableRefObject<(view: HandView | null) => void>;
   requestHandTileMenuRef: MutableRefObject<(entityId: string, x: number, y: number) => void>;
   playCardToTableRef:  MutableRefObject<(entityId: string, clientX: number, clientY: number) => void>;
+  reorderHandRef:      MutableRefObject<(handEntityId: string, newOrder: string[]) => void>;
 }
 
 export interface HandView {
@@ -81,7 +82,7 @@ export function ThreeCanvas({
   freeCameraRef, onObjectsChangeRef,
   onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,
   setShowAllZonesRef,
-  setHandViewRef, requestHandTileMenuRef, playCardToTableRef,
+  setHandViewRef, requestHandTileMenuRef, playCardToTableRef, reorderHandRef,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -256,6 +257,10 @@ export function ThreeCanvas({
       playRay.setFromCamera(playNDC, camera);
       if (!playRay.ray.intersectPlane(tablePlane, playHit)) return;
       world.playCardToTable(handle.entity, [playHit.x, playHit.y + 0.05, playHit.z]);
+    };
+
+    reorderHandRef.current = (handEntityId, newOrder) => {
+      world.reorderHand(handEntityId, newOrder);
     };
 
     // Compose a ContextMenuRequest for a hand-panel tile right-click. Reuses
@@ -460,6 +465,7 @@ export function ThreeCanvas({
     freeCameraRef, onObjectsChangeRef,
     onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,
     setShowAllZonesRef, setHandViewRef, requestHandTileMenuRef, playCardToTableRef,
+    reorderHandRef,
   ]);
 
   return (

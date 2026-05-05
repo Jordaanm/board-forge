@@ -43,7 +43,7 @@ import {
   type SpawnOptions,
   type ReplicationPolicy,
 } from './types';
-import { type HoldRelease, type ToolBroadcast, type PlayCardToTable } from '../wire';
+import { type HoldRelease, type ToolBroadcast, type PlayCardToTable, type ReorderHand } from '../wire';
 
 // Bounds-enforcement constants — mirror SceneSystemV2 so behaviour is identical
 // during the parity slice. Issue #5 deletes the duplicate.
@@ -455,6 +455,23 @@ class WorldImpl implements World, HandleRouter {
     this.transport.send(msg, { reliable: true });
   }
 
+  // Drag-within-panel reorder (issue #6 of issues--hand.md). Host calls the
+  // hand's reorderContents directly; guest fires the RPC and lets the host
+  // validate + apply.
+  reorderHand(handEntityId: string, newOrder: readonly string[]): void {
+    if (this.role === 'host') {
+      const hand = this.scene.getEntity(handEntityId);
+      hand?.getComponent(HandComponent)?.reorderContents(newOrder);
+      return;
+    }
+    const msg: ReorderHand = {
+      type:         'reorder-hand',
+      handEntityId,
+      newOrder:     [...newOrder],
+    };
+    this.transport.send(msg, { reliable: true });
+  }
+
   applyImpulse(entity: Entity, v: { x: number; y: number; z: number }): void {
     if (!canManipulate({ peerSeat: this.identity.selfSeat(), isHost: this.role === 'host' }, entity.owner)) return;
     const phys = entity.getComponent(PhysicsComponent);
@@ -525,6 +542,7 @@ class WorldImpl implements World, HandleRouter {
       case 'invoke-action':    this.hostInput?.handleInvokeAction(peerId, msg);  return;
       case 'apply-impulse':    this.hostInput?.handleApplyImpulse(peerId, msg);  return;
       case 'play-card-to-table': this.hostInput?.handlePlayCardToTable(peerId, msg); return;
+      case 'reorder-hand':       this.hostInput?.handleReorderHand(peerId, msg);      return;
       case 'guest-drag-move':  this.guestInput?.handleMessage(peerId, msg);      return;
       case 'guest-drag-start':
       case 'guest-drag-end':
@@ -629,6 +647,7 @@ class WorldImpl implements World, HandleRouter {
       case 'request-update':
       case 'apply-impulse':
       case 'play-card-to-table':
+      case 'reorder-hand':
       case 'guest-drag-move':
       case 'guest-drag-start':
       case 'guest-drag-end':

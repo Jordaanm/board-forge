@@ -14,7 +14,7 @@ import { type Entity } from './Entity';
 import { type SeatIndex } from '../seats/SeatLayout';
 import { canManipulate } from '../seats/OwnershipPolicy';
 import { type HoldService } from './HoldService';
-import { type HoldClaim, type HoldRelease, type InvokeAction, type RequestUpdate, type ApplyImpulse, type PlayCardToTable } from './wire';
+import { type HoldClaim, type HoldRelease, type InvokeAction, type RequestUpdate, type ApplyImpulse, type PlayCardToTable, type ReorderHand } from './wire';
 import { type ActionContext } from './EntityComponent';
 import { PhysicsComponent } from './components/PhysicsComponent';
 import { TweenComponent } from './components/TweenComponent';
@@ -105,6 +105,21 @@ export class HostInputDispatcher {
     if (!tween) return false;
     tween.tweenTo({ position: [msg.x, msg.y, msg.z] }, PLAY_TO_TABLE_TWEEN_MS);
     return true;
+  }
+
+  // Issue #6 of issues--hand.md — guest drags a tile within the hand panel
+  // to reorder the hand. HandComponent.reorderContents validates the
+  // permutation and re-arranges 3D slots; replication carries the new order
+  // to all peers.
+  handleReorderHand(peerId: string, msg: ReorderHand): boolean {
+    const senderSeat = this.getPeerSeat(peerId);
+    if (senderSeat === null) return false;
+    const hand = this.scene.getEntity(msg.handEntityId);
+    if (!hand) return false;
+    if (hand.owner !== null && hand.owner !== senderSeat) return false;
+    const handComp = hand.getComponent(HandComponent);
+    if (!handComp) return false;
+    return handComp.reorderContents(msg.newOrder);
   }
 }
 

@@ -12,6 +12,9 @@ import { HandComponent } from './HandComponent';
 import { registerCorePrimitives } from '../spawnables';
 import { PhysicsWorld } from '../../physics/PhysicsWorld';
 import { HostReplicatorV2, type ReplicatorPolicy } from '../HostReplicatorV2';
+import { HostInputDispatcher } from '../HostInputDispatcher';
+import { HoldService } from '../HoldService';
+import { type SeatIndex } from '../../seats/SeatLayout';
 
 const POLICY: ReplicatorPolicy = {
   channelFor:  () => 'reliable',
@@ -317,6 +320,119 @@ describe('HandComponent — isMainHand uniqueness', () => {
 
     b.getComponent(HandComponent)!.setState({ isMainHand: false });
     expect(a.getComponent(HandComponent)!.state.isMainHand).toBe(true);
+  });
+});
+
+describe('HandComponent — reorderContents', () => {
+  function setupThreeCards() {
+    const hand = scene.spawn('hand', ctx);
+    hand.owner = 0;
+    const c1 = scene.spawn('card', ctx);
+    const c2 = scene.spawn('card', ctx);
+    const c3 = scene.spawn('card', ctx);
+    const handZone = hand.getComponent(ZoneComponent)!;
+    fireBeginContact(physics.world, handZone.body, c1.getComponent(PhysicsComponent)!.body);
+    fireBeginContact(physics.world, handZone.body, c2.getComponent(PhysicsComponent)!.body);
+    fireBeginContact(physics.world, handZone.body, c3.getComponent(PhysicsComponent)!.body);
+    // Settle the arrange tweens fired on enter so each card carries no tween.
+    [c1, c2, c3].forEach(c => c.getComponent(TweenComponent)!.snapToTarget());
+    return { hand, c1, c2, c3, handZone };
+  }
+
+  test('reorderContents updates containedIds when newOrder is a permutation', () => {
+    const { hand, c1, c2, c3, handZone } = setupThreeCards();
+    const handComp = hand.getComponent(HandComponent)!;
+
+    expect(handComp.reorderContents([c3.id, c1.id, c2.id])).toBe(true);
+    expect(handZone.state.containedIds).toEqual([c3.id, c1.id, c2.id]);
+  });
+
+  test('reorderContents rejects a non-permutation', () => {
+    const { hand, c1, c2 } = setupThreeCards();
+    const handComp = hand.getComponent(HandComponent)!;
+
+    expect(handComp.reorderContents([c1.id, c2.id])).toBe(false);  // missing c3
+    expect(handComp.reorderContents([c1.id, c2.id, 'unknown-id'])).toBe(false);
+  });
+
+  test('reorderContents is a no-op when newOrder matches current order', () => {
+    const { hand, c1, c2, c3 } = setupThreeCards();
+    const handComp = hand.getComponent(HandComponent)!;
+    expect(handComp.reorderContents([c1.id, c2.id, c3.id])).toBe(false);
+  });
+
+  test('reorderContents re-tweens cards into slot positions matching the new order', () => {
+    const { hand, c1, c2, c3 } = setupThreeCards();
+    const handComp = hand.getComponent(HandComponent)!;
+
+    // Capture pre-reorder slot positions (sanity).
+    const xBefore = c1.getComponent(TransformComponent)!.state.position[0];
+    handComp.reorderContents([c3.id, c2.id, c1.id]);
+
+    // Each card now has an active tween toward its new slot.
+    [c1, c2, c3].forEach(c => expect(c.getComponent(TweenComponent)!.isActive()).toBe(true));
+    [c1, c2, c3].forEach(c => c.getComponent(TweenComponent)!.snapToTarget());
+
+    // After reorder, c1 lives in the LAST slot (was first); c3 lives in the
+    // first slot. Their X coordinates should swap signs in a 0-centred hand.
+    const xC1After = c1.getComponent(TransformComponent)!.state.position[0];
+    const xC3After = c3.getComponent(TransformComponent)!.state.position[0];
+    expect(xC3After).toBeCloseTo(xBefore, 5);  // c3 moved to where c1 was
+    expect(xC1After).toBeCloseTo(-xBefore, 5);  // c1 moved to the opposite slot
+  });
+});
+
+describe('HostInputDispatcher.handleReorderHand', () => {
+  function setupHandWithCards(handOwner: SeatIndex | null) {
+    const hand = scene.spawn('hand', ctx);
+    hand.owner = handOwner;
+    const c1 = scene.spawn('card', ctx);
+    const c2 = scene.spawn('card', ctx);
+    const handZone = hand.getComponent(ZoneComponent)!;
+    fireBeginContact(physics.world, handZone.body, c1.getComponent(PhysicsComponent)!.body);
+    fireBeginContact(physics.world, handZone.body, c2.getComponent(PhysicsComponent)!.body);
+    [c1, c2].forEach(c => c.getComponent(TweenComponent)!.snapToTarget());
+    return { hand, c1, c2, handZone };
+  }
+
+  function makeDispatcher(): { dispatcher: HostInputDispatcher; peerSeats: Map<string, SeatIndex> } {
+    const peerSeats = new Map<string, SeatIndex>();
+    const hold = new HoldService(scene.world as HostReplicatorV2, scene);
+    const dispatcher = new HostInputDispatcher(hold, (peerId) => peerSeats.get(peerId) ?? null, scene);
+    return { dispatcher, peerSeats };
+  }
+
+  test('owner seat may reorder their hand', () => {
+    const { hand, c1, c2, handZone } = setupHandWithCards(1);
+    const { dispatcher, peerSeats } = makeDispatcher();
+    peerSeats.set('p1', 1);
+    const accepted = dispatcher.handleReorderHand('p1', {
+      type: 'reorder-hand', handEntityId: hand.id, newOrder: [c2.id, c1.id],
+    });
+    expect(accepted).toBe(true);
+    expect(handZone.state.containedIds).toEqual([c2.id, c1.id]);
+  });
+
+  test('non-owner seat is rejected', () => {
+    const { hand, c1, c2, handZone } = setupHandWithCards(1);
+    const { dispatcher, peerSeats } = makeDispatcher();
+    peerSeats.set('p2', 2);
+    const accepted = dispatcher.handleReorderHand('p2', {
+      type: 'reorder-hand', handEntityId: hand.id, newOrder: [c2.id, c1.id],
+    });
+    expect(accepted).toBe(false);
+    expect(handZone.state.containedIds).toEqual([c1.id, c2.id]);
+  });
+
+  test('null-owner (shared) hand accepts any seated peer', () => {
+    const { hand, c1, c2, handZone } = setupHandWithCards(null);
+    const { dispatcher, peerSeats } = makeDispatcher();
+    peerSeats.set('p3', 3);
+    const accepted = dispatcher.handleReorderHand('p3', {
+      type: 'reorder-hand', handEntityId: hand.id, newOrder: [c2.id, c1.id],
+    });
+    expect(accepted).toBe(true);
+    expect(handZone.state.containedIds).toEqual([c2.id, c1.id]);
   });
 });
 
