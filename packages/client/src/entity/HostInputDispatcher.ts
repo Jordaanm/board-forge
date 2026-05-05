@@ -15,6 +15,7 @@ import { type SeatIndex } from '../seats/SeatLayout';
 import { canManipulate } from '../seats/OwnershipPolicy';
 import { type HoldService } from './HoldService';
 import { type DeckService } from './DeckService';
+import { type SceneHistoryService } from './SceneHistoryService';
 import { type HoldClaim, type HoldRelease, type InvokeAction, type RequestUpdate, type ApplyImpulse, type PlayCardToTable, type ReorderHand, type TweenIntoHand, type DrawFromDeck, type ShuffleDeck, type DealFromDeck } from './wire';
 import { type ActionContext } from './EntityComponent';
 import { PhysicsComponent } from './components/PhysicsComponent';
@@ -28,6 +29,7 @@ const TWEEN_INTO_HAND_MS     = 250;
 
 export class HostInputDispatcher {
   private decks: DeckService | null = null;
+  private history: SceneHistoryService | null = null;
 
   constructor(
     private readonly hold:        HoldService,
@@ -39,6 +41,17 @@ export class HostInputDispatcher {
   // path is rejected when null.
   setDeckService(deck: DeckService): void {
     this.decks = deck;
+  }
+
+  // World wires this on host construction. Guest-initiated host mutators push
+  // a snapshot label here so undo / History sees the mutation alongside host-
+  // local actions. Tests omit it.
+  setHistoryService(history: SceneHistoryService): void {
+    this.history = history;
+  }
+
+  private push(label: string): void {
+    this.history?.push(label);
   }
 
   // Returns true on accept (entity claimed and broadcast). False on any
@@ -58,6 +71,7 @@ export class HostInputDispatcher {
     const vel = (msg.vx !== undefined || msg.vy !== undefined || msg.vz !== undefined)
       ? { vx: msg.vx ?? 0, vy: msg.vy ?? 0, vz: msg.vz ?? 0 }
       : undefined;
+    this.push(`drop ${entity.name}`);
     this.hold.release(entity, vel);
     return true;
   }
@@ -114,6 +128,7 @@ export class HostInputDispatcher {
     if (hand.owner !== null && hand.owner !== senderSeat) return false;
     const tween = entity.getComponent(TweenComponent);
     if (!tween) return false;
+    this.push(`play ${entity.name}`);
     tween.tweenTo({ position: [msg.x, msg.y, msg.z] }, PLAY_TO_TABLE_TWEEN_MS);
     return true;
   }
@@ -130,6 +145,7 @@ export class HostInputDispatcher {
     if (hand.owner !== null && hand.owner !== senderSeat) return false;
     const handComp = hand.getComponent(HandComponent);
     if (!handComp) return false;
+    this.push(`reorder ${hand.name}`);
     return handComp.reorderContents(msg.newOrder);
   }
 
@@ -142,6 +158,7 @@ export class HostInputDispatcher {
     const entity = this.scene.getEntity(msg.deckId);
     if (!entity) return false;
     if (!canManipulate({ peerSeat: senderSeat, isHost: false }, entity.owner)) return false;
+    this.push(`draw ${msg.count} from ${entity.name}`);
     const drawn = this.decks.drawFromDeck(msg.deckId, msg.count, senderSeat);
     return drawn > 0;
   }
@@ -154,6 +171,7 @@ export class HostInputDispatcher {
     const entity = this.scene.getEntity(msg.deckId);
     if (!entity) return false;
     if (!canManipulate({ peerSeat: senderSeat, isHost: false }, entity.owner)) return false;
+    this.push(`shuffle ${entity.name}`);
     return this.decks.shuffleDeck(msg.deckId);
   }
 
@@ -165,6 +183,7 @@ export class HostInputDispatcher {
     const entity = this.scene.getEntity(msg.deckId);
     if (!entity) return false;
     if (!canManipulate({ peerSeat: senderSeat, isHost: false }, entity.owner)) return false;
+    this.push(`deal ${msg.count} from ${entity.name}`);
     const dealt = this.decks.dealFromDeck(msg.deckId, msg.count, senderSeat);
     return dealt > 0;
   }
@@ -185,6 +204,7 @@ export class HostInputDispatcher {
     if (!tween) return false;
     const handPose = hand.getComponent(TransformComponent)?.state.position;
     if (!handPose) return false;
+    this.push(`pick up ${entity.name}`);
     tween.tweenTo({ position: [handPose[0], handPose[1], handPose[2]] }, TWEEN_INTO_HAND_MS);
     return true;
   }

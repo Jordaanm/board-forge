@@ -5,6 +5,7 @@ import {
   type EntityPatch,
   type EntitySpawn,
   type SceneSnapshot,
+  type SceneReplace,
   type DespawnBatch,
   type InvokeAction,
   type HoldClaim,
@@ -150,6 +151,20 @@ describe('wire encode/decode round-trip', () => {
     expect(roundTrip(m)).toEqual(m);
   });
 
+  test('SceneReplace', () => {
+    const m: SceneReplace = {
+      type: 'scene-replace',
+      entities: [
+        {
+          id: 'e1', type: 'die', name: 'D', tags: [],
+          owner: null, privateToSeat: null, parentId: null, children: [],
+          components: { value: { v: 1, isNumeric: true } },
+        },
+      ],
+    };
+    expect(roundTrip(m)).toEqual(m);
+  });
+
   test('SceneMessage union accepts all message kinds', () => {
     const messages: SceneMessage[] = [
       { type: 'component-patches', channel: 'reliable', patches: [] },
@@ -159,6 +174,7 @@ describe('wire encode/decode round-trip', () => {
         components: {},
       } },
       { type: 'scene-snapshot', entities: [] },
+      { type: 'scene-replace', entities: [] },
       { type: 'entity-patch', entityId: 'e', partial: {} },
       { type: 'despawn-batch', entityIds: [] },
       { type: 'invoke-action', entityId: 'e', componentTypeId: 't', actionId: 'a' },
@@ -168,6 +184,6 @@ describe('wire encode/decode round-trip', () => {
       { type: 'apply-impulse',  entityId: 'e', vx: 0, vy: 0, vz: 0 },
       { type: 'tool-broadcast', toolId: 'ping', peerId: 'p', seat: null, payload: {} },
     ];
-    expect(messages).toHaveLength(11);
+    expect(messages).toHaveLength(12);
   });
 });

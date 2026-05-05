@@ -21,6 +21,7 @@ import { DEFAULT_KEY_LIGHT_PROPS, type KeyLightProps } from '../scene/KeyLight';
 import { RoomStateManager } from '../seats/RoomStateManager';
 import { RoomStateClient } from '../seats/RoomStateClient';
 import type { RoomStateMessage, RoomStateSnapshot } from '../seats/RoomState';
+import { type SceneHistoryService, type LastLoaded } from '../entity/SceneHistoryService';
 import './Room.css';
 
 type Status = 'connecting' | 'connected' | 'disconnected' | 'room-full';
@@ -55,6 +56,8 @@ export function Room({ roomId, isHost }: Props) {
   const [activeToolId, setActiveToolId] = useState<string>(TOOL_CATALOGUE[0]?.id ?? 'grab');
   const [showAllZones, setShowAllZones] = useState(false);
   const [handView, setHandView]         = useState<HandView | null>(null);
+  const [lastLoaded, setLastLoaded]     = useState<LastLoaded | null>(null);
+  const [historyService, setHistoryService] = useState<SceneHistoryService | null>(null);
 
   const sendRef            = useRef<(msg: ChannelMessage, opts?: { reliable?: boolean }) => void>(noop);
   const sendToRef          = useRef<(peerId: string, msg: ChannelMessage, opts?: { reliable?: boolean }) => void>(noop);
@@ -91,6 +94,13 @@ export function Room({ roomId, isHost }: Props) {
   const claimSeatRef       = useRef<(seatIndex: SeatIndex) => void>(noop);
   const kickPeerRef        = useRef<(peerId: string) => void>(noop);
   const banPeerRef         = useRef<(peerId: string) => void>(noop);
+  const saveSceneRef       = useRef<() => void>(noop);
+  const replaceSceneRef    = useRef<(snaps: unknown[]) => void>(noop);
+  const sceneHistoryRef    = useRef<SceneHistoryService | null>(null);
+  const onLastLoadedChangeRef = useRef<(loaded: LastLoaded | null) => void>(noop);
+  const onHistoryServiceChangeRef = useRef<(svc: SceneHistoryService | null) => void>(noop);
+  onLastLoadedChangeRef.current     = (loaded) => setLastLoaded(loaded);
+  onHistoryServiceChangeRef.current = (svc)    => setHistoryService(svc);
 
   // Set every render — fine, it's just a ref assignment.
   onContextMenuRef.current   = (req) => setContextMenu(req);
@@ -325,6 +335,11 @@ export function Room({ roomId, isHost }: Props) {
         requestHandTileMenuRef={requestHandTileMenuRef}
         playCardToTableRef={playCardToTableRef}
         reorderHandRef={reorderHandRef}
+        saveSceneRef={saveSceneRef}
+        replaceSceneRef={replaceSceneRef}
+        sceneHistoryRef={sceneHistoryRef}
+        onLastLoadedChangeRef={onLastLoadedChangeRef}
+        onHistoryServiceChangeRef={onHistoryServiceChangeRef}
       />
 
       <AnchorLayout>
@@ -340,6 +355,19 @@ export function Room({ roomId, isHost }: Props) {
               onSpawn={(t) => spawnRef.current(t)}
               showAllZones={showAllZones}
               onToggleShowAllZones={handleToggleShowAllZones}
+              onSave={() => saveSceneRef.current()}
+              onLoad={(envelope, filename) => {
+                sceneHistoryRef.current?.setLastLoaded({
+                  snapshot: envelope.scene,
+                  filename,
+                  savedAt:  envelope.savedAt,
+                });
+                replaceSceneRef.current(envelope.scene);
+              }}
+              onRevert={() => sceneHistoryRef.current?.revert()}
+              lastLoaded={lastLoaded}
+              currentEntityCount={objects.length}
+              historyService={historyService}
             />
           </UIPanel>
         )}

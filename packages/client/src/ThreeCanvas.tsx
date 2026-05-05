@@ -16,6 +16,9 @@ import { ZoneComponent } from './entity/components/ZoneComponent';
 import { HandComponent } from './entity/components/HandComponent';
 import { FlatViewComponent } from './entity/components/FlatViewComponent';
 import { aggregateContextMenu } from './entity/contextMenu';
+import { encodeSaveFile, downloadSaveFile } from './entity/SaveFile';
+import { captureCanvasThumbnail } from './entity/thumbnail';
+import { type SceneHistoryService, type LastLoaded } from './entity/SceneHistoryService';
 import { type CardTile } from './components/HandPanel';
 import { DEFAULT_PRIVATE_FIELDS } from './seats/PrivacyScrubber';
 import { MoveGizmo } from './scene/MoveGizmo';
@@ -71,6 +74,11 @@ interface Props {
   requestHandTileMenuRef: MutableRefObject<(entityId: string, x: number, y: number) => void>;
   playCardToTableRef:  MutableRefObject<(entityId: string, clientX: number, clientY: number) => void>;
   reorderHandRef:      MutableRefObject<(handEntityId: string, newOrder: string[]) => void>;
+  saveSceneRef:        MutableRefObject<() => void>;
+  replaceSceneRef:     MutableRefObject<(snaps: unknown[]) => void>;
+  sceneHistoryRef:     MutableRefObject<SceneHistoryService | null>;
+  onLastLoadedChangeRef: MutableRefObject<(loaded: LastLoaded | null) => void>;
+  onHistoryServiceChangeRef: MutableRefObject<(svc: SceneHistoryService | null) => void>;
 }
 
 export interface HandView {
@@ -87,6 +95,8 @@ export function ThreeCanvas({
   onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,
   setShowAllZonesRef,
   setHandViewRef, requestHandTileMenuRef, playCardToTableRef, reorderHandRef,
+  saveSceneRef, replaceSceneRef, sceneHistoryRef, onLastLoadedChangeRef,
+  onHistoryServiceChangeRef,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -181,6 +191,9 @@ export function ThreeCanvas({
       transport,
       physics:     physicsWorld ?? undefined,
       getPeerSeat: isHost ? (peerId) => getPeerSeatRef.current(peerId) : undefined,
+      captureThumb: isHost
+        ? () => captureCanvasThumbnail(renderer.domElement, { width: 192, height: 108, quality: 0.8 })
+        : undefined,
     });
     worldRef = world;
 
@@ -306,7 +319,27 @@ export function ThreeCanvas({
 
     getEntityRef.current = (id) => world.get(id)?.entity;
 
+    let unsubscribeHistory: () => void = () => {};
     if (isHost) {
+      sceneHistoryRef.current = world.history;
+      onHistoryServiceChangeRef.current(world.history);
+      unsubscribeHistory = world.history?.subscribe(() => {
+        onLastLoadedChangeRef.current(world.history?.lastLoaded ?? null);
+      }) ?? (() => {});
+
+      saveSceneRef.current = () => {
+        // Render once before capture so the texture reflects the current
+        // animation-loop frame even if Save is clicked between frames.
+        renderer.render(scene, camera);
+        const thumbnail = captureCanvasThumbnail(renderer.domElement, { width: 480, height: 270, quality: 0.8 });
+        const envelope = encodeSaveFile({ scene: world.snapshot(), thumbnail });
+        downloadSaveFile(envelope);
+      };
+
+      replaceSceneRef.current = (snaps) => {
+        world.replaceScene(snaps as Parameters<typeof world.replaceScene>[0]);
+      };
+
       spawnRef.current        = (type) => { world.spawn(type); };
       deleteObjectRef.current = (id)   => world.despawn(id);
       drawFromDeckRef.current = (deckId, count, seat) => world.drawFromDeck(deckId, count, seat);
@@ -434,6 +467,7 @@ export function ThreeCanvas({
       window.removeEventListener('resize', onResize);
       renderer.domElement.removeEventListener('pointermove', onCursorMove);
       unsubscribePing();
+      unsubscribeHistory();
       pingOverlay?.dispose();
       pingOverlay = null;
       cursorOverlay.dispose();
@@ -451,6 +485,10 @@ export function ThreeCanvas({
       spawnRef.current        = () => {};
       rollRef.current         = () => {};
       deleteObjectRef.current = () => {};
+      saveSceneRef.current    = () => {};
+      replaceSceneRef.current = () => {};
+      sceneHistoryRef.current = null;
+      onHistoryServiceChangeRef.current(null);
       drawFromDeckRef.current = () => {};
       shuffleDeckRef.current  = () => {};
       dealFromDeckRef.current = () => {};
@@ -476,7 +514,8 @@ export function ThreeCanvas({
     freeCameraRef, onObjectsChangeRef,
     onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,
     setShowAllZonesRef, setHandViewRef, requestHandTileMenuRef, playCardToTableRef,
-    reorderHandRef,
+    reorderHandRef, saveSceneRef, replaceSceneRef, sceneHistoryRef, onLastLoadedChangeRef,
+    onHistoryServiceChangeRef,
   ]);
 
   return (

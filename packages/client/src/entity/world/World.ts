@@ -21,6 +21,7 @@ import { HoldService } from '../HoldService';
 import { MergeService } from '../MergeService';
 import { DeckService } from '../DeckService';
 import { HostInputDispatcher } from '../HostInputDispatcher';
+import { SceneHistoryService } from '../SceneHistoryService';
 import { GuestInputHandler } from '../../input/GuestInputHandler';
 import { type SceneMessage, type EntityFieldsPartial } from '../wire';
 import { TransformComponent } from '../components/TransformComponent';
@@ -90,6 +91,7 @@ class WorldImpl implements World, HandleRouter {
   private readonly decks:      DeckService | null;
   private readonly hostInput:  HostInputDispatcher | null;
   private readonly guestInput: GuestInputHandler | null;
+  private readonly history_:   SceneHistoryService | null;
   private readonly policy:     ReplicationPolicy;
   private mergeBeginContact:   ((e: { bodyA: import('cannon-es').Body; bodyB: import('cannon-es').Body }) => void) | null = null;
   private mergeEndContact:     ((e: { bodyA: import('cannon-es').Body; bodyB: import('cannon-es').Body }) => void) | null = null;
@@ -134,6 +136,14 @@ class WorldImpl implements World, HandleRouter {
       this.hostInput  = new HostInputDispatcher(this.hold, this.getPeerSeat, this.scene);
       this.hostInput.setDeckService(this.decks);
       this.guestInput = new GuestInputHandler(this.hold, this.getPeerSeat, this.scene);
+      this.history_   = new SceneHistoryService(
+        {
+          replaceScene: (s) => this.replaceScene(s),
+          snapshot:     ()  => this.snapshot(),
+        },
+        { cap: opts.historyCap, captureThumb: opts.captureThumb },
+      );
+      this.hostInput.setHistoryService(this.history_);
       this.installBeginContactHandler();
     } else {
       this.physics    = null;
@@ -143,6 +153,7 @@ class WorldImpl implements World, HandleRouter {
       this.decks      = null;
       this.hostInput  = null;
       this.guestInput = null;
+      this.history_   = null;
     }
 
     this.unsubscribeMessage  = this.transport.onMessage((peerId, msg) => this.handleInbound(peerId, msg));
@@ -152,6 +163,7 @@ class WorldImpl implements World, HandleRouter {
   // ── Lifecycle ────────────────────────────────────────────────────────────
   spawn(type: string, opts: SpawnOptions = {}): EntityHandle {
     if (this.role !== 'host') throw new Error('World.spawn is host-only');
+    this.history_?.push(`spawn ${type}`);
     const entity = this.spawnEntity(type, opts);
     return this.handleFor(entity);
   }
@@ -231,6 +243,8 @@ class WorldImpl implements World, HandleRouter {
 
   despawn(id: string): void {
     if (this.role !== 'host') throw new Error('World.despawn is host-only');
+    const target = this.scene.getEntity(id);
+    if (target) this.history_?.push(`despawn ${target.name}`);
     const ctx: SpawnContext = { scene: this.threeScene, physics: this.physics, entityScene: this.scene };
     const removed = this.scene.despawn(id, ctx);
     for (const removedId of removed) {
@@ -246,6 +260,7 @@ class WorldImpl implements World, HandleRouter {
   updateProp(id: string, key: string, value: unknown): void {
     const entity = this.scene.getEntity(id);
     if (!entity) return;
+    this.history_?.push(`update ${entity.name}.${key}`);
 
     if (key === 'name') {
       entity.name = String(value);
@@ -447,6 +462,63 @@ class WorldImpl implements World, HandleRouter {
     this.notify();
   }
 
+  get history(): SceneHistoryService | null {
+    return this.history_;
+  }
+
+  // Atomic scene replace (PRD § Save / Load). Cancels all holds, cascade-
+  // despawns every entity through the existing despawn path (component
+  // onDespawn fires; THREE/cannon resources tear down; in-flight tweens
+  // cancel via TweenComponent.onDespawn), then runs scene.load(snaps) via
+  // the two-pass construction. Host clears replicator pending state and
+  // emits a single `scene-replace` envelope so guests apply the same reset
+  // atomically. UI state (camera, selection, current tool) is not touched.
+  replaceScene(snaps: readonly EntitySerialized[]): void {
+    if (this.disposed) return;
+    this.applyReplace(snaps);
+    if (this.role === 'host') {
+      this.replicator?.clearPending();
+      this.transport.send(
+        { type: 'scene-replace', entities: [...snaps] },
+        { reliable: true },
+      );
+    }
+  }
+
+  private applyReplace(snaps: readonly EntitySerialized[]): void {
+    const ctx: SpawnContext = { scene: this.threeScene, physics: this.physics, entityScene: this.scene };
+
+    for (const entity of this.scene.all()) {
+      entity.heldBy = null;
+    }
+    this.hold?.clearAllHoldState();
+
+    // Cascade-despawn from top-level roots so contained children fire
+    // onDespawn through their parent's traversal. cascadeDespawn no-ops on
+    // already-removed ids, so repeating for any orphans is safe.
+    const topLevelIds = this.scene.all()
+      .filter(e => e.parentId === null)
+      .map(e => e.id);
+    for (const id of topLevelIds) {
+      const removed = this.scene.despawn(id, ctx);
+      for (const r of removed) {
+        this.handles.delete(r);
+        this.restPoses.delete(r);
+      }
+    }
+    // Defensive sweep for any stragglers.
+    for (const entity of [...this.scene.all()]) {
+      const removed = this.scene.despawn(entity.id, ctx);
+      for (const r of removed) {
+        this.handles.delete(r);
+        this.restPoses.delete(r);
+      }
+    }
+
+    this.scene.load(snaps, ctx);
+    this.notify();
+  }
+
   // ── HandleRouter (issue #3) ─────────────────────────────────────────────
   // Mutation verbs called by EntityHandleImpl. Host writes the body / runs
   // HoldService directly; guest sends RPCs and applies optimistic updates so
@@ -495,6 +567,7 @@ class WorldImpl implements World, HandleRouter {
 
   release(entity: Entity, velocity?: { vx: number; vy: number; vz: number }): void {
     if (this.role === 'host') {
+      if (entity.heldBy !== null) this.history_?.push(`drop ${entity.name}`);
       this.hold!.release(entity, velocity);
       return;
     }
@@ -511,6 +584,7 @@ class WorldImpl implements World, HandleRouter {
   // RPC and lets the host validate + apply (issue #5 of issues--hand.md).
   playCardToTable(entity: Entity, position: [number, number, number]): void {
     if (this.role === 'host') {
+      this.history_?.push(`play ${entity.name}`);
       const tween = entity.getComponent(TweenComponent);
       if (tween) tween.tweenTo({ position }, 250);
       return;
@@ -531,6 +605,7 @@ class WorldImpl implements World, HandleRouter {
   reorderHand(handEntityId: string, newOrder: readonly string[]): void {
     if (this.role === 'host') {
       const hand = this.scene.getEntity(handEntityId);
+      if (hand) this.history_?.push(`reorder ${hand.name}`);
       hand?.getComponent(HandComponent)?.reorderContents(newOrder);
       return;
     }
@@ -552,6 +627,7 @@ class WorldImpl implements World, HandleRouter {
       const handPose = hand?.getComponent(TransformComponent)?.state.position;
       const tween = entity.getComponent(TweenComponent);
       if (!hand || !handPose || !tween) return;
+      this.history_?.push(`pick up ${entity.name}`);
       tween.tweenTo({ position: [handPose[0], handPose[1], handPose[2]] }, 250);
       return;
     }
@@ -564,6 +640,8 @@ class WorldImpl implements World, HandleRouter {
   // #6 of issues--deck.md.
   drawFromDeck(deckId: string, count: number, callerSeat: SeatIndex | null): void {
     if (this.role === 'host') {
+      const deck = this.scene.getEntity(deckId);
+      if (deck) this.history_?.push(`draw ${count} from ${deck.name}`);
       this.decks?.drawFromDeck(deckId, count, callerSeat);
       return;
     }
@@ -573,6 +651,8 @@ class WorldImpl implements World, HandleRouter {
   // Right-click Shuffle on a deck. Issue #7 of issues--deck.md.
   shuffleDeck(deckId: string): void {
     if (this.role === 'host') {
+      const deck = this.scene.getEntity(deckId);
+      if (deck) this.history_?.push(`shuffle ${deck.name}`);
       this.decks?.shuffleDeck(deckId);
       return;
     }
@@ -582,6 +662,8 @@ class WorldImpl implements World, HandleRouter {
   // Right-click Deal N on a deck. Issue #9 of issues--deck.md.
   dealFromDeck(deckId: string, count: number, callerSeat: SeatIndex | null): void {
     if (this.role === 'host') {
+      const deck = this.scene.getEntity(deckId);
+      if (deck) this.history_?.push(`deal ${count} from ${deck.name}`);
       this.decks?.dealFromDeck(deckId, count, callerSeat);
       return;
     }
@@ -703,6 +785,15 @@ class WorldImpl implements World, HandleRouter {
         return;
       }
 
+      case 'scene-replace': {
+        // Atomic destructive reset (PRD § Save / Load). Cascade-despawn every
+        // existing entity then load the new snapshot via the same path as the
+        // host. Mid-drag inputs whose target entity disappears are silently
+        // dropped by guest-drag-move's existing unknown-id guard.
+        this.applyReplace(msg.entities);
+        return;
+      }
+
       case 'component-patches': {
         let any = false;
         for (const p of msg.patches) {
@@ -818,6 +909,7 @@ class WorldImpl implements World, HandleRouter {
     this.handles.clear();
     this.restPoses.clear();
     this.listeners = [];
+    this.history_?.dispose();
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────

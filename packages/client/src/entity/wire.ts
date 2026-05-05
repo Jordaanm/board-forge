@@ -58,6 +58,14 @@ export interface SceneSnapshot {
   entities: EntitySerialized[];
 }
 
+// Atomic scene replace (PRD § Save / Load). Distinct from `scene-snapshot`,
+// which is idempotent and intended for late-join. Guests cascade-despawn
+// every existing entity and then load `entities`. Always reliable.
+export interface SceneReplace {
+  type:     'scene-replace';
+  entities: EntitySerialized[];
+}
+
 // Reverse-tree order of entity ids to delete. Always reliable.
 export interface DespawnBatch {
   type:      'despawn-batch';
@@ -183,6 +191,7 @@ export type SceneMessage =
   | ComponentPatchesMessage
   | EntitySpawn
   | SceneSnapshot
+  | SceneReplace
   | EntityPatch
   | DespawnBatch
   | InvokeAction

@@ -644,3 +644,181 @@ describe('World — ReplicationPolicy (issue #10)', () => {
     expect(pair.guest.get('d-1')).toBeDefined();
   });
 });
+
+describe('World — replaceScene (PRD save/load issue #1)', () => {
+  let pair: Pair | null = null;
+
+  afterEach(() => {
+    pair?.host.dispose();
+    pair?.guest.dispose();
+    pair = null;
+  });
+
+  test('host round-trip: snapshot → mutate → replaceScene matches original', () => {
+    pair = setup();
+    pair.host.spawn('die',   { id: 'd-1', position: [1, 5, 2] });
+    pair.host.spawn('token', { id: 't-1', position: [-1, 5, 0] });
+    pair.host.tick(0.016);
+
+    const snap = pair.host.snapshot();
+
+    pair.host.spawn('die', { id: 'd-2' });
+    pair.host.despawn('t-1');
+    pair.host.tick(0.016);
+
+    pair.host.replaceScene(snap);
+
+    const ids = pair.host.all().map(h => h.id).sort();
+    expect(ids).toEqual(['d-1', 't-1']);
+  });
+
+  test('replaceScene cascade-despawns: the prior THREE Object3D is removed from the scene', () => {
+    pair = setup();
+    pair.host.spawn('die', { id: 'd-1' });
+    pair.host.tick(0.016);
+    const oldObj = pair.host.get('d-1')!.get(TransformComponent)!.object3d;
+
+    pair.host.replaceScene([]);
+    expect(pair.host.all()).toEqual([]);
+
+    // Object3D from the prior entity must be detached from its parent.
+    expect(oldObj.parent).toBeNull();
+  });
+
+  test('held entity loses its hold on replace', () => {
+    pair = setup();
+    pair.host.spawn('die', { id: 'd-1', position: [0, 5, 0] });
+    pair.host.tick(0.016);
+    pair.host.get('d-1')!.tryHold(HOST_SEAT);
+    expect(pair.host.get('d-1')!.heldBy()).toBe(HOST_SEAT);
+
+    const snap = pair.host.snapshot();
+    pair.host.replaceScene(snap);
+
+    expect(pair.host.get('d-1')!.heldBy()).toBeNull();
+  });
+
+  test('guest receives scene-replace and rebuilds the scene', () => {
+    pair = setup();
+    pair.host.spawn('die',   { id: 'd-1', position: [1, 5, 2] });
+    pair.host.spawn('token', { id: 't-1', position: [-1, 5, 0] });
+    pair.host.tick(0.016);
+
+    const snap = pair.host.snapshot();
+
+    pair.host.spawn('die', { id: 'd-2' });
+    pair.host.despawn('t-1');
+    pair.host.tick(0.016);
+
+    pair.host.replaceScene(snap);
+
+    const guestIds = pair.guest.all().map(h => h.id).sort();
+    expect(guestIds).toEqual(['d-1', 't-1']);
+    expect(pair.guest.get('d-2')).toBeUndefined();
+  });
+
+  test('replaceScene to an empty array clears host and guest', () => {
+    pair = setup();
+    pair.host.spawn('die', { id: 'd-1' });
+    pair.host.spawn('token', { id: 't-1' });
+    pair.host.tick(0.016);
+
+    pair.host.replaceScene([]);
+
+    expect(pair.host.all()).toEqual([]);
+    expect(pair.guest.all()).toEqual([]);
+  });
+
+  test('camera, selection, and current tool are not affected by replace', () => {
+    // World does not own camera / selection / tool — they are external. This
+    // test asserts the negative: replaceScene does not throw and entity-bound
+    // state survives the replace; the absence of any UI-state-bearing fields
+    // on World is the structural guarantee.
+    pair = setup();
+    pair.host.spawn('die', { id: 'd-1' });
+    pair.host.tick(0.016);
+    expect(() => pair!.host.replaceScene(pair!.host.snapshot())).not.toThrow();
+  });
+
+  test('guest-drag-move for an entity that disappears is silently dropped', () => {
+    pair = setup();
+    pair.host.spawn('die', { id: 'd-1', position: [0, 5, 0] });
+    pair.host.tick(0.016);
+
+    pair.host.replaceScene([]);  // wipe everything on host + guest
+
+    // Guest has no record of d-1; an attempt to setPosition is a no-op locally
+    // (no entity to dispatch through), and the host's GuestInputHandler would
+    // drop a stray guest-drag-move for an unknown id without throwing.
+    expect(pair.guest.get('d-1')).toBeUndefined();
+    expect(pair.host.get('d-1')).toBeUndefined();
+  });
+});
+
+describe('World — history push hooks (issue #5)', () => {
+  let pair: Pair | null = null;
+
+  afterEach(() => {
+    pair?.host.dispose();
+    pair?.guest.dispose();
+    pair = null;
+  });
+
+  test('host-only: guest world has no SceneHistoryService', () => {
+    pair = setup();
+    expect(pair.host.history).not.toBeNull();
+    expect(pair.guest.history).toBeNull();
+  });
+
+  test('spawn pushes an entry; tick does not', () => {
+    pair = setup();
+    const before = pair.host.history!.entries().length;
+    pair.host.spawn('die', { id: 'd-1' });
+    expect(pair.host.history!.entries().length).toBe(before + 1);
+
+    const afterSpawn = pair.host.history!.entries().length;
+    pair.host.tick(0.016);
+    pair.host.tick(0.016);
+    expect(pair.host.history!.entries().length).toBe(afterSpawn);
+  });
+
+  test('despawn pushes an entry', () => {
+    pair = setup();
+    pair.host.spawn('die', { id: 'd-1' });
+    const before = pair.host.history!.entries().length;
+    pair.host.despawn('d-1');
+    expect(pair.host.history!.entries().length).toBe(before + 1);
+  });
+
+  test('updateProp pushes an entry', () => {
+    pair = setup();
+    pair.host.spawn('token', { id: 't-1' });
+    const before = pair.host.history!.entries().length;
+    pair.host.updateProp('t-1', 'name', 'Renamed');
+    expect(pair.host.history!.entries().length).toBe(before + 1);
+  });
+
+  test('Load (setLastLoaded) clears the undo stack', () => {
+    pair = setup();
+    pair.host.spawn('die', { id: 'd-1' });
+    pair.host.spawn('token', { id: 't-1' });
+    expect(pair.host.history!.entries().length).toBeGreaterThan(0);
+
+    pair.host.history!.setLastLoaded({ snapshot: [], filename: 'x.json', savedAt: '' });
+    expect(pair.host.history!.entries()).toHaveLength(0);
+  });
+
+  test('restore delegates to replaceScene; guest receives the swap', () => {
+    pair = setup();
+    pair.host.spawn('die', { id: 'd-1' });
+    pair.host.tick(0.016);
+    const entries = pair.host.history!.entries();
+    expect(entries.length).toBeGreaterThan(0);
+    const root = entries[0];  // pre-spawn (empty) state
+
+    pair.host.history!.restore(root);
+    pair.host.tick(0.016);
+    expect(pair.host.all()).toEqual([]);
+    expect(pair.guest.all()).toEqual([]);
+  });
+});

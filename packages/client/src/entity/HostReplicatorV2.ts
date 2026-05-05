@@ -162,6 +162,15 @@ export class HostReplicatorV2 implements ComponentReplicator {
   hasPendingUnreliable(): boolean {
     return hasAnyPatches(this.unreliableComponents);
   }
+
+  // Drop every queued patch and message. Used by World.replaceScene: trailing
+  // entity-spawn / despawn-batch / component-patches describe the pre-replace
+  // state and would arrive after the authoritative scene-replace envelope.
+  clearPending(): void {
+    this.reliableComponents   = emptyBuffer();
+    this.unreliableComponents = emptyBuffer();
+    this.reliableMessages     = [];
+  }
 }
 
 function drainEligible(

@@ -15,6 +15,7 @@ import { type SceneMessage, type ToolBroadcast } from '../wire';
 import { type SeatIndex } from '../../seats/SeatLayout';
 import { type PhysicsWorld } from '../../physics/PhysicsWorld';
 import { type GuestInputMessage } from '../../net/SceneState';
+import { type SceneHistoryService } from '../SceneHistoryService';
 
 // Inbound from the wire: scene-level replication plus guest input streams.
 export type WorldInboundMessage = SceneMessage | GuestInputMessage;
@@ -96,6 +97,17 @@ export interface World {
   snapshot(): EntitySerialized[];
   loadSnapshot(snaps: readonly EntitySerialized[]): void;
 
+  // Atomic scene replace (PRD § Save / Load). Cancels all holds, cascade-
+  // despawns every entity through the existing despawn path, then loads
+  // `snaps` via the two-pass construction. Host emits `scene-replace` to
+  // guests; guests perform the same cascade-despawn-then-load on receipt.
+  // UI state (camera, selection, current tool) is not touched.
+  replaceScene(snaps: readonly EntitySerialized[]): void;
+
+  // Host-only history surface (PRD § Save / Load — issue #4 onwards). Null on
+  // guests, where Save / Load / Revert / History are not exposed.
+  history: SceneHistoryService | null;
+
   // Transitional surface — `releasePeer` stays until input dispatch is fully
   // owned by World. Late-join (formerly `replayTo`) is now driven internally
   // by transport.onPeerJoin (issue #8).
@@ -175,4 +187,9 @@ export interface WorldOptions {
   // Required on the host for HostInputDispatcher's ownership checks; resolves
   // a peer id to its current seat. Returns null for spectators.
   getPeerSeat?: (peerId: string) => SeatIndex | null;
+  // Host-only: returns a JPEG data URL for the current canvas, or null.
+  // Forwarded to SceneHistoryService for undo-entry thumbnails.
+  captureThumb?: () => string | null;
+  // Host-only: undo ring cap. Defaults to 20 inside SceneHistoryService.
+  historyCap?: number;
 }

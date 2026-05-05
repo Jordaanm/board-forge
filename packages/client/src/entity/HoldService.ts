@@ -105,6 +105,14 @@ export class HoldService {
     }
   }
 
+  // Drop every internal hold-tracking state without firing release messages.
+  // Used by World.replaceScene: the entire scene is wiped and the
+  // scene-replace envelope is the authoritative reset, so per-entity
+  // hold-release wire chatter would be redundant.
+  clearAllHoldState(): void {
+    this.priorBodyType.clear();
+  }
+
   // Zone-entry suppression placeholder (PRD-2 reads this when wiring zones).
   // An entity with `heldBy != null` is being carried; zones should ignore
   // overlap events for it until released.
