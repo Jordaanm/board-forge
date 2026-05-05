@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { type SpawnableType } from '../net/SceneState';
 import { resolveObjectMeta, type PropertyDef } from '../scene/objectMeta';
+import { SEAT_COLOURS } from '../seats/SeatLayout';
 import { type TableProps } from '../scene/Table';
 import { type SkydomeProps } from '../scene/Skydome';
 import { type KeyLightProps } from '../scene/KeyLight';
@@ -468,6 +469,36 @@ function PropertyRow({
           onChange={e => onChange(e.target.checked)}
         />
       )}
+      {def.type === 'seat' && (
+        <SeatSelect value={value as number} onChange={onChange} />
+      )}
+    </div>
+  );
+}
+
+function SeatSelect({ value, onChange }: { value: number | undefined; onChange: (v: unknown) => void }) {
+  const current = typeof value === 'number' ? value : -1;
+  const swatch = current >= 0 && current < SEAT_COLOURS.length ? SEAT_COLOURS[current] : 'transparent';
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <span style={{
+        width: 14, height: 14, borderRadius: 3,
+        background: swatch,
+        border: '1px solid rgba(255,255,255,0.3)',
+        flex: '0 0 auto',
+      }} />
+      <select
+        style={INPUT}
+        value={current}
+        onChange={e => onChange(parseInt(e.target.value, 10))}
+      >
+        <option value={-1}>None</option>
+        {SEAT_COLOURS.map((c, i) => (
+          <option key={i} value={i} style={{ background: c, color: '#000' }}>
+            Seat {i} — {c}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
