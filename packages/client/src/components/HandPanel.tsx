@@ -7,7 +7,8 @@
 // right-click invokes the standard entity context menu. Pointerdown + drag
 // out of the panel triggers `onPlayCardToTable` (issue #5).
 
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
+import { registerDropTarget } from '../input/dropTargetRegistry';
 import './HandPanel.css';
 
 export interface CardTile {
@@ -23,6 +24,9 @@ interface Props {
   onTileContextMenu:  (id: string, x: number, y: number) => void;
   onPlayCardToTable?: (id: string, x: number, y: number) => void;
   onReorderHand?:     (newOrder: string[]) => void;
+  // When set, registers the panel root with `dropTargetRegistry` so GrabTool
+  // can route 3D releases over the panel into this hand. Issue #7.
+  handEntityId?:      string;
 }
 
 // Pixels of pointer travel before we treat a press-drag-release as a drag
@@ -32,18 +36,14 @@ const DRAG_THRESHOLD_PX = 5;
 
 export function HandPanel({
   cards, selectedId, onSelectTile, onTileContextMenu, onPlayCardToTable, onReorderHand,
+  handEntityId,
 }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
 
-  if (cards.length === 0) {
-    return (
-      <div className="hand-panel" data-testid="hand-panel" ref={panelRef}>
-        <div className="hand-panel__placeholder" data-testid="hand-panel-placeholder">
-          No cards
-        </div>
-      </div>
-    );
-  }
+  useEffect(() => {
+    if (!panelRef.current || !handEntityId) return;
+    return registerDropTarget(panelRef.current, { kind: 'hand-panel', handEntityId });
+  }, [handEntityId]);
 
   const handleTilePointerDown = (cardId: string) => (e: React.PointerEvent) => {
     if (e.button !== 0) return;          // left button only
@@ -82,6 +82,11 @@ export function HandPanel({
 
   return (
     <div className="hand-panel" data-testid="hand-panel" ref={panelRef}>
+      {cards.length === 0 && (
+        <div className="hand-panel__placeholder" data-testid="hand-panel-placeholder">
+          No cards
+        </div>
+      )}
       {cards.map(card => (
         <Tile
           key={card.id}

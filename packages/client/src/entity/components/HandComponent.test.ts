@@ -382,6 +382,77 @@ describe('HandComponent — reorderContents', () => {
   });
 });
 
+describe('HostInputDispatcher.handleTweenIntoHand', () => {
+  function makeDispatcher(): { dispatcher: HostInputDispatcher; peerSeats: Map<string, SeatIndex> } {
+    const peerSeats = new Map<string, SeatIndex>();
+    const hold = new HoldService(scene.world as HostReplicatorV2, scene);
+    const dispatcher = new HostInputDispatcher(hold, (peerId) => peerSeats.get(peerId) ?? null, scene);
+    return { dispatcher, peerSeats };
+  }
+
+  test('owner-seat may tween a card into their hand; tween targets hand pose', () => {
+    const hand = scene.spawn('hand', ctx);
+    hand.owner = 1;
+    placeHand(hand, 5, 0.5, 3);
+    const card = scene.spawn('card', ctx);
+
+    const { dispatcher, peerSeats } = makeDispatcher();
+    peerSeats.set('p1', 1);
+
+    const accepted = dispatcher.handleTweenIntoHand('p1', {
+      type: 'tween-into-hand', entityId: card.id, handEntityId: hand.id,
+    });
+    expect(accepted).toBe(true);
+    expect(card.getComponent(TweenComponent)!.isActive()).toBe(true);
+
+    card.getComponent(TweenComponent)!.snapToTarget();
+    expect(card.getComponent(TransformComponent)!.state.position).toEqual([5, 0.5, 3]);
+  });
+
+  test('non-owner is rejected', () => {
+    const hand = scene.spawn('hand', ctx);
+    hand.owner = 1;
+    const card = scene.spawn('card', ctx);
+    const { dispatcher, peerSeats } = makeDispatcher();
+    peerSeats.set('p2', 2);
+
+    const accepted = dispatcher.handleTweenIntoHand('p2', {
+      type: 'tween-into-hand', entityId: card.id, handEntityId: hand.id,
+    });
+    expect(accepted).toBe(false);
+    expect(card.getComponent(TweenComponent)!.isActive()).toBe(false);
+  });
+
+  test('null-owner (shared) hand accepts any seated peer', () => {
+    const hand = scene.spawn('hand', ctx);
+    hand.owner = null;
+    const card = scene.spawn('card', ctx);
+    const { dispatcher, peerSeats } = makeDispatcher();
+    peerSeats.set('p3', 3);
+
+    const accepted = dispatcher.handleTweenIntoHand('p3', {
+      type: 'tween-into-hand', entityId: card.id, handEntityId: hand.id,
+    });
+    expect(accepted).toBe(true);
+  });
+
+  test('unknown hand or entity is rejected', () => {
+    const card = scene.spawn('card', ctx);
+    const { dispatcher, peerSeats } = makeDispatcher();
+    peerSeats.set('p1', 1);
+
+    expect(dispatcher.handleTweenIntoHand('p1', {
+      type: 'tween-into-hand', entityId: card.id, handEntityId: 'no-such-hand',
+    })).toBe(false);
+
+    const hand = scene.spawn('hand', ctx);
+    hand.owner = 1;
+    expect(dispatcher.handleTweenIntoHand('p1', {
+      type: 'tween-into-hand', entityId: 'no-such-card', handEntityId: hand.id,
+    })).toBe(false);
+  });
+});
+
 describe('HostInputDispatcher.handleReorderHand', () => {
   function setupHandWithCards(handOwner: SeatIndex | null) {
     const hand = scene.spawn('hand', ctx);

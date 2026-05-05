@@ -118,6 +118,12 @@ export interface World {
   // host to validate and apply.
   reorderHand(handEntityId: string, newOrder: readonly string[]): void;
 
+  // Drag-from-3D-canvas onto a hand panel (issue #7 of issues--hand.md). Host
+  // tweens the entity to the destination hand's centre; guest dispatches
+  // `tween-into-hand` for the host to validate and apply. Caller should have
+  // already released any active hold on the entity before invoking.
+  tweenIntoHand(entity: Entity, handEntityId: string): void;
+
   dispose(): void;
 }
 

@@ -4,8 +4,9 @@ import { render, cleanup, fireEvent } from '@testing-library/react';
 import { AnchorLayout } from './AnchorLayout';
 import { UIPanel } from './UIPanel';
 import { HandPanel, type CardTile } from './HandPanel';
+import { findDropTargetAt, clearDropTargets } from '../input/dropTargetRegistry';
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); clearDropTargets(); });
 
 const noop = () => {};
 
@@ -271,5 +272,56 @@ describe('HandPanel — drag-within-panel reorder (issue #6)', () => {
 
     expect(onPlay).toHaveBeenCalledWith('c1', 700, 200);
     expect(onReorder).not.toHaveBeenCalled();
+  });
+});
+
+describe('HandPanel — drop-target registration (issue #7)', () => {
+  test('registers panel root with handEntityId metadata when prop is set', () => {
+    const { container } = render(
+      <HandPanel
+        cards={SAMPLE}
+        selectedId={null}
+        onSelectTile={noop}
+        onTileContextMenu={noop}
+        handEntityId="hand-42"
+      />,
+    );
+    const panel = container.querySelector('[data-testid="hand-panel"]') as HTMLElement;
+    document.elementFromPoint = (() => panel) as Document['elementFromPoint'];
+
+    expect(findDropTargetAt(0, 0)).toEqual({ kind: 'hand-panel', handEntityId: 'hand-42' });
+  });
+
+  test('omitting handEntityId leaves the panel out of the registry', () => {
+    const { container } = render(
+      <HandPanel
+        cards={SAMPLE}
+        selectedId={null}
+        onSelectTile={noop}
+        onTileContextMenu={noop}
+      />,
+    );
+    const panel = container.querySelector('[data-testid="hand-panel"]') as HTMLElement;
+    document.elementFromPoint = (() => panel) as Document['elementFromPoint'];
+
+    expect(findDropTargetAt(0, 0)).toBeNull();
+  });
+
+  test('unmounting the panel deregisters the drop target', () => {
+    const { container, unmount } = render(
+      <HandPanel
+        cards={SAMPLE}
+        selectedId={null}
+        onSelectTile={noop}
+        onTileContextMenu={noop}
+        handEntityId="hand-42"
+      />,
+    );
+    const panel = container.querySelector('[data-testid="hand-panel"]') as HTMLElement;
+    document.elementFromPoint = (() => panel) as Document['elementFromPoint'];
+    expect(findDropTargetAt(0, 0)).not.toBeNull();
+
+    unmount();
+    expect(findDropTargetAt(0, 0)).toBeNull();
   });
 });

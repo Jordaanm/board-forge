@@ -15,6 +15,7 @@ import { type MoveGizmo, type GizmoAxis } from '../../scene/MoveGizmo';
 import { projectRayOntoAxis } from '../axisDrag';
 import { type Tool, type ToolContext, type ToolPointerEvent } from './types';
 import { type AxisGizmoAttachment } from './AxisGizmoAttachment';
+import { findDropTargetAt } from '../dropTargetRegistry';
 
 const VELOCITY_SAMPLES = 20;
 const HOLD_MS          = 150;
@@ -180,7 +181,7 @@ export class GrabTool implements Tool {
     if (this.velHistory.length > VELOCITY_SAMPLES) this.velHistory.shift();
   }
 
-  onRelease(e: ToolPointerEvent, _ctx: ToolContext): void {
+  onRelease(e: ToolPointerEvent, ctx: ToolContext): void {
     if (e.button !== 0) return;
 
     if (this.axisDrag) {
@@ -194,6 +195,16 @@ export class GrabTool implements Tool {
       const wasActive = this.carry.active;
       this.carry = null;
       if (wasActive) {
+        // Drop target under the cursor wins over throw velocity. Releases
+        // the hold (no throw) and tweens the entity into the destination
+        // hand — zone-enter then runs HandComponent's slot logic.
+        const drop = findDropTargetAt(e.clientX, e.clientY);
+        if (drop?.kind === 'hand-panel') {
+          handle.release();
+          ctx.world.tweenIntoHand(handle.entity, drop.handEntityId);
+          this.velHistory.length = 0;
+          return;
+        }
         const vel = this.computeThrowVelocity(e.timestamp);
         handle.release({ vx: vel.x, vy: 0, vz: vel.z });
       } else {

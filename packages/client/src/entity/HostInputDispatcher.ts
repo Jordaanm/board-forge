@@ -14,14 +14,16 @@ import { type Entity } from './Entity';
 import { type SeatIndex } from '../seats/SeatLayout';
 import { canManipulate } from '../seats/OwnershipPolicy';
 import { type HoldService } from './HoldService';
-import { type HoldClaim, type HoldRelease, type InvokeAction, type RequestUpdate, type ApplyImpulse, type PlayCardToTable, type ReorderHand } from './wire';
+import { type HoldClaim, type HoldRelease, type InvokeAction, type RequestUpdate, type ApplyImpulse, type PlayCardToTable, type ReorderHand, type TweenIntoHand } from './wire';
 import { type ActionContext } from './EntityComponent';
 import { PhysicsComponent } from './components/PhysicsComponent';
 import { TweenComponent } from './components/TweenComponent';
 import { ZoneComponent } from './components/ZoneComponent';
 import { HandComponent } from './components/HandComponent';
+import { TransformComponent } from './components/TransformComponent';
 
 const PLAY_TO_TABLE_TWEEN_MS = 250;
+const TWEEN_INTO_HAND_MS     = 250;
 
 export class HostInputDispatcher {
   constructor(
@@ -120,6 +122,26 @@ export class HostInputDispatcher {
     const handComp = hand.getComponent(HandComponent);
     if (!handComp) return false;
     return handComp.reorderContents(msg.newOrder);
+  }
+
+  // Issue #7 of issues--hand.md — guest releases a 3D-grabbed entity over
+  // the hand panel. Host tweens the entity to the hand's centre; the zone's
+  // beginContact then triggers HandComponent's slot logic. Sender's seat
+  // must own the destination hand (or it's null-owner / shared).
+  handleTweenIntoHand(peerId: string, msg: TweenIntoHand): boolean {
+    const senderSeat = this.getPeerSeat(peerId);
+    if (senderSeat === null) return false;
+    const hand = this.scene.getEntity(msg.handEntityId);
+    if (!hand) return false;
+    if (hand.owner !== null && hand.owner !== senderSeat) return false;
+    const entity = this.scene.getEntity(msg.entityId);
+    if (!entity) return false;
+    const tween = entity.getComponent(TweenComponent);
+    if (!tween) return false;
+    const handPose = hand.getComponent(TransformComponent)?.state.position;
+    if (!handPose) return false;
+    tween.tweenTo({ position: [handPose[0], handPose[1], handPose[2]] }, TWEEN_INTO_HAND_MS);
+    return true;
   }
 }
 

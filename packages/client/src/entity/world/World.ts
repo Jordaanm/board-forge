@@ -43,7 +43,7 @@ import {
   type SpawnOptions,
   type ReplicationPolicy,
 } from './types';
-import { type HoldRelease, type ToolBroadcast, type PlayCardToTable, type ReorderHand } from '../wire';
+import { type HoldRelease, type ToolBroadcast, type PlayCardToTable, type ReorderHand, type TweenIntoHand } from '../wire';
 
 // Bounds-enforcement constants — mirror SceneSystemV2 so behaviour is identical
 // during the parity slice. Issue #5 deletes the duplicate.
@@ -472,6 +472,23 @@ class WorldImpl implements World, HandleRouter {
     this.transport.send(msg, { reliable: true });
   }
 
+  // Drag-canvas-onto-panel (issue #7 of issues--hand.md). After GrabTool
+  // releases the hold, the entity is tweened to the destination hand's
+  // centre so zone-enter triggers HandComponent's slot logic. Host runs the
+  // tween directly; guest emits the RPC.
+  tweenIntoHand(entity: Entity, handEntityId: string): void {
+    if (this.role === 'host') {
+      const hand = this.scene.getEntity(handEntityId);
+      const handPose = hand?.getComponent(TransformComponent)?.state.position;
+      const tween = entity.getComponent(TweenComponent);
+      if (!hand || !handPose || !tween) return;
+      tween.tweenTo({ position: [handPose[0], handPose[1], handPose[2]] }, 250);
+      return;
+    }
+    const msg: TweenIntoHand = { type: 'tween-into-hand', entityId: entity.id, handEntityId };
+    this.transport.send(msg, { reliable: true });
+  }
+
   applyImpulse(entity: Entity, v: { x: number; y: number; z: number }): void {
     if (!canManipulate({ peerSeat: this.identity.selfSeat(), isHost: this.role === 'host' }, entity.owner)) return;
     const phys = entity.getComponent(PhysicsComponent);
@@ -543,6 +560,7 @@ class WorldImpl implements World, HandleRouter {
       case 'apply-impulse':    this.hostInput?.handleApplyImpulse(peerId, msg);  return;
       case 'play-card-to-table': this.hostInput?.handlePlayCardToTable(peerId, msg); return;
       case 'reorder-hand':       this.hostInput?.handleReorderHand(peerId, msg);      return;
+      case 'tween-into-hand':    this.hostInput?.handleTweenIntoHand(peerId, msg);    return;
       case 'guest-drag-move':  this.guestInput?.handleMessage(peerId, msg);      return;
       case 'guest-drag-start':
       case 'guest-drag-end':
@@ -648,6 +666,7 @@ class WorldImpl implements World, HandleRouter {
       case 'apply-impulse':
       case 'play-card-to-table':
       case 'reorder-hand':
+      case 'tween-into-hand':
       case 'guest-drag-move':
       case 'guest-drag-start':
       case 'guest-drag-end':

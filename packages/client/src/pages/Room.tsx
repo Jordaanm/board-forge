@@ -388,6 +388,7 @@ export function Room({ roomId, isHost }: Props) {
               onTileContextMenu={(id, x, y) => requestHandTileMenuRef.current(id, x, y)}
               onPlayCardToTable={(id, x, y) => playCardToTableRef.current(id, x, y)}
               onReorderHand={(newOrder) => reorderHandRef.current(handView.handEntityId, newOrder)}
+              handEntityId={handView.handEntityId}
             />
           </UIPanel>
         )}

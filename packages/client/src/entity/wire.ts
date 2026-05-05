@@ -126,6 +126,16 @@ export interface ReorderHand {
   newOrder:     string[];
 }
 
+// Drag-from-3D-canvas onto a hand panel (issue #7 of issues--hand.md). After
+// GrabTool releases the hold, host tweens the entity to the hand's centre so
+// the zone-enter logic slots it normally. Host validates that the requesting
+// seat owns the destination hand (or it's a null-owner shared hand).
+export interface TweenIntoHand {
+  type:         'tween-into-hand';
+  entityId:     string;
+  handEntityId: string;
+}
+
 // Cosmetic broadcast originated by a Tool (issue #3 of issues--tools.md).
 // Rides the unreliable channel — missed messages are not retried. Payload
 // schema is per-tool (e.g. ping carries `{ entityId }` or `{ point: [x,z] }`).
@@ -153,4 +163,5 @@ export type SceneMessage =
   | ApplyImpulse
   | PlayCardToTable
   | ReorderHand
+  | TweenIntoHand
   | ToolBroadcast;
