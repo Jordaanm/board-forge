@@ -232,6 +232,14 @@ export class ZoneComponent extends EntityComponent<ZoneState> {
     });
     this.debugMesh = new THREE.Mesh(geom, mat);
     this.debugMesh.userData.skipTint = true;
+    // Three's raycaster doesn't auto-skip invisible objects, so override:
+    // only pick the zone when its debug mesh is actually visible. Otherwise
+    // clicks would land on a hidden box and miss entities inside.
+    const defaultRaycast = THREE.Mesh.prototype.raycast;
+    this.debugMesh.raycast = function (raycaster, intersects) {
+      if (!this.visible) return;
+      defaultRaycast.call(this, raycaster, intersects);
+    };
     t.object3d.add(this.debugMesh);
   }
 
