@@ -197,7 +197,7 @@ export function ThreeCanvas({
             // canvas backbuffer is cleared after each rAF. Re-render before
             // capture so toDataURL reads a populated buffer instead of blank.
             renderer.render(scene, camera);
-            return captureCanvasThumbnail(renderer.domElement, { width: 192, height: 108, quality: 0.8 });
+            return captureCanvasThumbnail(renderer.domElement, { width: 192, height: 108 });
           }
         : undefined,
     });
@@ -337,7 +337,7 @@ export function ThreeCanvas({
         // Render once before capture so the texture reflects the current
         // animation-loop frame even if Save is clicked between frames.
         renderer.render(scene, camera);
-        const thumbnail = captureCanvasThumbnail(renderer.domElement, { width: 480, height: 270, quality: 0.8 });
+        const thumbnail = captureCanvasThumbnail(renderer.domElement, { width: 480, height: 270 });
         const envelope = encodeSaveFile({ scene: world.snapshot(), thumbnail });
         downloadSaveFile(envelope);
       };

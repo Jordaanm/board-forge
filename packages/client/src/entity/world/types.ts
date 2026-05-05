@@ -187,7 +187,7 @@ export interface WorldOptions {
   // Required on the host for HostInputDispatcher's ownership checks; resolves
   // a peer id to its current seat. Returns null for spectators.
   getPeerSeat?: (peerId: string) => SeatIndex | null;
-  // Host-only: returns a JPEG data URL for the current canvas, or null.
+  // Host-only: returns a PNG data URL for the current canvas, or null.
   // Forwarded to SceneHistoryService for undo-entry thumbnails.
   captureThumb?: () => string | null;
   // Host-only: undo ring cap. Defaults to 20 inside SceneHistoryService.

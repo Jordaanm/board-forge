@@ -3,8 +3,10 @@
 // Single JSON document with shape `{ format, version, savedAt, thumbnail,
 // scene, script }`. `format` is the sentinel `"vtt-scene"`; `version` is an
 // integer starting at 1; `scene` is the existing `EntitySerialized[]` shape
-// produced by `World.snapshot`. `thumbnail` is a JPEG data URL; `savedAt` is
-// an ISO timestamp; `script` is reserved as `null` until scripting lands.
+// produced by `World.snapshot`. `thumbnail` is a lossless PNG data URL (so
+// the future steganography path can embed the save payload in the pixels
+// without JPEG resampling corrupting it); `savedAt` is an ISO timestamp;
+// `script` is reserved as `null` until scripting lands.
 //
 // Validation on `decode` rejects unknown `format`, unknown `version`, missing
 // required fields, or any unknown component `typeId` in `scene`. Optional

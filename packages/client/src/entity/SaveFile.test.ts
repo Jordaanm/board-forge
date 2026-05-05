@@ -51,13 +51,13 @@ describe('SaveFile round-trip', () => {
   test('encode → JSON → decode preserves the scene', () => {
     const env = encodeSaveFile({
       scene:     sampleScene,
-      thumbnail: 'data:image/jpeg;base64,/9j/example',
+      thumbnail: 'data:image/png;base64,iVBORw0KGgo=',
       savedAt:   '2026-05-06T12:00:00.000Z',
     });
     const text    = JSON.stringify(env);
     const decoded = decodeSaveFile(text);
     expect(decoded.scene).toEqual(sampleScene);
-    expect(decoded.thumbnail).toBe('data:image/jpeg;base64,/9j/example');
+    expect(decoded.thumbnail).toBe('data:image/png;base64,iVBORw0KGgo=');
     expect(decoded.savedAt).toBe('2026-05-06T12:00:00.000Z');
   });
 

@@ -168,11 +168,11 @@ describe('SceneHistoryService — undo ring (issue #5)', () => {
   test('captureThumb is invoked once per push', () => {
     let captures = 0;
     const captured = new SceneHistoryService(world, {
-      captureThumb: () => { captures++; return 'data:image/jpeg;base64,zzz'; },
+      captureThumb: () => { captures++; return 'data:image/png;base64,iVBOR'; },
     });
     world.setCurrent([snap('a')]); captured.push('a');
     world.setCurrent([snap('b')]); captured.push('b');
     expect(captures).toBe(2);
-    expect(captured.entries()[0].thumbnail).toBe('data:image/jpeg;base64,zzz');
+    expect(captured.entries()[0].thumbnail).toBe('data:image/png;base64,iVBOR');
   });
 });

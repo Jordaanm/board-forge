@@ -31,7 +31,7 @@ export interface SnapshotProvider {
 export interface SceneHistoryServiceOptions {
   // Maximum entries retained on the undo stack. Default 20.
   cap?: number;
-  // Returns a JPEG data URL or null. Default returns null. ThreeCanvas wires
+  // Returns a PNG data URL or null. Default returns null. ThreeCanvas wires
   // this to a 192×108 capture against the live canvas.
   captureThumb?: () => string | null;
 }
