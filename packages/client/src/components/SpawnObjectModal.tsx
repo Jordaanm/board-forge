@@ -4,7 +4,7 @@
 
 import { forwardRef, useEffect, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { listSpawnables, type SpawnableDef } from '../entity/SpawnableRegistry';
+import { listPublicSpawnables, type SpawnableDef } from '../entity/SpawnableRegistry';
 import { groupByCategory, searchSpawnables } from '../entity/spawnableSearch';
 import { useAnchorTarget } from './AnchorLayout';
 import './SpawnObjectModal.css';
@@ -143,7 +143,7 @@ export function SpawnObjectModal({ onSpawn }: Props) {
 // when the dialog opens, so by the time this renders, the World constructor
 // in ThreeCanvas has already run registerCorePrimitives().
 function ModalBody({ onSpawn }: { onSpawn: (type: string) => void }) {
-  const allDefs = listSpawnables();
+  const allDefs = listPublicSpawnables();
   const [query, setQuery]     = useState('');
   const [focusIdx, setFocusIdx] = useState(0);
   const [flashType, setFlashType] = useState<string | null>(null);

@@ -12,6 +12,7 @@ import { ValueComponent } from './components/ValueComponent';
 import { DiceComponent } from './components/DiceComponent';
 import { FlatViewComponent } from './components/FlatViewComponent';
 import { CardComponent } from './components/CardComponent';
+import { DeckComponent } from './components/DeckComponent';
 import { ZoneComponent } from './components/ZoneComponent';
 import { TweenComponent } from './components/TweenComponent';
 import { HandComponent } from './components/HandComponent';
@@ -25,6 +26,7 @@ export function registerCorePrimitives(): void {
   if (!componentRegistry.has('dice'))      componentRegistry.register(DiceComponent);
   if (!componentRegistry.has('flatview'))  componentRegistry.register(FlatViewComponent);
   if (!componentRegistry.has('card'))      componentRegistry.register(CardComponent);
+  if (!componentRegistry.has('deck'))      componentRegistry.register(DeckComponent);
   if (!componentRegistry.has('zone'))      componentRegistry.register(ZoneComponent);
   if (!componentRegistry.has('tween'))     componentRegistry.register(TweenComponent);
   if (!componentRegistry.has('hand'))      componentRegistry.register(HandComponent);
@@ -82,6 +84,21 @@ export function registerCorePrimitives(): void {
       { typeId: 'flatview',  state: { textureRef: '' } },
       { typeId: 'card',      state: { face: '', back: '', category: '' } },
       { typeId: 'tween',     state: {} },
+    ],
+  });
+
+  if (!getSpawnable('deck')) registerSpawnable({
+    type:        'deck',
+    label:       'Deck',
+    category:    'Cards',
+    defaultTags: ['deck'],
+    internal:    true,
+    components: [
+      { typeId: 'transform', state: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } },
+      { typeId: 'mesh',      state: { meshRef: 'prim:deck', textureRefs: { face: '', back: '' }, tint: '#fafafa', size: [0.63, 0.02, 0.88] } },
+      { typeId: 'physics',   state: { mass: 0.05, friction: 0.6, restitution: 0.1, isLocked: false } },
+      { typeId: 'tween',     state: {} },
+      { typeId: 'deck',      state: { cards: [], category: '' } },
     ],
   });
 

@@ -18,6 +18,7 @@ import { SceneImpl, entityToSerialized, type EntitySerialized } from '../Scene';
 import { HostReplicatorV2 } from '../HostReplicatorV2';
 import { componentRegistry } from '../ComponentRegistry';
 import { HoldService } from '../HoldService';
+import { MergeService } from '../MergeService';
 import { HostInputDispatcher } from '../HostInputDispatcher';
 import { GuestInputHandler } from '../../input/GuestInputHandler';
 import { type SceneMessage, type EntityFieldsPartial } from '../wire';
@@ -84,9 +85,11 @@ class WorldImpl implements World, HandleRouter {
   private readonly physics:    PhysicsWorld | null;
   private readonly replicator: HostReplicatorV2 | null;
   private readonly hold:       HoldService | null;
+  private readonly merge:      MergeService | null;
   private readonly hostInput:  HostInputDispatcher | null;
   private readonly guestInput: GuestInputHandler | null;
   private readonly policy:     ReplicationPolicy;
+  private mergeBeginContact:   ((e: { bodyA: import('cannon-es').Body; bodyB: import('cannon-es').Body }) => void) | null = null;
 
   private readonly getPeerSeat: (peerId: string) => SeatIndex | null;
 
@@ -118,12 +121,17 @@ class WorldImpl implements World, HandleRouter {
       this.replicator = new HostReplicatorV2(this.policy);
       this.scene.world = this.replicator;
       this.hold       = new HoldService(this.replicator, this.scene);
+      this.merge      = new MergeService(this.scene, this.replicator, {
+        spawnAt: (type, position) => this.spawnEntityAt(type, position),
+      });
       this.hostInput  = new HostInputDispatcher(this.hold, this.getPeerSeat, this.scene);
       this.guestInput = new GuestInputHandler(this.hold, this.getPeerSeat, this.scene);
+      this.installBeginContactHandler();
     } else {
       this.physics    = null;
       this.replicator = null;
       this.hold       = null;
+      this.merge      = null;
       this.hostInput  = null;
       this.guestInput = null;
     }
@@ -135,6 +143,13 @@ class WorldImpl implements World, HandleRouter {
   // ── Lifecycle ────────────────────────────────────────────────────────────
   spawn(type: string, opts: SpawnOptions = {}): EntityHandle {
     if (this.role !== 'host') throw new Error('World.spawn is host-only');
+    const entity = this.spawnEntity(type, opts);
+    return this.handleFor(entity);
+  }
+
+  // Returns the raw Entity. Used by MergeService and the public `spawn()`
+  // facade. Always host-only.
+  private spawnEntity(type: string, opts: SpawnOptions = {}): Entity {
     const ctx: SpawnContext = { scene: this.threeScene, physics: this.physics, entityScene: this.scene };
     const entity = this.scene.spawn(type, ctx, { id: opts.id });
 
@@ -156,12 +171,38 @@ class WorldImpl implements World, HandleRouter {
 
     if (this.replicator) this.replicator.enqueueEntitySpawn(entityToSerialized(entity));
     this.notify();
-    return this.handleFor(entity);
+    return entity;
+  }
+
+  private spawnEntityAt(type: string, position: [number, number, number]): Entity {
+    return this.spawnEntity(type, { position });
   }
 
   // Mirrors SceneSystemV2.spawn's random table-surface placement so existing
   // EditorPanel-driven spawns land where they used to. Issue #4 reconsiders
   // whether spawn placement is World's concern or the editor's.
+  // Subscribes to the cannon world's beginContact event so MergeService runs
+  // whenever two PhysicsComponent bodies first touch. Host-only — guests don't
+  // run physics. Issue #2 of issues--deck.md.
+  private installBeginContactHandler(): void {
+    if (!this.physics || !this.merge) return;
+    this.mergeBeginContact = (e) => {
+      const a = this.findEntityByBody(e.bodyA);
+      const b = this.findEntityByBody(e.bodyB);
+      if (!a || !b) return;
+      this.merge!.enqueueContact(a, b);
+    };
+    this.physics.world.addEventListener('beginContact', this.mergeBeginContact);
+  }
+
+  private findEntityByBody(body: import('cannon-es').Body): Entity | undefined {
+    for (const e of this.scene.all()) {
+      const phys = e.getComponent(PhysicsComponent);
+      if (phys?.body === body) return e;
+    }
+    return undefined;
+  }
+
   private defaultSpawnPosition(entity: Entity): [number, number, number] {
     const x = (Math.random() - 0.5) * 6;
     const z = (Math.random() - 0.5) * 3;
@@ -250,6 +291,7 @@ class WorldImpl implements World, HandleRouter {
       this.tickTweens(dtSeconds);
       this.syncZoneBodies();
       this.physics.step(dtSeconds);
+      this.merge?.processQueued();
       this.enforceTableBounds();
       this.syncFromPhysics();
 
@@ -693,6 +735,11 @@ class WorldImpl implements World, HandleRouter {
 
     this.unsubscribeMessage();
     this.unsubscribePeerJoin();
+
+    if (this.physics && this.mergeBeginContact) {
+      this.physics.world.removeEventListener('beginContact', this.mergeBeginContact);
+      this.mergeBeginContact = null;
+    }
 
     this.scene.world = null;
 

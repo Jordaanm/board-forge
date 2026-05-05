@@ -1,11 +1,13 @@
 ## TODO
 
+Host Tools:
+  * Scene Graph
+  * Editor Panel
+  * Spawnables Menu
+  * Scripting
+  * Player Management
 ### Bugs
 * Tint menu closes immediately when you click on it, making it difficult to properly pick a colour.
-* Changes to the table are not replicated to all peers.
-  * The table settings should be part of the scene state, and replicated to all peers.
-* The table's hitbox is not updated when the table is resized or shape is changed.
-* An object moving fast enough passes through objects instead of colliding and stopping.
 
 ### Minor Features
 * Selecting an item in the scene highlights it in the scene graph panel.
@@ -15,16 +17,6 @@
 * Remove the transitional `__delete` host-local built-in from `ContextMenuController.ts`.
 * Decide whether Delete becomes a base-class action on every entity or moves into the editor panel UX. Either way, drop the special-cased id in `dispatchMenuAction`.
 
-### Add Card object type
-* Cards have a "category" property, which is a string.
-* Cards have a "face" and "back" property, which reference images to be used as the card's front and back faces.
-* Cards have a "value" property, which is a string.
-
-### Hands
-* Hands are a zone type that can hold any number of objects, of any type.
-* Each hand has a "Main Hand" property which references a player. A player can only have 1 Main Hand at a time. If another zone is set as the Main Hand, the previous Main Hand will be removed.
-* The contents of the main hand are displayed in a floating panel along the bottom of the UI, and can be interacted with.
-* This feature is the same as it is in Tabletop Simulator
 
 ### Add containers
 

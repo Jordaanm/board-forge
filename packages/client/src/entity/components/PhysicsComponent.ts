@@ -153,6 +153,20 @@ export class PhysicsComponent extends EntityComponent<PhysicsState> {
   }
 
   // ── Methods (PRD § Physics Component) ───────────────────────────────────
+  // Rebuild the body shape from the current sibling MeshComponent. Used when
+  // sibling components (DeckComponent) resize the mesh and need the body's
+  // hitbox to follow. Issue #2 of issues--deck.md.
+  rebuildShape(): void {
+    if (!this.body) return;
+    const mesh = this.entity.getComponent(MeshComponent);
+    if (!mesh) return;
+    while (this.body.shapes.length > 0) this.body.removeShape(this.body.shapes[0]);
+    this.body.addShape(buildShape(mesh));
+    this.body.updateBoundingRadius();
+    this.body.aabbNeedsUpdate = true;
+    this.body.updateMassProperties();
+  }
+
   getVelocity(): Vec3Like {
     const v = this.body.velocity;
     return { x: v.x, y: v.y, z: v.z };

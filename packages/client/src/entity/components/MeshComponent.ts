@@ -72,6 +72,7 @@ export class MeshComponent extends EntityComponent<MeshState> {
     if (this.state.meshRef === 'prim:cube') return 'cube';
     if (this.state.meshRef === 'prim:d6')   return 'cube';
     if (this.state.meshRef === 'prim:card') return 'cube';
+    if (this.state.meshRef === 'prim:deck') return 'cube';
     if (this.state.meshRef === 'prim:meeple') return 'meeple';
     return 'unknown';
   }
@@ -121,6 +122,8 @@ export class MeshComponent extends EntityComponent<MeshState> {
       const meshSlot = (child.userData.materialSlot as string | undefined) ?? 'default';
       if (Array.isArray(child.material)) {
         for (const mat of child.material) {
+          // Per-material skipTint (deck side stripe map keeps its procedural texture).
+          if (mat.userData?.skipTint) continue;
           const matSlot = (mat.userData?.materialSlot as string | undefined) ?? meshSlot;
           apply(mat, matSlot);
         }
@@ -144,6 +147,7 @@ function buildMesh(meshRef: string, size: MeshSize): THREE.Object3D {
   }
   if (meshRef === 'prim:d6')   return buildD6(size);
   if (meshRef === 'prim:card') return buildCard(size);
+  if (meshRef === 'prim:deck') return buildDeck(size);
   if (meshRef === 'prim:meeple') {
     const r = (typeof size === 'number' ? size : size[0]) * 0.5;
     const totalH = (typeof size === 'number' ? size : size[1]);
@@ -167,7 +171,12 @@ function sizeToBox(size: MeshSize): [number, number, number] {
 }
 
 function halfExtentsFor(meshRef: string, size: MeshSize): [number, number, number] {
-  if (meshRef === 'prim:cube' || meshRef === 'prim:d6' || meshRef === 'prim:card') {
+  if (
+    meshRef === 'prim:cube' ||
+    meshRef === 'prim:d6'   ||
+    meshRef === 'prim:card' ||
+    meshRef === 'prim:deck'
+  ) {
     const [w, h, d] = sizeToBox(size);
     return [w / 2, h / 2, d / 2];
   }
@@ -253,6 +262,67 @@ function buildCard(size: MeshSize): THREE.Object3D {
   mesh.castShadow    = true;
   mesh.receiveShadow = true;
   return mesh;
+}
+
+// prim:deck — like prim:card but the side material renders striped slabs (one
+// per card). Stripe count derives from height: `cards.length = round(h /
+// CARD_SLAB_HEIGHT)`. The side material carries `userData.skipTint` so
+// applyMaterialAttributes doesn't overwrite the procedural map with a null
+// when no `side` URL is set.
+function buildDeck(size: MeshSize): THREE.Object3D {
+  const [w, h, d] = sizeToBox(size);
+  const geometry = new THREE.BoxGeometry(w, h, d);
+  geometry.groups[0].materialIndex = 2; // +X side
+  geometry.groups[1].materialIndex = 2; // -X side
+  geometry.groups[2].materialIndex = 0; // +Y face (top card)
+  geometry.groups[3].materialIndex = 1; // -Y back (bottom card back)
+  geometry.groups[4].materialIndex = 2; // +Z side
+  geometry.groups[5].materialIndex = 2; // -Z side
+
+  const faceMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+  faceMat.userData = { materialSlot: 'face' };
+  const backMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+  backMat.userData = { materialSlot: 'back' };
+
+  const stripeCount = Math.max(1, Math.round(h / 0.02));
+  const sideMat = new THREE.MeshLambertMaterial({ color: 0xfafafa });
+  sideMat.userData = { materialSlot: 'side', skipTint: true };
+  const stripeTex = stripeTextureFor(stripeCount);
+  if (stripeTex) {
+    sideMat.map = stripeTex;
+    sideMat.needsUpdate = true;
+  }
+
+  const mesh = new THREE.Mesh(geometry, [faceMat, backMat, sideMat]);
+  mesh.castShadow    = true;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+const stripeTextureCache = new Map<number, THREE.Texture>();
+
+function stripeTextureFor(stripeCount: number): THREE.Texture | null {
+  if (typeof document === 'undefined') return null;
+  const cached = stripeTextureCache.get(stripeCount);
+  if (cached) return cached;
+
+  const SIZE = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = SIZE;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  ctx.fillStyle = '#fafafa';
+  ctx.fillRect(0, 0, SIZE, SIZE);
+  ctx.fillStyle = '#202020';
+  for (let i = 1; i < stripeCount; i++) {
+    const y = Math.floor((SIZE * i) / stripeCount);
+    ctx.fillRect(0, y, SIZE, 1);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  stripeTextureCache.set(stripeCount, tex);
+  return tex;
 }
 
 const PIP_POSITIONS: Record<number, ReadonlyArray<readonly [number, number]>> = {

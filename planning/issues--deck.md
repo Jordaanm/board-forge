@@ -26,7 +26,7 @@ None — can start immediately.
 
 ---
 
-## Issue #2 — `DeckComponent` + `prim:deck` mesh + card↔card merge
+## Issue #2 — `DeckComponent` + `prim:deck` mesh + card↔card merge ✅ Completed
 
 ### What to build
 
@@ -43,18 +43,18 @@ Three subsystems land together because each is incomplete without the others:
 
 ### Acceptance criteria
 
-- [ ] `DeckComponent` registered with `typeId: 'deck'`, `requires: ['transform', 'mesh', 'physics']`.
-- [ ] `deck` spawnable registered with `internal: true`; absent from spawn modal.
-- [ ] `SpawnableDef.internal?: boolean` field added; `SpawnObjectModal` filters it.
-- [ ] `prim:deck` builds a striped-side BoxGeometry; height = `0.02 × cards.length`; face/back/side material slot routing matches `prim:card`.
-- [ ] `DeckComponent.onPropertiesChanged({ cards })` patches Mesh `textureRefs.face`, `textureRefs.back`, and `size` so the deck visibly grows and shows correct top/bottom.
-- [ ] `MergeService.canMerge` returns false when either party is held, in a hand, in a deck, or has mismatched category.
-- [ ] `MergeService.merge` (card↔card path) spawns a `deck` entity at the lower card's transform, names it `Deck of {category}` (fallback `Deck-{guid:8}` when category empty), sets both cards' `isContained=true` and `parentId=deck.id`, with the newer card at index 0.
-- [ ] Deck physics: mass = `cardMass × cards.length`; hitbox derived from height-scaled box.
-- [ ] `PhysicsComponent.collide` host listener calls `MergeService` on contact events.
-- [ ] Two same-category cards dropped on each other form a deck. The cards' meshes hide; the deck's mesh shows both faces correctly.
-- [ ] Mismatched-category collision does not merge (cards bounce).
-- [ ] Tests: `MergeService.test.ts` covers each `canMerge` branch and the card↔card `merge` outcome. `DeckComponent.test.ts` covers material/size patching on `cards` change.
+- [x] `DeckComponent` registered with `typeId: 'deck'`, `requires: ['transform', 'mesh', 'physics']`.
+- [x] `deck` spawnable registered with `internal: true`; absent from spawn modal.
+- [x] `SpawnableDef.internal?: boolean` field added; `SpawnObjectModal` filters it.
+- [x] `prim:deck` builds a striped-side BoxGeometry; height = `0.02 × cards.length`; face/back/side material slot routing matches `prim:card`.
+- [x] `DeckComponent.onPropertiesChanged({ cards })` patches Mesh `textureRefs.face`, `textureRefs.back`, and `size` so the deck visibly grows and shows correct top/bottom.
+- [x] `MergeService.canMerge` returns false when either party is held, in a hand, in a deck, or has mismatched category.
+- [x] `MergeService.merge` (card↔card path) spawns a `deck` entity at the lower card's transform, names it `Deck of {category}` (fallback `Deck-{guid:8}` when category empty), sets both cards' `isContained=true` and `parentId=deck.id`, with the newer card at index 0.
+- [x] Deck physics: mass = `cardMass × cards.length`; hitbox derived from height-scaled box.
+- [x] `PhysicsComponent.collide` host listener calls `MergeService` on contact events.
+- [x] Two same-category cards dropped on each other form a deck. The cards' meshes hide; the deck's mesh shows both faces correctly.
+- [x] Mismatched-category collision does not merge (cards bounce).
+- [x] Tests: `MergeService.test.ts` covers each `canMerge` branch and the card↔card `merge` outcome. `DeckComponent.test.ts` covers material/size patching on `cards` change.
 
 ### Blocked by
 

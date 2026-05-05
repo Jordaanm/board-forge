@@ -1,0 +1,214 @@
+import { describe, test, expect, beforeEach } from 'vitest';
+import * as THREE from 'three';
+import { SceneImpl } from './Scene';
+import { type SpawnContext } from './EntityComponent';
+import { HostReplicatorV2, type ReplicatorPolicy } from './HostReplicatorV2';
+import { MergeService } from './MergeService';
+import { registerCorePrimitives } from './spawnables';
+import { PhysicsWorld } from '../physics/PhysicsWorld';
+import { CardComponent } from './components/CardComponent';
+import { DeckComponent } from './components/DeckComponent';
+import { TransformComponent } from './components/TransformComponent';
+import { type Entity } from './Entity';
+
+const POLICY: ReplicatorPolicy = {
+  channelFor:  () => 'reliable',
+  coalesceFor: () => 'merge',
+  shouldFlush: () => true,
+};
+
+let scene: SceneImpl;
+let ctx: SpawnContext;
+let replicator: HostReplicatorV2;
+let merge: MergeService;
+
+function spawnCard(opts: { id?: string; pos?: [number, number, number]; category?: string; face?: string; back?: string } = {}): Entity {
+  const e = scene.spawn('card', ctx, { id: opts.id });
+  const t = e.getComponent(TransformComponent)!;
+  if (opts.pos) {
+    t.setState({ position: opts.pos, rotation: t.state.rotation, scale: t.state.scale });
+  }
+  if (opts.category !== undefined || opts.face !== undefined || opts.back !== undefined) {
+    e.getComponent(CardComponent)!.setState({
+      category: opts.category ?? '',
+      face:     opts.face     ?? '',
+      back:     opts.back     ?? '',
+    });
+  }
+  return e;
+}
+
+beforeEach(() => {
+  registerCorePrimitives();
+  scene = new SceneImpl();
+  ctx = { scene: new THREE.Scene(), physics: new PhysicsWorld(), entityScene: scene };
+  replicator = new HostReplicatorV2(POLICY);
+  scene.world = replicator;
+  merge = new MergeService(scene, replicator, {
+    spawnAt: (type, position) => {
+      const e = scene.spawn(type, ctx);
+      const t = e.getComponent(TransformComponent)!;
+      t.setState({ position, rotation: t.state.rotation, scale: t.state.scale });
+      return e;
+    },
+  });
+});
+
+describe('MergeService.canMerge — gating', () => {
+  test('two same-category, free, not-private, not-contained cards → true', () => {
+    const a = spawnCard({ category: 'tarot' });
+    const b = spawnCard({ category: 'tarot' });
+    expect(merge.canMerge(a, b)).toBe(true);
+  });
+
+  test('mismatched category → false', () => {
+    const a = spawnCard({ category: 'tarot' });
+    const b = spawnCard({ category: 'pinochle' });
+    expect(merge.canMerge(a, b)).toBe(false);
+  });
+
+  test('held card → false', () => {
+    const a = spawnCard({ category: 'x' });
+    const b = spawnCard({ category: 'x' });
+    a.heldBy = 1;
+    expect(merge.canMerge(a, b)).toBe(false);
+  });
+
+  test('privateToSeat (in hand) → false', () => {
+    const a = spawnCard({ category: 'x' });
+    const b = spawnCard({ category: 'x' });
+    a.privateToSeat = 0;
+    expect(merge.canMerge(a, b)).toBe(false);
+  });
+
+  test('isContained (already in deck) → false', () => {
+    const a = spawnCard({ category: 'x' });
+    const b = spawnCard({ category: 'x' });
+    a.isContained = true;
+    expect(merge.canMerge(a, b)).toBe(false);
+  });
+
+  test('same entity → false', () => {
+    const a = spawnCard({ category: 'x' });
+    expect(merge.canMerge(a, a)).toBe(false);
+  });
+
+  test('non-card vs card → false', () => {
+    const a = spawnCard({ category: 'x' });
+    const die = scene.spawn('die', ctx);
+    expect(merge.canMerge(a, die)).toBe(false);
+  });
+});
+
+describe('MergeService.merge — card↔card', () => {
+  test('spawns a deck at the lower card pose with newer card at index 0', () => {
+    const lower = spawnCard({ id: 'lo', pos: [0, 0.5, 0], category: 'tarot', face: 'fL', back: 'bL' });
+    const upper = spawnCard({ id: 'up', pos: [0, 0.7, 0], category: 'tarot', face: 'fU', back: 'bU' });
+
+    const deck = merge.merge(upper, lower);
+    expect(deck).not.toBeNull();
+    const deckC = deck!.getComponent(DeckComponent)!;
+    expect(deckC.state.cards).toEqual(['up', 'lo']);
+    expect(deckC.state.category).toBe('tarot');
+
+    const deckPos = deck!.getComponent(TransformComponent)!.state.position;
+    expect(deckPos).toEqual([0, 0.5, 0]);
+  });
+
+  test('order is independent of argument order', () => {
+    const lower = spawnCard({ id: 'lo', pos: [0, 0.5, 0], category: 'x' });
+    const upper = spawnCard({ id: 'up', pos: [0, 0.7, 0], category: 'x' });
+    const deck = merge.merge(lower, upper);
+    expect(deck!.getComponent(DeckComponent)!.state.cards).toEqual(['up', 'lo']);
+  });
+
+  test('sets isContained=true and parentId=deck.id on both cards', () => {
+    const a = spawnCard({ id: 'a', pos: [0, 0.5, 0], category: 'x' });
+    const b = spawnCard({ id: 'b', pos: [0, 0.7, 0], category: 'x' });
+    const deck = merge.merge(a, b);
+    expect(a.isContained).toBe(true);
+    expect(b.isContained).toBe(true);
+    expect(a.parentId).toBe(deck!.id);
+    expect(b.parentId).toBe(deck!.id);
+  });
+
+  test('deck name is "Deck of {category}" when category set', () => {
+    const a = spawnCard({ pos: [0, 0.5, 0], category: 'tarot' });
+    const b = spawnCard({ pos: [0, 0.7, 0], category: 'tarot' });
+    const deck = merge.merge(a, b);
+    expect(deck!.name).toBe('Deck of tarot');
+  });
+
+  test('deck name is "Deck-{guid8}" when category empty', () => {
+    const a = spawnCard({ pos: [0, 0.5, 0], category: '' });
+    const b = spawnCard({ pos: [0, 0.7, 0], category: '' });
+    const deck = merge.merge(a, b);
+    expect(deck!.name).toMatch(/^Deck-[0-9a-fA-F]{8}$/);
+  });
+
+  test('refuses when canMerge returns false', () => {
+    const a = spawnCard({ category: 'x' });
+    const b = spawnCard({ category: 'y' });
+    expect(merge.merge(a, b)).toBeNull();
+  });
+
+  test('replicates the new isContained, parentId, name, children fields', () => {
+    const lower = spawnCard({ id: 'lo', pos: [0, 0.5, 0], category: 't' });
+    const upper = spawnCard({ id: 'up', pos: [0, 0.7, 0], category: 't' });
+    const deck = merge.merge(upper, lower)!;
+
+    const reliable = replicator.flushReliable();
+    const patches: Array<{ entityId: string; partial: Record<string, unknown> }> = [];
+    for (const m of reliable) {
+      if (m.type === 'entity-patch') patches.push({ entityId: m.entityId, partial: m.partial });
+    }
+    // Cards' isContained=true must have been enqueued.
+    expect(patches.some(p => p.entityId === 'up' && p.partial.isContained === true)).toBe(true);
+    expect(patches.some(p => p.entityId === 'lo' && p.partial.isContained === true)).toBe(true);
+    // Cards' parentId must point at the new deck.
+    expect(patches.some(p => p.entityId === 'up' && p.partial.parentId === deck.id)).toBe(true);
+    expect(patches.some(p => p.entityId === 'lo' && p.partial.parentId === deck.id)).toBe(true);
+  });
+});
+
+describe('MergeService — queued contact processing', () => {
+  test('enqueueContact + processQueued runs the merge', () => {
+    const a = spawnCard({ id: 'a', pos: [0, 0.5, 0], category: 'x' });
+    const b = spawnCard({ id: 'b', pos: [0, 0.7, 0], category: 'x' });
+    merge.enqueueContact(a, b);
+    merge.processQueued();
+    expect(a.isContained).toBe(true);
+    expect(b.isContained).toBe(true);
+  });
+
+  test('enqueueContact filters via canMerge before queueing', () => {
+    const a = spawnCard({ category: 'x' });
+    const b = spawnCard({ category: 'y' });
+    merge.enqueueContact(a, b);
+    merge.processQueued();
+    expect(a.isContained).toBe(false);
+    expect(b.isContained).toBe(false);
+  });
+
+  test('a card already merged in an earlier pair is skipped in later pairs', () => {
+    const a = spawnCard({ id: 'a', pos: [0, 0.5, 0], category: 'x' });
+    const b = spawnCard({ id: 'b', pos: [0, 0.7, 0], category: 'x' });
+    const c = spawnCard({ id: 'c', pos: [0, 0.6, 0], category: 'x' });
+    merge.enqueueContact(a, b);
+    merge.enqueueContact(b, c);  // b is already merged after first pair
+    merge.processQueued();
+    expect(a.isContained).toBe(true);
+    expect(b.isContained).toBe(true);
+    // c is still loose (no card↔deck merge until issue #3).
+    expect(c.isContained).toBe(false);
+  });
+});
+
+describe('MergeService — public spawnable filter', () => {
+  test('deck spawnable is registered as internal', async () => {
+    const { getSpawnable, listPublicSpawnables } = await import('./SpawnableRegistry');
+    const def = getSpawnable('deck');
+    expect(def?.internal).toBe(true);
+    expect(listPublicSpawnables().some(d => d.type === 'deck')).toBe(false);
+  });
+});

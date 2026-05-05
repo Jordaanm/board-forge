@@ -16,6 +16,9 @@ export interface SpawnableDef {
   category:    string;
   defaultTags: string[];
   components:  ComponentInit[];
+  // Internal spawnables are spawned by the host (e.g. via MergeService for
+  // decks) and never appear in the spawn modal. Issue #2 of issues--deck.md.
+  internal?:   boolean;
 }
 
 const SPAWNABLES = new Map<string, SpawnableDef>();
@@ -48,6 +51,12 @@ export function getSpawnable(type: string): SpawnableDef | undefined {
 
 export function listSpawnables(): SpawnableDef[] {
   return [...SPAWNABLES.values()];
+}
+
+// Spawnables suitable for the spawn modal — excludes ones flagged `internal`
+// (spawned by the host runtime, e.g. decks).
+export function listPublicSpawnables(): SpawnableDef[] {
+  return [...SPAWNABLES.values()].filter(d => !d.internal);
 }
 
 export function clearSpawnables(): void {
