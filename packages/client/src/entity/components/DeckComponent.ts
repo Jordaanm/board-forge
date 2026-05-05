@@ -48,8 +48,21 @@ export class DeckComponent extends EntityComponent<DeckState> {
     const handId = ctx.recipientSeat !== null
       ? findMainHandId(this.entity.scene, ctx.recipientSeat)
       : null;
+    const drawMenu: MenuItem = handId === null
+      ? { kind: 'action', id: 'draw', label: 'Draw', disabled: true }
+      : {
+          kind:  'submenu',
+          label: 'Draw',
+          items: [
+            { kind: 'action',  id: 'draw', label: '1',      args: { count: 1 } },
+            { kind: 'action',  id: 'draw', label: '2',      args: { count: 2 } },
+            { kind: 'action',  id: 'draw', label: '3',      args: { count: 3 } },
+            { kind: 'action',  id: 'draw', label: '5',      args: { count: 5 } },
+            { kind: 'numeric', id: 'draw', label: 'Other…', min: 1, default: 1 },
+          ],
+        };
     return [
-      { kind: 'action', id: 'draw',    label: 'Draw',    disabled: handId === null },
+      drawMenu,
       { kind: 'action', id: 'shuffle', label: 'Shuffle' },
     ];
   }

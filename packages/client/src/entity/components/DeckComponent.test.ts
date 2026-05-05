@@ -80,7 +80,7 @@ describe('DeckComponent — context menu', () => {
     expect(items.some(i => i.kind === 'action' && (i as { id: string }).id === 'shuffle')).toBe(true);
   });
 
-  test('"Draw" is enabled when caller has a main hand', () => {
+  test('"Draw" is a submenu (not a disabled action) when caller has a main hand', () => {
     const hand = scene.spawn('hand', ctx);
     hand.owner = 0;
     hand.getComponent(HandComponent)!.setState({ isMainHand: true });
@@ -88,10 +88,10 @@ describe('DeckComponent — context menu', () => {
     const items = deck.getComponent(DeckComponent)!.onContextMenu({
       recipientSeat: 0, isHost: true, entity: deck,
     });
-    const draw = items.find(i => i.kind === 'action' && (i as { id: string }).id === 'draw') as
-      | { disabled?: boolean }
-      | undefined;
-    expect(draw?.disabled).toBe(false);
+    const drawSub = items.find(i => i.kind === 'submenu' && (i as { label: string }).label === 'Draw');
+    expect(drawSub).toBeDefined();
+    const sub = drawSub as { kind: string; label: string; items: Array<{ kind: string; id: string; label: string }> };
+    expect(sub.items.map(i => i.label)).toEqual(['1', '2', '3', '5', 'Other…']);
   });
 
   test('"Draw" is greyed out when recipientSeat is null', () => {

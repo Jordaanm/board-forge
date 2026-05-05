@@ -57,8 +57,26 @@ export interface MenuContext {
 // the aggregator after each component returns its items — components do not
 // set it themselves.
 export type MenuItem =
-  | { kind: 'action';      id: string; label: string; componentTypeId?: string; disabled?: boolean }
+  | {
+      kind:  'action';
+      id:    string;
+      label: string;
+      componentTypeId?: string;
+      disabled?:        boolean;
+      // Optional preset args dispatched alongside the click. Used by submenu
+      // sets like Draw ▸ {1,2,3,5} where each option carries its count.
+      args?: object;
+    }
   | { kind: 'colorpicker'; id: string; label: string; value: string; componentTypeId?: string }
+  | {
+      kind:    'numeric';
+      id:      string;
+      label:   string;
+      min?:    number;
+      max?:    number;
+      default?: number;
+      componentTypeId?: string;
+    }
   | { kind: 'submenu';     label: string; items: MenuItem[] }
   | { kind: 'heading';     label: string }
   | { kind: 'separator' };

@@ -92,6 +92,7 @@ function MenuList({
         if (item.kind === 'heading')   return <div key={`hd-${i}`}  style={HEADING_STYLE}>{item.label}</div>;
         if (item.kind === 'action')      return <ActionRow      key={`act-${item.id}-${i}`}   item={item} onAction={onAction} />;
         if (item.kind === 'colorpicker') return <ColorPickerRow key={`color-${item.id}-${i}`} item={item} onAction={onAction} />;
+        if (item.kind === 'numeric')     return <NumericRow     key={`num-${item.id}-${i}`}   item={item} onAction={onAction} />;
         if (item.kind === 'submenu')     return <SubmenuRow     key={`sub-${item.label}-${i}`} item={item} onAction={onAction} />;
         return null;
       })}
@@ -118,8 +119,9 @@ function ActionRow({
       }}
       onClick={() => {
         if (item.disabled) return;
-        const args = maybePromptForCount(item);
-        if (args === SKIP_ACTION) return;
+        const promptArgs = maybePromptForCount(item);
+        if (promptArgs === SKIP_ACTION) return;
+        const args = promptArgs ?? item.args;
         onAction(item, args);
       }}
       onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')}
@@ -150,6 +152,70 @@ function ColorPickerRow({
         style={{ width: 28, height: 18, border: 'none', background: 'none', padding: 0, cursor: 'pointer' }}
       />
     </label>
+  );
+}
+
+function NumericRow({
+  item, onAction,
+}: {
+  item: MenuItem & { kind: 'numeric' };
+  onAction: (item: MenuItem & { kind: 'action' | 'colorpicker' }, args: object | undefined) => void;
+}) {
+  const [value, setValue] = useState<number>(item.default ?? 1);
+  const submit = () => {
+    let n = Number(value);
+    if (!Number.isFinite(n)) return;
+    if (item.min !== undefined && n < item.min) n = item.min;
+    if (item.max !== undefined && n > item.max) n = item.max;
+    // Forward as an `action` so the existing dispatcher pipeline accepts it.
+    const action = {
+      kind: 'action' as const,
+      id:   item.id,
+      label: item.label,
+      ...(item.componentTypeId ? { componentTypeId: item.componentTypeId } : {}),
+    };
+    onAction(action, { count: n });
+  };
+  return (
+    <div
+      style={{
+        ...ITEM,
+        color: '#e8e8e8',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 6,
+      }}
+      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')}
+      onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+    >
+      <span style={{ flexShrink: 0 }}>{item.label}</span>
+      <span style={{ display: 'flex', gap: 4 }}>
+        <input
+          type="number"
+          min={item.min}
+          max={item.max}
+          value={value}
+          onChange={e => setValue(Number(e.target.value))}
+          onKeyDown={e => { if (e.key === 'Enter') submit(); }}
+          style={{
+            width: 56, padding: '2px 4px', fontSize: 12,
+            background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.2)',
+            color: '#e8e8e8', borderRadius: 3,
+          }}
+        />
+        <button
+          onClick={submit}
+          style={{
+            padding: '2px 8px', fontSize: 12,
+            background: 'rgba(80,140,220,0.3)', border: '1px solid rgba(255,255,255,0.2)',
+            color: '#e8e8e8', borderRadius: 3, cursor: 'pointer',
+          }}
+        >
+          OK
+        </button>
+      </span>
+    </div>
   );
 }
 

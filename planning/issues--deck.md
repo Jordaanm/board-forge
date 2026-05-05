@@ -181,7 +181,7 @@ Gates on `canManipulate(ctx, deck.owner)`. Wire: `{ type: 'shuffle-deck', deckId
 
 ---
 
-## Issue #8 — Numeric `MenuItem` kind + submenu rendering
+## Issue #8 — Numeric `MenuItem` kind + submenu rendering ✅ Completed
 
 ### What to build
 
@@ -199,12 +199,12 @@ Convert `DeckComponent`'s `Draw` menu item from issue #6 from a flat action to `
 
 ### Acceptance criteria
 
-- [ ] `MenuItem` union extended with `numeric` (and `submenu` if absent).
-- [ ] `ContextMenu.tsx` renders numeric inputs with min/max/default and submit-on-Enter.
-- [ ] `DeckComponent.onContextMenu` returns `Draw ▸ {1, 2, 3, 5, Other...}` when caller has a main hand; greyed out otherwise.
-- [ ] Selecting `Draw 3` calls `drawFromDeck(deckId, 3)`.
-- [ ] Selecting `Other...` and entering 7 calls `drawFromDeck(deckId, 7)`.
-- [ ] Manual test: numeric input is keyboard-focusable and confirms via Enter.
+- [x] `MenuItem` union extended with `numeric` (and `submenu` if absent).
+- [x] `ContextMenu.tsx` renders numeric inputs with min/max/default and submit-on-Enter.
+- [x] `DeckComponent.onContextMenu` returns `Draw ▸ {1, 2, 3, 5, Other...}` when caller has a main hand; greyed out otherwise.
+- [x] Selecting `Draw 3` calls `drawFromDeck(deckId, 3)`.
+- [x] Selecting `Other...` and entering 7 calls `drawFromDeck(deckId, 7)`.
+- [x] Manual test: numeric input is keyboard-focusable and confirms via Enter.
 
 ### Blocked by
 

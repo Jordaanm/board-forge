@@ -29,7 +29,7 @@ export function aggregateContextMenu(entity: Entity, ctx: MenuContext): MenuItem
 }
 
 function tagAction(item: MenuItem, componentTypeId: string): MenuItem {
-  if (item.kind === 'action' || item.kind === 'colorpicker') {
+  if (item.kind === 'action' || item.kind === 'colorpicker' || item.kind === 'numeric') {
     return item.componentTypeId
       ? item
       : { ...item, componentTypeId };
