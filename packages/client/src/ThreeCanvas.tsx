@@ -13,6 +13,7 @@ import { MeshComponent } from './entity/components/MeshComponent';
 import { ValueComponent } from './entity/components/ValueComponent';
 import { DiceComponent } from './entity/components/DiceComponent';
 import { ZoneComponent } from './entity/components/ZoneComponent';
+import { HandComponent } from './entity/components/HandComponent';
 import { MoveGizmo } from './scene/MoveGizmo';
 import { CameraController } from './camera/CameraController';
 import { ToolDispatcher, TOOL_CATALOGUE, type Tool } from './input/tools';
@@ -427,6 +428,12 @@ function entityToObjectSummary(entity: Entity): ObjectSummary {
     props.halfExtentsY = hy;
     props.halfExtentsZ = hz;
     props.isVisible    = zone.state.isVisible;
+  }
+  const hand = entity.getComponent(HandComponent);
+  if (hand) {
+    props.isMainHand = hand.state.isMainHand;
+    props.isPrivate  = hand.state.isPrivate;
+    props.owner      = entity.owner ?? -1;
   }
   return {
     id:         entity.id,

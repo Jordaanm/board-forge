@@ -26,6 +26,7 @@ import { PhysicsComponent } from '../components/PhysicsComponent';
 import { MeshComponent } from '../components/MeshComponent';
 import { ZoneComponent } from '../components/ZoneComponent';
 import { TweenComponent } from '../components/TweenComponent';
+import { HandComponent } from '../components/HandComponent';
 import { registerCorePrimitives } from '../spawnables';
 import { PhysicsWorld } from '../../physics/PhysicsWorld';
 import { TABLE_SURFACE_Y, TABLE_WIDTH, TABLE_DEPTH } from '../../scene/Table';
@@ -199,6 +200,20 @@ class WorldImpl implements World, HandleRouter {
       if (this.replicator) this.replicator.enqueueEntityPatch(entity.id, { tags: [...entity.tags] });
       this.notify();
       return;
+    }
+    if (key === 'owner') {
+      const seat = Number(value);
+      const owner = Number.isFinite(seat) && seat >= 0 ? (seat as SeatIndex) : null;
+      entity.owner = owner;
+      if (this.replicator) this.replicator.enqueueEntityPatch(entity.id, { owner });
+      this.notify();
+      return;
+    }
+
+    const hand = entity.getComponent(HandComponent);
+    if (hand) {
+      if      (key === 'isMainHand') hand.setState({ isMainHand: Boolean(value) });
+      else if (key === 'isPrivate')  hand.setState({ isPrivate:  Boolean(value) });
     }
 
     const zone = entity.getComponent(ZoneComponent);

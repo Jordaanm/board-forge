@@ -58,6 +58,21 @@ export const OBJECT_META: Record<string, ObjectMeta> = {
     ],
     actions: [],
   },
+  hand: {
+    type:  'hand',
+    label: 'Hand',
+    propertySchema: [
+      { key: 'name',         label: 'Name',           type: 'string'  },
+      { key: 'owner',        label: 'Owner seat (-1=null)', type: 'number' },
+      { key: 'isMainHand',   label: 'Main hand',      type: 'boolean' },
+      { key: 'isPrivate',    label: 'Private',        type: 'boolean' },
+      { key: 'halfExtentsX', label: 'Half-extent X',  type: 'number'  },
+      { key: 'halfExtentsY', label: 'Half-extent Y',  type: 'number'  },
+      { key: 'halfExtentsZ', label: 'Half-extent Z',  type: 'number'  },
+      { key: 'isVisible',    label: 'Show debug box', type: 'boolean' },
+    ],
+    actions: [],
+  },
 };
 
 // Resolves a spawnable's display metadata, falling back to the registry's

@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { type Entity } from './Entity';
 import { type SeatIndex } from '../seats/SeatLayout';
 import { type PhysicsWorld } from '../physics/PhysicsWorld';
-import { type ComponentPatch } from './wire';
+import { type ComponentPatch, type EntityFieldsPartial } from './wire';
 
 export type ReplicationChannel = 'reliable' | 'unreliable';
 
@@ -21,6 +21,10 @@ export type ReplicationChannel = 'reliable' | 'unreliable';
 // it explicitly.
 export interface ComponentReplicator {
   enqueueComponentPatch(patch: ComponentPatch): void;
+  // Replicates a partial entity-level field mutation (privateToSeat, owner,
+  // tags, etc.). Components mutate `entity.<field>` directly and call this to
+  // propagate. Issue #3 of issues--hand.md (HandComponent privacy mutation).
+  enqueueEntityPatch(entityId: string, partial: EntityFieldsPartial): void;
 }
 
 // Carried into every onSpawn / onDespawn call. Components own their view

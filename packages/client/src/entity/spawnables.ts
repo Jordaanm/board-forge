@@ -14,6 +14,7 @@ import { FlatViewComponent } from './components/FlatViewComponent';
 import { CardComponent } from './components/CardComponent';
 import { ZoneComponent } from './components/ZoneComponent';
 import { TweenComponent } from './components/TweenComponent';
+import { HandComponent } from './components/HandComponent';
 import { D6_FACE_MAP } from '../dice/d6';
 
 export function registerCorePrimitives(): void {
@@ -26,6 +27,7 @@ export function registerCorePrimitives(): void {
   if (!componentRegistry.has('card'))      componentRegistry.register(CardComponent);
   if (!componentRegistry.has('zone'))      componentRegistry.register(ZoneComponent);
   if (!componentRegistry.has('tween'))     componentRegistry.register(TweenComponent);
+  if (!componentRegistry.has('hand'))      componentRegistry.register(HandComponent);
 
   if (!getSpawnable('board')) registerSpawnable({
     type:        'board',
@@ -91,6 +93,23 @@ export function registerCorePrimitives(): void {
     components: [
       { typeId: 'transform', state: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } },
       { typeId: 'zone',      state: { halfExtents: [0.5, 0.1, 0.5], containedIds: [], isVisible: true } },
+    ],
+  });
+
+  if (!getSpawnable('hand')) registerSpawnable({
+    type:        'hand',
+    label:       'Hand',
+    category:    'Zones',
+    defaultTags: ['hand'],
+    components: [
+      { typeId: 'transform', state: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } },
+      { typeId: 'zone',      state: {
+          halfExtents:      [0.5, 0.1, 0.15],
+          acceptComponents: ['flatview'],
+          containedIds:     [],
+          isVisible:        false,
+        } },
+      { typeId: 'hand',      state: { isMainHand: false, isPrivate: true } },
     ],
   });
 }
