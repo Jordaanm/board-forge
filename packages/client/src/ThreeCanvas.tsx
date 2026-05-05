@@ -17,6 +17,7 @@ import { HandComponent } from './entity/components/HandComponent';
 import { FlatViewComponent } from './entity/components/FlatViewComponent';
 import { aggregateContextMenu } from './entity/contextMenu';
 import { type CardTile } from './components/HandPanel';
+import { DEFAULT_PRIVATE_FIELDS } from './seats/PrivacyScrubber';
 import { MoveGizmo } from './scene/MoveGizmo';
 import { CameraController } from './camera/CameraController';
 import { ToolDispatcher, TOOL_CATALOGUE, type Tool } from './input/tools';
@@ -163,6 +164,7 @@ export function ThreeCanvas({
       sendTo:     (peerId, msg, opts) => sendToRef.current(peerId, msg, opts),
       getTargets: isHost ? () => getTargetsRef.current() : () => [],
       getEntity:  (id) => worldRef?.get(id)?.entity,
+      privateFieldRegistry: DEFAULT_PRIVATE_FIELDS,
     });
 
     const world: World = createWorld({

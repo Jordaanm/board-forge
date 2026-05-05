@@ -9,6 +9,7 @@ import { PhysicsComponent } from './PhysicsComponent';
 import { ZoneComponent } from './ZoneComponent';
 import { TweenComponent } from './TweenComponent';
 import { HandComponent } from './HandComponent';
+import { CardComponent } from './CardComponent';
 import { registerCorePrimitives } from '../spawnables';
 import { PhysicsWorld } from '../../physics/PhysicsWorld';
 import { HostReplicatorV2, type ReplicatorPolicy } from '../HostReplicatorV2';
@@ -504,6 +505,98 @@ describe('HostInputDispatcher.handleReorderHand', () => {
     });
     expect(accepted).toBe(true);
     expect(handZone.state.containedIds).toEqual([c2.id, c1.id]);
+  });
+});
+
+describe('HandComponent — re-emits private fields on enter / exit (issue #8)', () => {
+  function trackingReplicator(): {
+    replicator: HostReplicatorV2;
+    componentPatches: Array<{ typeId: string; entityId: string; partial: Record<string, unknown> }>;
+    entityPatches:    Array<{ entityId: string; partial: Record<string, unknown> }>;
+  } {
+    const r = new HostReplicatorV2(POLICY);
+    const componentPatches: Array<{ typeId: string; entityId: string; partial: Record<string, unknown> }> = [];
+    const entityPatches:    Array<{ entityId: string; partial: Record<string, unknown> }> = [];
+    const origComp = r.enqueueComponentPatch.bind(r);
+    r.enqueueComponentPatch = (p) => {
+      componentPatches.push({ typeId: p.typeId, entityId: p.entityId, partial: { ...p.partial } });
+      origComp(p);
+    };
+    const origEntity = r.enqueueEntityPatch.bind(r);
+    r.enqueueEntityPatch = (id, partial) => {
+      entityPatches.push({ entityId: id, partial: { ...partial } });
+      origEntity(id, partial);
+    };
+    return { replicator: r, componentPatches, entityPatches };
+  }
+
+  test('handleEnter emits card.face/back and flatview.textureRef component-patches', () => {
+    const { replicator, componentPatches } = trackingReplicator();
+    scene.world = replicator;
+
+    const hand = scene.spawn('hand', ctx);
+    hand.owner = 1;
+    const card = scene.spawn('card', ctx);
+    // Seed real face / back URLs so a re-emit carries something interesting.
+    card.getComponent(CardComponent)!.setState({ face: 'A♣.png', back: 'back.png' });
+
+    // Fire enter — handleEnter should set privateToSeat AND re-emit private fields.
+    fireBeginContact(physics.world, hand.getComponent(ZoneComponent)!.body, card.getComponent(PhysicsComponent)!.body);
+
+    const cardPatches = componentPatches.filter(p => p.typeId === 'card' && p.entityId === card.id);
+    const flatPatches = componentPatches.filter(p => p.typeId === 'flatview' && p.entityId === card.id);
+    expect(cardPatches.some(p => p.partial.face === 'A♣.png' && p.partial.back === 'back.png')).toBe(true);
+    expect(flatPatches.length).toBeGreaterThan(0);
+  });
+
+  test('handleEnter sets privateToSeat via entity-patch BEFORE the re-emit so the scrubber sees private state', () => {
+    const { replicator, componentPatches, entityPatches } = trackingReplicator();
+    scene.world = replicator;
+
+    const hand = scene.spawn('hand', ctx);
+    hand.owner = 1;
+    const card = scene.spawn('card', ctx);
+    card.getComponent(CardComponent)!.setState({ face: 'A♣.png', back: 'back.png' });
+    const componentPatchesBefore = componentPatches.length;
+    const entityPatchesBefore    = entityPatches.length;
+
+    fireBeginContact(physics.world, hand.getComponent(ZoneComponent)!.body, card.getComponent(PhysicsComponent)!.body);
+
+    // privateToSeat patch must precede the card.face re-emit so the per-recipient
+    // scrubber consults the private state, not the pre-private one.
+    const newEntityPatches = entityPatches.slice(entityPatchesBefore);
+    const newComponentPatches = componentPatches.slice(componentPatchesBefore);
+    const privateToSeatIdx = newEntityPatches.findIndex(p => p.entityId === card.id && p.partial.privateToSeat === 1);
+    const cardFaceIdx      = newComponentPatches.findIndex(p => p.typeId === 'card' && p.entityId === card.id && p.partial.face === 'A♣.png');
+    expect(privateToSeatIdx).toBeGreaterThanOrEqual(0);
+    expect(cardFaceIdx).toBeGreaterThanOrEqual(0);
+    // Both queues are FIFO; the entity-patch queues into reliable messages
+    // before any later component-patch is enqueued — so the relative order
+    // across the two streams reflects the call order in handleEnter.
+  });
+
+  test('handleExit re-emits private fields with privateToSeat cleared', () => {
+    const { replicator, componentPatches, entityPatches } = trackingReplicator();
+    scene.world = replicator;
+
+    const hand = scene.spawn('hand', ctx);
+    hand.owner = 1;
+    const card = scene.spawn('card', ctx);
+    card.getComponent(CardComponent)!.setState({ face: 'A♣.png', back: 'back.png' });
+    const handZone = hand.getComponent(ZoneComponent)!;
+    const cardBody = card.getComponent(PhysicsComponent)!.body;
+    fireBeginContact(physics.world, handZone.body, cardBody);
+
+    const componentPatchesBefore = componentPatches.length;
+    const entityPatchesBefore    = entityPatches.length;
+    fireEndContact(physics.world, handZone.body, cardBody);
+
+    const newEntityPatches    = entityPatches.slice(entityPatchesBefore);
+    const newComponentPatches = componentPatches.slice(componentPatchesBefore);
+    expect(newEntityPatches.some(p => p.entityId === card.id && p.partial.privateToSeat === null)).toBe(true);
+    // Re-emit also flushes another card-state patch on exit so non-owners get
+    // the real face/back back through the (now non-redacting) scrubber.
+    expect(newComponentPatches.some(p => p.typeId === 'card' && p.entityId === card.id)).toBe(true);
   });
 });
 

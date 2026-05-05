@@ -57,7 +57,7 @@ describe('RtcTransport — privacy scrubbing fan-out', () => {
     const toClaimant = sent.find(s => s.peerId === 'p-claimant')!;
     const toOther    = sent.find(s => s.peerId === 'p-other')!;
     expect((toClaimant.msg as typeof msg).patches[0].partial).toEqual({ face: 'A♣', back: 'red' });
-    expect((toOther.msg    as typeof msg).patches[0].partial).toEqual({ back: 'red' });
+    expect((toOther.msg    as typeof msg).patches[0].partial).toEqual({ face: '', back: 'red' });
   });
 
   test('entity-spawn: components scrubbed for non-claimants', () => {
@@ -82,7 +82,7 @@ describe('RtcTransport — privacy scrubbing fan-out', () => {
     const toClaimant = sent.find(s => s.peerId === 'p-claimant')!;
     const toOther    = sent.find(s => s.peerId === 'p-other')!;
     expect((toClaimant.msg as typeof msg).entity.components.card).toEqual({ face: 'A♣', back: 'red' });
-    expect((toOther.msg    as typeof msg).entity.components.card).toEqual({ back: 'red' });
+    expect((toOther.msg    as typeof msg).entity.components.card).toEqual({ face: '', back: 'red' });
   });
 
   test('public entity (privateToSeat null) goes to every peer unchanged', () => {

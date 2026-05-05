@@ -19,6 +19,8 @@ import { type SeatIndex } from '../../seats/SeatLayout';
 import { TransformComponent } from './TransformComponent';
 import { ZoneComponent } from './ZoneComponent';
 import { TweenComponent } from './TweenComponent';
+import { CardComponent } from './CardComponent';
+import { FlatViewComponent } from './FlatViewComponent';
 
 export interface HandState {
   isMainHand: boolean;
@@ -115,6 +117,11 @@ export class HandComponent extends EntityComponent<HandState> {
     if (!this.world) return;
     if (this.state.isPrivate) {
       this.setEntityPrivateToSeat(entity, this.entity.owner);
+      // Re-emit privacy-sensitive fields so the PrivacyScrubber blanks them
+      // on the wire to non-owner peers (issue #8). Without this, peers that
+      // already received the public face/back URLs at spawn time could read
+      // them off their cached mesh material via a camera fly-around.
+      this.reEmitPrivateFields(entity);
     }
     this.arrangeContents();
   }
@@ -122,6 +129,9 @@ export class HandComponent extends EntityComponent<HandState> {
   private handleExit(entity: Entity): void {
     if (!this.world) return;
     this.setEntityPrivateToSeat(entity, null);
+    // Mirror handleEnter: re-emit so non-owners receive the real (unscrubbed)
+    // values back once the card is no longer private.
+    this.reEmitPrivateFields(entity);
     this.arrangeContents();
   }
 
@@ -129,6 +139,16 @@ export class HandComponent extends EntityComponent<HandState> {
     if (entity.privateToSeat === seat) return;
     entity.privateToSeat = seat;
     this.world?.enqueueEntityPatch(entity.id, { privateToSeat: seat });
+  }
+
+  // Forces a setState round-trip on each privacy-sensitive component so a
+  // patch flows through replication. The PrivacyScrubber substitutes empty
+  // strings for non-owner recipients while owners receive the real values.
+  private reEmitPrivateFields(entity: Entity): void {
+    const card = entity.getComponent(CardComponent);
+    if (card) card.setState({ face: card.state.face, back: card.state.back });
+    const flat = entity.getComponent(FlatViewComponent);
+    if (flat) flat.setState({ textureRef: flat.state.textureRef });
   }
 
   // ── Slot layout ──────────────────────────────────────────────────────
