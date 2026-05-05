@@ -26,6 +26,11 @@ const TWEEN_INTO_HAND_MS = 250;
 const SHUFFLE_JITTER_MS  = 200;
 // Y-axis rotation magnitude for the shuffle jitter (radians). ~10 degrees.
 const SHUFFLE_JITTER_RAD = 0.18;
+// Per-card stagger between scheduled deal tweens (ms).
+const DEAL_STAGGER_MS    = 80;
+// Total seat count — matches SeatLayout.SeatIndex range. Used by the
+// clockwise walk so we don't need to import SeatLayout here.
+const SEAT_COUNT         = 8;
 
 export class DeckService {
   constructor(
@@ -112,6 +117,58 @@ export class DeckService {
     }, SHUFFLE_JITTER_MS);
   }
 
+  // Deal `count` cards round-robin to every seat with a main hand, ordered
+  // clockwise from the caller (caller first). Per-card tween is the standard
+  // 250ms; cards are scheduled with an 80ms stagger via TweenComponent's
+  // delay support. Stops when the deck runs out mid-deal. Returns total
+  // cards dealt. Issue #9 of issues--deck.md.
+  dealFromDeck(deckId: string, count: number, callerSeat: SeatIndex | null): number {
+    if (count <= 0 || callerSeat === null) return 0;
+    const deck = this.scene.getEntity(deckId);
+    if (!deck) return 0;
+    const deckC = deck.getComponent(DeckComponent);
+    if (!deckC) return 0;
+
+    const recipients = clockwiseSeatsWithMainHand(this.scene, callerSeat);
+    if (recipients.length === 0) return 0;
+
+    const deckTransform = deck.getComponent(TransformComponent)!;
+    const deckPos = deckTransform.state.position;
+    const deckRot = deckTransform.state.rotation;
+
+    let dealt = 0;
+    const newCards = [...deckC.state.cards];
+    outer: for (let round = 0; round < count; round++) {
+      for (let i = 0; i < recipients.length; i++) {
+        if (newCards.length === 0) break outer;
+        const cardId = newCards.shift()!;
+        const card = this.scene.getEntity(cardId);
+        if (!card) continue;
+        const seat = recipients[i];
+        const handId = mainHandIdFor(this.scene, seat);
+        if (!handId) continue;
+        const hand = this.scene.getEntity(handId);
+        const handPos = hand?.getComponent(TransformComponent)?.state.position ?? deckPos;
+
+        this.releaseCardFromDeck(card, deckPos, deckRot);
+        const tween = card.getComponent(TweenComponent);
+        if (tween) {
+          const delay = (round * recipients.length + i) * DEAL_STAGGER_MS;
+          tween.tweenTo(
+            { position: [handPos[0], handPos[1], handPos[2]] },
+            TWEEN_INTO_HAND_MS,
+            delay,
+          );
+        }
+        dealt++;
+      }
+    }
+
+    deckC.setState({ cards: newCards });
+    this.maybeDissolve(deckId);
+    return dealt;
+  }
+
   // If the deck has exactly 1 card left, un-hide that card at the deck's
   // current pose with zero velocity, then despawn the deck. No-op otherwise.
   maybeDissolve(deckId: string): boolean {
@@ -186,6 +243,25 @@ function fisherYates<T>(arr: T[]): T[] {
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
   return arr;
+}
+
+// Walks every seat with a main hand, ordered clockwise from `callerSeat`
+// (caller first). Returns the seat indices in deal order. Seat numbering
+// in `SeatLayout` walks counter-clockwise as the index increases, so the
+// clockwise traversal subtracts.
+function clockwiseSeatsWithMainHand(scene: SceneImpl, callerSeat: SeatIndex): SeatIndex[] {
+  const seatsWithHand = new Set<SeatIndex>();
+  for (const e of scene.all()) {
+    if (e.owner === null) continue;
+    const hand = e.getComponent(HandComponent);
+    if (hand?.state.isMainHand) seatsWithHand.add(e.owner);
+  }
+  const out: SeatIndex[] = [];
+  for (let i = 0; i < SEAT_COUNT; i++) {
+    const seat = ((callerSeat - i + SEAT_COUNT) % SEAT_COUNT) as SeatIndex;
+    if (seatsWithHand.has(seat)) out.push(seat);
+  }
+  return out;
 }
 
 // Returns the entity id of the seat's main hand, or null if none exists.

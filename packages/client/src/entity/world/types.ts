@@ -133,6 +133,10 @@ export interface World {
   // Issue #7 of issues--deck.md.
   shuffleDeck(deckId: string): void;
 
+  // Round-robin `count` cards from a deck to every seat with a main hand,
+  // ordered clockwise from the caller (caller first). Issue #9 of issues--deck.md.
+  dealFromDeck(deckId: string, count: number, callerSeat: SeatIndex | null): void;
+
   dispose(): void;
 }
 

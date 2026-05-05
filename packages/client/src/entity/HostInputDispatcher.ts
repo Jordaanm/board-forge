@@ -15,7 +15,7 @@ import { type SeatIndex } from '../seats/SeatLayout';
 import { canManipulate } from '../seats/OwnershipPolicy';
 import { type HoldService } from './HoldService';
 import { type DeckService } from './DeckService';
-import { type HoldClaim, type HoldRelease, type InvokeAction, type RequestUpdate, type ApplyImpulse, type PlayCardToTable, type ReorderHand, type TweenIntoHand, type DrawFromDeck, type ShuffleDeck } from './wire';
+import { type HoldClaim, type HoldRelease, type InvokeAction, type RequestUpdate, type ApplyImpulse, type PlayCardToTable, type ReorderHand, type TweenIntoHand, type DrawFromDeck, type ShuffleDeck, type DealFromDeck } from './wire';
 import { type ActionContext } from './EntityComponent';
 import { PhysicsComponent } from './components/PhysicsComponent';
 import { TweenComponent } from './components/TweenComponent';
@@ -155,6 +155,18 @@ export class HostInputDispatcher {
     if (!entity) return false;
     if (!canManipulate({ peerSeat: senderSeat, isHost: false }, entity.owner)) return false;
     return this.decks.shuffleDeck(msg.deckId);
+  }
+
+  // Issue #9 of issues--deck.md — guest right-clicks "Deal N" on a deck.
+  handleDealFromDeck(peerId: string, msg: DealFromDeck): boolean {
+    if (!this.decks) return false;
+    const senderSeat = this.getPeerSeat(peerId);
+    if (senderSeat === null) return false;
+    const entity = this.scene.getEntity(msg.deckId);
+    if (!entity) return false;
+    if (!canManipulate({ peerSeat: senderSeat, isHost: false }, entity.owner)) return false;
+    const dealt = this.decks.dealFromDeck(msg.deckId, msg.count, senderSeat);
+    return dealt > 0;
   }
 
   // Issue #7 of issues--hand.md — guest releases a 3D-grabbed entity over

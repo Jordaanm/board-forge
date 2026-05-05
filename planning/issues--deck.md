@@ -212,7 +212,7 @@ Convert `DeckComponent`'s `Draw` menu item from issue #6 from a flat action to `
 
 ---
 
-## Issue #9 — Deal N
+## Issue #9 — Deal N ✅ Completed
 
 ### What to build
 
@@ -226,18 +226,18 @@ Gates on `canManipulate(ctx, deck.owner)`. Wire: `{ type: 'deal-from-deck', deck
 
 ### Acceptance criteria
 
-- [ ] `DeckComponent.onContextMenu` returns `Deal ▸ {1, 2, 3, 5, Other...}`.
-- [ ] Action gates on `canManipulate(ctx, entity.owner)`.
-- [ ] Host `dealFromDeck(deckId, count)`:
+- [x] `DeckComponent.onContextMenu` returns `Deal ▸ {1, 2, 3, 5, Other...}`.
+- [x] Action gates on `canManipulate(ctx, entity.owner)`.
+- [x] Host `dealFromDeck(deckId, count)`:
   - Builds recipients = seats with a main hand, ordered clockwise from caller (caller first).
   - Runs `count` rounds; per round, per recipient, pops top card and schedules `tweenIntoHand` with the staggered delay.
   - If `cards.length === 0` mid-deal, breaks the loop.
   - Calls `maybeDissolve` after scheduling.
-- [ ] Per-card privacy re-emit (matches issue #6 path).
-- [ ] Guest emits `{ type: 'deal-from-deck', deckId, count }`; host validates.
-- [ ] `DeckComponent.test.ts`: deal round-robins clockwise from caller; stops on exhaustion; correct cards land in correct hands.
-- [ ] Manual test: 2+ seated players with main hands, form a 10-card deck, `Deal 3` → 6 cards distributed in clockwise order, deck has 4 left.
-- [ ] Manual test: 3 seated players, form a 5-card deck, `Deal 2` → 5 cards distributed, deck dissolves on the 5th deal (last card un-hides).
+- [x] Per-card privacy re-emit (matches issue #6 path).
+- [x] Guest emits `{ type: 'deal-from-deck', deckId, count }`; host validates.
+- [x] `DeckComponent.test.ts`: deal round-robins clockwise from caller; stops on exhaustion; correct cards land in correct hands.
+- [x] Manual test: 2+ seated players with main hands, form a 10-card deck, `Deal 3` → 6 cards distributed in clockwise order, deck has 4 left.
+- [x] Manual test: 3 seated players, form a 5-card deck, `Deal 2` → 5 cards distributed, deck dissolves on the 5th deal (last card un-hides).
 
 ### Blocked by
 

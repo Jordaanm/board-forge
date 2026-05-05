@@ -71,6 +71,7 @@ export function Room({ roomId, isHost }: Props) {
   const deleteObjectRef    = useRef<(id: string) => void>(noop);
   const drawFromDeckRef    = useRef<(deckId: string, count: number, callerSeat: SeatIndex | null) => void>(noop);
   const shuffleDeckRef     = useRef<(deckId: string) => void>(noop);
+  const dealFromDeckRef    = useRef<(deckId: string, count: number, callerSeat: SeatIndex | null) => void>(noop);
   const updatePropRef      = useRef<(id: string, key: string, value: unknown) => void>(noop);
   const updateTablePropRef    = useRef<(key: keyof TableProps, value: unknown) => void>(noop);
   const updateSkydomePropRef  = useRef<(key: keyof SkydomeProps, value: unknown) => void>(noop);
@@ -246,6 +247,7 @@ export function Room({ roomId, isHost }: Props) {
         delete:        (id) => deleteObjectRef.current(id),
         drawFromDeck:  (deckId, count, seat) => drawFromDeckRef.current(deckId, count, seat),
         shuffleDeck:   (deckId) => shuffleDeckRef.current(deckId),
+        dealFromDeck:  (deckId, count, seat) => dealFromDeckRef.current(deckId, count, seat),
       },
       selfSeat: getSelfSeatRef.current(),
     });
@@ -306,6 +308,7 @@ export function Room({ roomId, isHost }: Props) {
         deleteObjectRef={deleteObjectRef}
         drawFromDeckRef={drawFromDeckRef}
         shuffleDeckRef={shuffleDeckRef}
+        dealFromDeckRef={dealFromDeckRef}
         updatePropRef={updatePropRef}
         updateTablePropRef={updateTablePropRef}
         updateSkydomePropRef={updateSkydomePropRef}

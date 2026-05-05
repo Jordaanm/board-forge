@@ -568,6 +568,15 @@ class WorldImpl implements World, HandleRouter {
     this.transport.send({ type: 'shuffle-deck', deckId }, { reliable: true });
   }
 
+  // Right-click Deal N on a deck. Issue #9 of issues--deck.md.
+  dealFromDeck(deckId: string, count: number, callerSeat: SeatIndex | null): void {
+    if (this.role === 'host') {
+      this.decks?.dealFromDeck(deckId, count, callerSeat);
+      return;
+    }
+    this.transport.send({ type: 'deal-from-deck', deckId, count }, { reliable: true });
+  }
+
   applyImpulse(entity: Entity, v: { x: number; y: number; z: number }): void {
     if (!canManipulate({ peerSeat: this.identity.selfSeat(), isHost: this.role === 'host' }, entity.owner)) return;
     const phys = entity.getComponent(PhysicsComponent);
@@ -642,6 +651,7 @@ class WorldImpl implements World, HandleRouter {
       case 'tween-into-hand':    this.hostInput?.handleTweenIntoHand(peerId, msg);    return;
       case 'draw-from-deck':     this.hostInput?.handleDrawFromDeck(peerId, msg);     return;
       case 'shuffle-deck':       this.hostInput?.handleShuffleDeck(peerId, msg);      return;
+      case 'deal-from-deck':     this.hostInput?.handleDealFromDeck(peerId, msg);     return;
       case 'guest-drag-move':  this.guestInput?.handleMessage(peerId, msg);      return;
       case 'guest-drag-start':
       case 'guest-drag-end':
@@ -750,6 +760,7 @@ class WorldImpl implements World, HandleRouter {
       case 'tween-into-hand':
       case 'draw-from-deck':
       case 'shuffle-deck':
+      case 'deal-from-deck':
       case 'guest-drag-move':
       case 'guest-drag-start':
       case 'guest-drag-end':

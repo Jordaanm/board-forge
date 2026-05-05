@@ -120,6 +120,7 @@ export interface MenuActionDeps {
     delete:        (entityId: string) => void;
     drawFromDeck?: (deckId: string, count: number, callerSeat: SeatIndex | null) => void;
     shuffleDeck?:  (deckId: string) => void;
+    dealFromDeck?: (deckId: string, count: number, callerSeat: SeatIndex | null) => void;
   };
   selfSeat:      SeatIndex | null;
 }
@@ -154,6 +155,17 @@ export function dispatchMenuAction(
       deps.hostLocal.shuffleDeck?.(entityId);
     } else {
       deps.send({ type: 'shuffle-deck', deckId: entityId });
+    }
+    return;
+  }
+
+  // Deck deal — issue #9 of issues--deck.md.
+  if (item.kind === 'action' && item.id === 'deal' && item.componentTypeId === 'deck') {
+    const count = (args as { count?: number } | undefined)?.count ?? 1;
+    if (deps.isHost) {
+      deps.hostLocal.dealFromDeck?.(entityId, count, deps.selfSeat);
+    } else {
+      deps.send({ type: 'deal-from-deck', deckId: entityId, count });
     }
     return;
   }

@@ -155,6 +155,16 @@ export interface ShuffleDeck {
   deckId: string;
 }
 
+// Right-click "Deal N" on a deck. Issue #9 of issues--deck.md. Reliable
+// channel. Host validates `canManipulate(deck.owner)`, builds the recipient
+// list (seats with a main hand, ordered clockwise from the caller, caller
+// first), and runs `count` rounds of round-robin deals.
+export interface DealFromDeck {
+  type:   'deal-from-deck';
+  deckId: string;
+  count:  number;
+}
+
 // Cosmetic broadcast originated by a Tool (issue #3 of issues--tools.md).
 // Rides the unreliable channel — missed messages are not retried. Payload
 // schema is per-tool (e.g. ping carries `{ entityId }` or `{ point: [x,z] }`).
@@ -185,4 +195,5 @@ export type SceneMessage =
   | TweenIntoHand
   | DrawFromDeck
   | ShuffleDeck
+  | DealFromDeck
   | ToolBroadcast;

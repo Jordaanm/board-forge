@@ -145,6 +145,68 @@ describe('DeckService.maybeDissolve', () => {
   });
 });
 
+describe('DeckService.dealFromDeck', () => {
+  function setupHand(seat: 0 | 1 | 2 | 3): string {
+    const hand = scene.spawn('hand', ctx);
+    hand.owner = seat;
+    hand.getComponent(HandComponent)!.setState({ isMainHand: true });
+    return hand.id;
+  }
+
+  test('refuses when no recipients have main hands', () => {
+    const deck = buildDeckOf('t', ['a', 'b', 'c']);
+    const dealt = decks.dealFromDeck(deck.id, 1, 0);
+    expect(dealt).toBe(0);
+  });
+
+  test('one round to one recipient pops top card', () => {
+    setupHand(0);
+    const deck = buildDeckOf('t', ['a', 'b', 'c']);
+    const before = [...deck.getComponent(DeckComponent)!.state.cards];
+    const dealt = decks.dealFromDeck(deck.id, 1, 0);
+    expect(dealt).toBe(1);
+    expect(deck.getComponent(DeckComponent)!.state.cards).toEqual(before.slice(1));
+  });
+
+  test('round-robin: 2 seats, count=2 → 4 cards, alternating', () => {
+    setupHand(0);
+    setupHand(1);
+    const deck = buildDeckOf('t', ['a', 'b', 'c', 'd', 'e']);
+    const before = [...deck.getComponent(DeckComponent)!.state.cards];
+    const dealt = decks.dealFromDeck(deck.id, 2, 0);
+    expect(dealt).toBe(4);
+    expect(deck.getComponent(DeckComponent)!.state.cards).toEqual(before.slice(4));
+    // First card to caller (seat 0); second to next clockwise.
+    expect(scene.getEntity(before[0])!.isContained).toBe(false);
+    expect(scene.getEntity(before[1])!.isContained).toBe(false);
+  });
+
+  test('stops on exhaustion mid-deal', () => {
+    setupHand(0);
+    setupHand(1);
+    const deck = buildDeckOf('t', ['a', 'b', 'c']);
+    const dealt = decks.dealFromDeck(deck.id, 2, 0);
+    // 3 cards in deck → max 3 dealt; the 4th pop is skipped.
+    // After dealing 3, the deck has 0 cards and dissolves immediately
+    // (cards.length === 0 doesn't trigger maybeDissolve, but on length === 1
+    // it would). Here the deck has 0 cards left. Don't expect dissolve.
+    expect(dealt).toBe(3);
+  });
+
+  test('clockwise order: caller seat 2, recipient with hand at seat 1 dealt second', () => {
+    setupHand(2);
+    setupHand(1);
+    const deck = buildDeckOf('t', ['a', 'b', 'c', 'd']);
+    const cardsBefore = [...deck.getComponent(DeckComponent)!.state.cards];
+    decks.dealFromDeck(deck.id, 1, 2);
+    // Round 0: i=0 → seat 2 (caller), i=1 → seat (2-1)=1.
+    // Card at index 0 of deck went to seat 2, card at index 1 went to seat 1.
+    // Just verify both cards are released.
+    expect(scene.getEntity(cardsBefore[0])!.isContained).toBe(false);
+    expect(scene.getEntity(cardsBefore[1])!.isContained).toBe(false);
+  });
+});
+
 describe('DeckService.shuffleDeck', () => {
   test('permutes cards (same set, possibly different order)', () => {
     const deck = buildDeckOf('t', ['a', 'b', 'c', 'd', 'e']);

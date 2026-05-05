@@ -61,9 +61,21 @@ export class DeckComponent extends EntityComponent<DeckState> {
             { kind: 'numeric', id: 'draw', label: 'Other…', min: 1, default: 1 },
           ],
         };
+    const dealMenu: MenuItem = {
+      kind:  'submenu',
+      label: 'Deal',
+      items: [
+        { kind: 'action',  id: 'deal', label: '1',      args: { count: 1 } },
+        { kind: 'action',  id: 'deal', label: '2',      args: { count: 2 } },
+        { kind: 'action',  id: 'deal', label: '3',      args: { count: 3 } },
+        { kind: 'action',  id: 'deal', label: '5',      args: { count: 5 } },
+        { kind: 'numeric', id: 'deal', label: 'Other…', min: 1, default: 1 },
+      ],
+    };
     return [
       drawMenu,
       { kind: 'action', id: 'shuffle', label: 'Shuffle' },
+      dealMenu,
     ];
   }
 

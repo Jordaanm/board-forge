@@ -56,7 +56,7 @@ export class TweenComponent extends EntityComponent<TweenState> {
     return this.tween !== null;
   }
 
-  tweenTo(target: TweenTarget, durationMs: number): void {
+  tweenTo(target: TweenTarget, durationMs: number, delayMs: number = 0): void {
     if (this.tween) this.cancel();
 
     const transform = this.entity.getComponent(TransformComponent);
@@ -69,7 +69,9 @@ export class TweenComponent extends EntityComponent<TweenState> {
       targetPosition:           cloneVec3(target.position),
       targetRotation:           target.rotation ? cloneQuat(target.rotation) : null,
       durationMs:               Math.max(0, durationMs),
-      elapsedMs:                0,
+      // Negative elapsed acts as a delay: tick accumulates without rendering
+      // until elapsed >= 0. Used by deal staggering. Issue #9 of issues--deck.md.
+      elapsedMs:                -Math.max(0, delayMs),
       stashedMass:              physics.body.mass,
       stashedCollisionResponse: physics.body.collisionResponse,
     };
@@ -126,6 +128,9 @@ export class TweenComponent extends EntityComponent<TweenState> {
   tick(dtSeconds: number): void {
     if (!this.tween) return;
     this.tween.elapsedMs += dtSeconds * 1000;
+    // Pre-delay phase: physics is already kinematicized, so the entity sits
+    // frozen at startPosition until the delay elapses.
+    if (this.tween.elapsedMs < 0) return;
 
     const linT = this.tween.durationMs > 0
       ? Math.min(1, this.tween.elapsedMs / this.tween.durationMs)
