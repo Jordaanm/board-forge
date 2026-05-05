@@ -108,7 +108,7 @@ Extend `HoldService` release path to call `MergeService.recheckMergeOverlaps(ent
 
 ---
 
-## Issue #5 — Privacy scrub for in-deck cards
+## Issue #5 — Privacy scrub for in-deck cards ✅ Completed
 
 ### What to build
 
@@ -116,11 +116,11 @@ Extend the `PrivacyScrubber` (in `HostReplicatorV2` or wherever the per-peer pat
 
 ### Acceptance criteria
 
-- [ ] `PrivacyScrubber` predicate: scrub `CardComponent.face` / `back` when the card's `parentId` is set and resolves to an entity with a `DeckComponent`.
-- [ ] Host's local card state remains real (not blanked).
-- [ ] Peer's mirrored card state has empty `face` / `back`.
-- [ ] The deck's own `MeshComponent.textureRefs` (top/bottom slots) are not scrubbed — the visible top is always public.
-- [ ] Test in the privacy-scrub test suite: an in-deck card's `face` is `''` in a patch destined for a non-host peer; `face` is real in the host's local state.
+- [x] `PrivacyScrubber` predicate: scrub `CardComponent.face` / `back` when the card's `parentId` is set and resolves to an entity with a `DeckComponent`.
+- [x] Host's local card state remains real (not blanked).
+- [x] Peer's mirrored card state has empty `face` / `back`.
+- [x] The deck's own `MeshComponent.textureRefs` (top/bottom slots) are not scrubbed — the visible top is always public.
+- [x] Test in the privacy-scrub test suite: an in-deck card's `face` is `''` in a patch destined for a non-host peer; `face` is real in the host's local state.
 
 ### Blocked by
 

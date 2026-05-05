@@ -55,14 +55,16 @@ export function scrubSceneMessage(
       const out = msg.patches.map(p => {
         const entity = getEntity(p.entityId);
         if (!entity) return p;
-        return redactComponentPatch(ctx, entity.privateToSeat, p, registry);
+        return redactComponentPatch(ctx, entity, p, registry, getEntity);
       });
       return { type: 'component-patches', channel: msg.channel, patches: out };
     }
     case 'entity-spawn': {
-      const e       = msg.entity;
-      const isOwner = ctx.isHost || ctx.peerSeat === e.privateToSeat || e.privateToSeat === null;
-      if (isOwner) return msg;
+      const e          = msg.entity;
+      if (ctx.isHost) return msg;
+      const seatPriv   = e.privateToSeat !== null && ctx.peerSeat !== e.privateToSeat;
+      const inDeck     = isInDeck(e.parentId, getEntity);
+      if (!seatPriv && !inDeck) return msg;
       const components: Record<string, object> = {};
       for (const [typeId, state] of Object.entries(e.components)) {
         const fields = registry[typeId];
@@ -77,14 +79,28 @@ export function scrubSceneMessage(
   }
 }
 
+// True when the supplied parent id resolves to an entity carrying a
+// DeckComponent. Used by the in-deck privacy rule (issue #5 of issues--deck.md):
+// a card whose parent is a deck has its face / back scrubbed for every non-host
+// peer regardless of `privateToSeat`.
+function isInDeck(parentId: string | null, getEntity: EntityLookup): boolean {
+  if (!parentId) return false;
+  const parent = getEntity(parentId);
+  if (!parent) return false;
+  return parent.components.has('deck');
+}
+
 function redactComponentPatch(
-  ctx:           RecipientContext,
-  privateToSeat: SeatIndex | null,
-  patch:         { entityId: string; typeId: string; partial: Record<string, unknown> },
-  registry:      PrivateFieldRegistry,
+  ctx:        RecipientContext,
+  entity:     Entity,
+  patch:      { entityId: string; typeId: string; partial: Record<string, unknown> },
+  registry:   PrivateFieldRegistry,
+  getEntity:  EntityLookup,
 ): { entityId: string; typeId: string; partial: Record<string, unknown> } {
-  const isOwner = ctx.isHost || ctx.peerSeat === privateToSeat || privateToSeat === null;
-  if (isOwner) return patch;
+  if (ctx.isHost) return patch;
+  const seatPriv = entity.privateToSeat !== null && ctx.peerSeat !== entity.privateToSeat;
+  const inDeck   = isInDeck(entity.parentId, getEntity);
+  if (!seatPriv && !inDeck) return patch;
   const fields = registry[patch.typeId];
   if (!fields) return patch;
   return { ...patch, partial: redactFields(patch.partial, fields, 'patch') };

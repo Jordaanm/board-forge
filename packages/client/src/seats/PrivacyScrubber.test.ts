@@ -141,6 +141,79 @@ describe('scrubSceneMessage entity-spawn with private fields', () => {
   });
 });
 
+describe('scrubSceneMessage in-deck cards (issue #5 of issues--deck.md)', () => {
+  // Manually build the deck entity with a synthetic deck component so we don't
+  // have to register the full primitive/spawnable graph here.
+  function spawnDeck(id: string): Entity {
+    const e = new Entity({ id, type: 'deck', name: id });
+    e.components.set('deck', {} as never);
+    scene.add(e);
+    return e;
+  }
+
+  test('in-deck card.face is scrubbed for every non-host peer', () => {
+    const deck = spawnDeck('deck1');
+    const card = spawn('card1', null);
+    card.parentId = deck.id;
+    const msg: SceneMessage = {
+      type: 'component-patches', channel: 'reliable',
+      patches: [{ entityId: 'card1', typeId: 'card', partial: { face: 'A♣', back: 'red' } }],
+    };
+    const out = scrubSceneMessage({ peerSeat: 5, isHost: false }, msg, DEFAULT_PRIVATE_FIELDS, lookup);
+    expect((out as typeof msg).patches[0].partial).toEqual({ face: '', back: '' });
+  });
+
+  test('host always sees the real face / back of an in-deck card', () => {
+    const deck = spawnDeck('deck1');
+    const card = spawn('card1', null);
+    card.parentId = deck.id;
+    const msg: SceneMessage = {
+      type: 'component-patches', channel: 'reliable',
+      patches: [{ entityId: 'card1', typeId: 'card', partial: { face: 'A♣', back: 'red' } }],
+    };
+    const out = scrubSceneMessage({ peerSeat: null, isHost: true }, msg, DEFAULT_PRIVATE_FIELDS, lookup);
+    expect((out as typeof msg).patches[0].partial).toEqual({ face: 'A♣', back: 'red' });
+  });
+
+  test('a card whose parentId is null is unaffected by the deck rule', () => {
+    spawn('card1', null);
+    const msg: SceneMessage = {
+      type: 'component-patches', channel: 'reliable',
+      patches: [{ entityId: 'card1', typeId: 'card', partial: { face: 'A♣' } }],
+    };
+    const out = scrubSceneMessage({ peerSeat: 5, isHost: false }, msg, DEFAULT_PRIVATE_FIELDS, lookup);
+    expect((out as typeof msg).patches[0].partial).toEqual({ face: 'A♣' });
+  });
+
+  test('a card whose parent is not a deck is unaffected', () => {
+    const parent = new Entity({ id: 'p', type: 'box', name: 'p' });
+    scene.add(parent);
+    const card = spawn('card1', null);
+    card.parentId = parent.id;
+    const msg: SceneMessage = {
+      type: 'component-patches', channel: 'reliable',
+      patches: [{ entityId: 'card1', typeId: 'card', partial: { face: 'A♣' } }],
+    };
+    const out = scrubSceneMessage({ peerSeat: 5, isHost: false }, msg, DEFAULT_PRIVATE_FIELDS, lookup);
+    expect((out as typeof msg).patches[0].partial).toEqual({ face: 'A♣' });
+  });
+
+  test('the deck entity itself is not scrubbed (mesh.textureRefs stays public)', () => {
+    spawnDeck('deck1');
+    // mesh isn't in the registry — confirms deck mesh top/bottom slots stay public.
+    const msg: SceneMessage = {
+      type: 'component-patches', channel: 'reliable',
+      patches: [{
+        entityId: 'deck1',
+        typeId:   'mesh',
+        partial:  { textureRefs: { face: 'top.png', back: 'bot.png', side: '' } },
+      }],
+    };
+    const out = scrubSceneMessage({ peerSeat: 5, isHost: false }, msg, DEFAULT_PRIVATE_FIELDS, lookup);
+    expect(out).toEqual(msg);
+  });
+});
+
 describe('DEFAULT_PRIVATE_FIELDS — face / back / textureRef coverage', () => {
   test('blanks card.face, card.back, and flatview.textureRef for non-owners', () => {
     spawn('a', 1);
