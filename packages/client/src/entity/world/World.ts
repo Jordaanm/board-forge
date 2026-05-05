@@ -394,7 +394,12 @@ class WorldImpl implements World, HandleRouter {
     while (cur) {
       for (const entity of this.scene.all()) {
         const t = entity.getComponent(TransformComponent);
-        if (t?.object3d === cur) return this.handleFor(entity);
+        if (t?.object3d !== cur) continue;
+        // Contained entities (cards inside a deck) are invisible and have no
+        // physics body, but their THREE.Object3D still exists. THREE's
+        // raycaster doesn't auto-skip invisible meshes, so guard here.
+        if (entity.isContained) return undefined;
+        return this.handleFor(entity);
       }
       cur = cur.parent;
     }

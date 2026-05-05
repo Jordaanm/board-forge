@@ -43,6 +43,31 @@ function setup(): Pair {
   return { host, guest, firePeerJoin: bus.firePeerJoin };
 }
 
+describe('World.pickByObject3D — isContained guard', () => {
+  let pair: Pair | null = null;
+
+  afterEach(() => {
+    pair?.host.dispose();
+    pair?.guest.dispose();
+    pair = null;
+  });
+
+  test('returns the entity for a normal pick', () => {
+    pair = setup();
+    const handle = pair.host.spawn('die', { id: 'die-pick' });
+    const obj = handle.get(TransformComponent)!.object3d;
+    expect(pair.host.pickByObject3D(obj)?.id).toBe('die-pick');
+  });
+
+  test('returns undefined for an entity with isContained=true', () => {
+    pair = setup();
+    const handle = pair.host.spawn('card', { id: 'card-contained' });
+    handle.entity.isContained = true;
+    const obj = handle.get(TransformComponent)!.object3d;
+    expect(pair.host.pickByObject3D(obj)).toBeUndefined();
+  });
+});
+
 describe('World — host→guest round-trip', () => {
   let pair: Pair | null = null;
 
