@@ -128,7 +128,7 @@ Extend the `PrivacyScrubber` (in `HostReplicatorV2` or wherever the per-peer pat
 
 ---
 
-## Issue #6 — Draw 1 + singleton dissolution
+## Issue #6 — Draw 1 + singleton dissolution ✅ Completed
 
 ### What to build
 
@@ -142,14 +142,14 @@ Wire: new `{ type: 'draw-from-deck', deckId, count: 1 }` RPC. Host validates, ru
 
 ### Acceptance criteria
 
-- [ ] `DeckComponent.onContextMenu` returns a `Draw` action item; greyed out (`disabled: true`) when `mainHandFor(callerSeat)` is null.
-- [ ] Action gates on `canManipulate(ctx, entity.owner)`.
-- [ ] Host `drawFromDeck(deckId, count)`: pops `min(count, cards.length)` from front of `cards`. For each: clear `isContained`, clear `parentId`, set transform to deck's top pose, call `world.tweenIntoHand(card, mainHandId)` (250ms), then `card.setState({ face, back })` to trigger privacy re-emit.
-- [ ] `maybeDissolve` runs after the pop loop. If `cards.length === 1`: un-hide lone card at deck pose, zero velocity (`body.velocity` and `body.angularVelocity`), despawn deck.
-- [ ] Guest emits `{ type: 'draw-from-deck', deckId, count: 1 }`; host validates.
-- [ ] `DeckComponent.test.ts`: `draw` pops from front; refuses (no-op) when caller has no main hand; `maybeDissolve` triggers correctly when down to 1.
-- [ ] Manual test: form a 3-card deck, draw 1 → 2-card deck. Draw again → 1 → dissolve.
-- [ ] Privacy: drawn card shows correct face in caller's hand UI; other peers receive only the hand-blanked face (existing hand privacy handles this).
+- [x] `DeckComponent.onContextMenu` returns a `Draw` action item; greyed out (`disabled: true`) when `mainHandFor(callerSeat)` is null.
+- [x] Action gates on `canManipulate(ctx, entity.owner)`.
+- [x] Host `drawFromDeck(deckId, count)`: pops `min(count, cards.length)` from front of `cards`. For each: clear `isContained`, clear `parentId`, set transform to deck's top pose, call `world.tweenIntoHand(card, mainHandId)` (250ms), then `card.setState({ face, back })` to trigger privacy re-emit.
+- [x] `maybeDissolve` runs after the pop loop. If `cards.length === 1`: un-hide lone card at deck pose, zero velocity (`body.velocity` and `body.angularVelocity`), despawn deck.
+- [x] Guest emits `{ type: 'draw-from-deck', deckId, count: 1 }`; host validates.
+- [x] `DeckComponent.test.ts`: `draw` pops from front; refuses (no-op) when caller has no main hand; `maybeDissolve` triggers correctly when down to 1.
+- [x] Manual test: form a 3-card deck, draw 1 → 2-card deck. Draw again → 1 → dissolve.
+- [x] Privacy: drawn card shows correct face in caller's hand UI; other peers receive only the hand-blanked face (existing hand privacy handles this).
 
 ### Blocked by
 

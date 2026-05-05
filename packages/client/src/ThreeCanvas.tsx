@@ -52,6 +52,7 @@ interface Props {
   rollRef:             MutableRefObject<() => void>;
   onContextMenuRef:    MutableRefObject<(req: ContextMenuRequest) => void>;
   deleteObjectRef:     MutableRefObject<(id: string) => void>;
+  drawFromDeckRef:     MutableRefObject<(deckId: string, count: number, callerSeat: SeatIndex | null) => void>;
   updatePropRef:       MutableRefObject<(id: string, key: string, value: unknown) => void>;
   updateTablePropRef:    MutableRefObject<(key: keyof TableProps, value: unknown) => void>;
   updateSkydomePropRef:  MutableRefObject<(key: keyof SkydomeProps, value: unknown) => void>;
@@ -78,7 +79,7 @@ export interface HandView {
 export function ThreeCanvas({
   isHost, sendRef, sendToRef, getTargetsRef, getSelfSeatRef, getSelfPeerIdRef, getPeerSeatRef,
   onMsgRef, onPeerLeftRef, onPeerJoinedRef,
-  spawnRef, rollRef, onContextMenuRef, deleteObjectRef,
+  spawnRef, rollRef, onContextMenuRef, deleteObjectRef, drawFromDeckRef,
   updatePropRef, updateTablePropRef, updateSkydomePropRef, updateKeyLightPropRef,
   freeCameraRef, onObjectsChangeRef,
   onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,
@@ -306,6 +307,7 @@ export function ThreeCanvas({
     if (isHost) {
       spawnRef.current        = (type) => { world.spawn(type); };
       deleteObjectRef.current = (id)   => world.despawn(id);
+      drawFromDeckRef.current = (deckId, count, seat) => world.drawFromDeck(deckId, count, seat);
       updatePropRef.current   = (id, key, value) => world.updateProp(id, key, value);
 
       rollRef.current = () => {
@@ -445,6 +447,7 @@ export function ThreeCanvas({
       spawnRef.current        = () => {};
       rollRef.current         = () => {};
       deleteObjectRef.current = () => {};
+      drawFromDeckRef.current = () => {};
       updatePropRef.current      = () => {};
       updateTablePropRef.current    = () => {};
       updateSkydomePropRef.current  = () => {};
@@ -462,7 +465,7 @@ export function ThreeCanvas({
   }, [
     isHost, sendRef, sendToRef, getTargetsRef, getSelfSeatRef, getSelfPeerIdRef, getPeerSeatRef,
     onMsgRef, onPeerLeftRef, onPeerJoinedRef,
-    spawnRef, rollRef, onContextMenuRef, deleteObjectRef,
+    spawnRef, rollRef, onContextMenuRef, deleteObjectRef, drawFromDeckRef,
     updatePropRef, updateTablePropRef, updateSkydomePropRef, updateKeyLightPropRef,
     freeCameraRef, onObjectsChangeRef,
     onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,

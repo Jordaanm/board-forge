@@ -14,7 +14,8 @@ import { type Entity } from './Entity';
 import { type SeatIndex } from '../seats/SeatLayout';
 import { canManipulate } from '../seats/OwnershipPolicy';
 import { type HoldService } from './HoldService';
-import { type HoldClaim, type HoldRelease, type InvokeAction, type RequestUpdate, type ApplyImpulse, type PlayCardToTable, type ReorderHand, type TweenIntoHand } from './wire';
+import { type DeckService } from './DeckService';
+import { type HoldClaim, type HoldRelease, type InvokeAction, type RequestUpdate, type ApplyImpulse, type PlayCardToTable, type ReorderHand, type TweenIntoHand, type DrawFromDeck } from './wire';
 import { type ActionContext } from './EntityComponent';
 import { PhysicsComponent } from './components/PhysicsComponent';
 import { TweenComponent } from './components/TweenComponent';
@@ -26,11 +27,19 @@ const PLAY_TO_TABLE_TWEEN_MS = 250;
 const TWEEN_INTO_HAND_MS     = 250;
 
 export class HostInputDispatcher {
+  private decks: DeckService | null = null;
+
   constructor(
     private readonly hold:        HoldService,
     private readonly getPeerSeat: (peerId: string) => SeatIndex | null,
     private readonly scene:       SceneImpl,
   ) {}
+
+  // World wires this on host construction. Tests omit it; the draw-from-deck
+  // path is rejected when null.
+  setDeckService(deck: DeckService): void {
+    this.decks = deck;
+  }
 
   // Returns true on accept (entity claimed and broadcast). False on any
   // refusal: unknown entity, ownership refused, already held.
@@ -122,6 +131,19 @@ export class HostInputDispatcher {
     const handComp = hand.getComponent(HandComponent);
     if (!handComp) return false;
     return handComp.reorderContents(msg.newOrder);
+  }
+
+  // Issue #6 of issues--deck.md — guest right-clicks Draw on a deck. Host
+  // validates ownership, then runs the draw via DeckService.
+  handleDrawFromDeck(peerId: string, msg: DrawFromDeck): boolean {
+    if (!this.decks) return false;
+    const senderSeat = this.getPeerSeat(peerId);
+    if (senderSeat === null) return false;
+    const entity = this.scene.getEntity(msg.deckId);
+    if (!entity) return false;
+    if (!canManipulate({ peerSeat: senderSeat, isHost: false }, entity.owner)) return false;
+    const drawn = this.decks.drawFromDeck(msg.deckId, msg.count, senderSeat);
+    return drawn > 0;
   }
 
   // Issue #7 of issues--hand.md — guest releases a 3D-grabbed entity over

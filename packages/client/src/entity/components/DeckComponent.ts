@@ -10,10 +10,13 @@
 import {
   EntityComponent,
   type SpawnContext,
+  type MenuContext,
+  type MenuItem,
 } from '../EntityComponent';
 import { MeshComponent } from './MeshComponent';
 import { PhysicsComponent } from './PhysicsComponent';
 import { CardComponent } from './CardComponent';
+import { HandComponent } from './HandComponent';
 
 export interface DeckState {
   cards:    string[];
@@ -39,6 +42,18 @@ export class DeckComponent extends EntityComponent<DeckState> {
     if (changed.cards !== undefined) {
       this.applyCardsToSiblings();
     }
+  }
+
+  onContextMenu(ctx: MenuContext): MenuItem[] {
+    const handId = ctx.recipientSeat !== null
+      ? findMainHandId(this.entity.scene, ctx.recipientSeat)
+      : null;
+    return [{
+      kind:     'action',
+      id:       'draw',
+      label:    'Draw',
+      disabled: handId === null,
+    }];
   }
 
   private applyCardsToSiblings(): void {
@@ -72,4 +87,14 @@ export class DeckComponent extends EntityComponent<DeckState> {
       phys.setState({ mass: CARD_MASS * n });
     }
   }
+}
+
+function findMainHandId(scene: { all(): import('../Entity').Entity[] } | null, seat: number): string | null {
+  if (!scene) return null;
+  for (const e of scene.all()) {
+    if (e.owner !== seat) continue;
+    const hand = e.getComponent(HandComponent);
+    if (hand?.state.isMainHand) return e.id;
+  }
+  return null;
 }

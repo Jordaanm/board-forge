@@ -124,6 +124,11 @@ export interface World {
   // already released any active hold on the entity before invoking.
   tweenIntoHand(entity: Entity, handEntityId: string): void;
 
+  // Pop the top `count` cards off a deck and tween each into the calling
+  // seat's main hand. Issue #6 of issues--deck.md. Host runs the draw
+  // directly; guest dispatches `draw-from-deck` for the host to validate.
+  drawFromDeck(deckId: string, count: number, callerSeat: SeatIndex | null): void;
+
   dispose(): void;
 }
 

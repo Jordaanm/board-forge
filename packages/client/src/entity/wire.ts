@@ -137,6 +137,16 @@ export interface TweenIntoHand {
   handEntityId: string;
 }
 
+// Right-click "Draw N" on a deck. Issue #6 of issues--deck.md. Reliable
+// channel (single-shot). Host validates `canManipulate(deck.owner)` and that
+// the caller has a main hand, then pops `min(count, cards.length)` cards from
+// the front and tweens each into the caller's main hand.
+export interface DrawFromDeck {
+  type:   'draw-from-deck';
+  deckId: string;
+  count:  number;
+}
+
 // Cosmetic broadcast originated by a Tool (issue #3 of issues--tools.md).
 // Rides the unreliable channel — missed messages are not retried. Payload
 // schema is per-tool (e.g. ping carries `{ entityId }` or `{ point: [x,z] }`).
@@ -165,4 +175,5 @@ export type SceneMessage =
   | PlayCardToTable
   | ReorderHand
   | TweenIntoHand
+  | DrawFromDeck
   | ToolBroadcast;

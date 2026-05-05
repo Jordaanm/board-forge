@@ -19,6 +19,7 @@ import { HostReplicatorV2 } from '../HostReplicatorV2';
 import { componentRegistry } from '../ComponentRegistry';
 import { HoldService } from '../HoldService';
 import { MergeService } from '../MergeService';
+import { DeckService } from '../DeckService';
 import { HostInputDispatcher } from '../HostInputDispatcher';
 import { GuestInputHandler } from '../../input/GuestInputHandler';
 import { type SceneMessage, type EntityFieldsPartial } from '../wire';
@@ -86,6 +87,7 @@ class WorldImpl implements World, HandleRouter {
   private readonly replicator: HostReplicatorV2 | null;
   private readonly hold:       HoldService | null;
   private readonly merge:      MergeService | null;
+  private readonly decks:      DeckService | null;
   private readonly hostInput:  HostInputDispatcher | null;
   private readonly guestInput: GuestInputHandler | null;
   private readonly policy:     ReplicationPolicy;
@@ -126,7 +128,11 @@ class WorldImpl implements World, HandleRouter {
         spawnAt: (type, position) => this.spawnEntityAt(type, position),
       });
       this.hold.setMergeService(this.merge);
+      this.decks      = new DeckService(this.scene, this.replicator, {
+        despawn: (id) => this.despawn(id),
+      });
       this.hostInput  = new HostInputDispatcher(this.hold, this.getPeerSeat, this.scene);
+      this.hostInput.setDeckService(this.decks);
       this.guestInput = new GuestInputHandler(this.hold, this.getPeerSeat, this.scene);
       this.installBeginContactHandler();
     } else {
@@ -134,6 +140,7 @@ class WorldImpl implements World, HandleRouter {
       this.replicator = null;
       this.hold       = null;
       this.merge      = null;
+      this.decks      = null;
       this.hostInput  = null;
       this.guestInput = null;
     }
@@ -541,6 +548,17 @@ class WorldImpl implements World, HandleRouter {
     this.transport.send(msg, { reliable: true });
   }
 
+  // Right-click Draw on a deck. Host runs the draw directly via DeckService;
+  // guest emits the dedicated RPC for the host to validate and apply. Issue
+  // #6 of issues--deck.md.
+  drawFromDeck(deckId: string, count: number, callerSeat: SeatIndex | null): void {
+    if (this.role === 'host') {
+      this.decks?.drawFromDeck(deckId, count, callerSeat);
+      return;
+    }
+    this.transport.send({ type: 'draw-from-deck', deckId, count }, { reliable: true });
+  }
+
   applyImpulse(entity: Entity, v: { x: number; y: number; z: number }): void {
     if (!canManipulate({ peerSeat: this.identity.selfSeat(), isHost: this.role === 'host' }, entity.owner)) return;
     const phys = entity.getComponent(PhysicsComponent);
@@ -613,6 +631,7 @@ class WorldImpl implements World, HandleRouter {
       case 'play-card-to-table': this.hostInput?.handlePlayCardToTable(peerId, msg); return;
       case 'reorder-hand':       this.hostInput?.handleReorderHand(peerId, msg);      return;
       case 'tween-into-hand':    this.hostInput?.handleTweenIntoHand(peerId, msg);    return;
+      case 'draw-from-deck':     this.hostInput?.handleDrawFromDeck(peerId, msg);     return;
       case 'guest-drag-move':  this.guestInput?.handleMessage(peerId, msg);      return;
       case 'guest-drag-start':
       case 'guest-drag-end':
@@ -719,6 +738,7 @@ class WorldImpl implements World, HandleRouter {
       case 'play-card-to-table':
       case 'reorder-hand':
       case 'tween-into-hand':
+      case 'draw-from-deck':
       case 'guest-drag-move':
       case 'guest-drag-start':
       case 'guest-drag-end':

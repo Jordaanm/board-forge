@@ -117,7 +117,8 @@ export interface MenuActionDeps {
   entity:        Entity | undefined;        // resolved at request time
   send:          (msg: ChannelMessage) => void;
   hostLocal: {
-    delete:      (entityId: string) => void;
+    delete:        (entityId: string) => void;
+    drawFromDeck?: (deckId: string, count: number, callerSeat: SeatIndex | null) => void;
   };
   selfSeat:      SeatIndex | null;
 }
@@ -131,6 +132,18 @@ export function dispatchMenuAction(
   // Built-in host-only action short-circuits straight to the host runtime.
   if (item.kind === 'action' && item.id === '__delete') {
     if (deps.isHost) deps.hostLocal.delete(entityId);
+    return;
+  }
+
+  // Deck draw — host runs locally; guest dispatches the dedicated RPC. Issue
+  // #6 of issues--deck.md.
+  if (item.kind === 'action' && item.id === 'draw' && item.componentTypeId === 'deck') {
+    const count = (args as { count?: number } | undefined)?.count ?? 1;
+    if (deps.isHost) {
+      deps.hostLocal.drawFromDeck?.(entityId, count, deps.selfSeat);
+    } else {
+      deps.send({ type: 'draw-from-deck', deckId: entityId, count });
+    }
     return;
   }
 

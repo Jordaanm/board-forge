@@ -6,6 +6,7 @@ import { registerCorePrimitives } from '../spawnables';
 import { PhysicsWorld } from '../../physics/PhysicsWorld';
 import { CardComponent } from './CardComponent';
 import { DeckComponent, CARD_SLAB_HEIGHT, CARD_MASS } from './DeckComponent';
+import { HandComponent } from './HandComponent';
 import { MeshComponent } from './MeshComponent';
 import { PhysicsComponent } from './PhysicsComponent';
 
@@ -63,3 +64,40 @@ describe('DeckComponent — patches mesh on cards change', () => {
     expect(after).toEqual(before);
   });
 });
+
+describe('DeckComponent — context menu', () => {
+  test('returns "Draw" action; greyed out when caller has no main hand', () => {
+    const deck = scene.spawn('deck', ctx);
+    const items = deck.getComponent(DeckComponent)!.onContextMenu({
+      recipientSeat: 0, isHost: true, entity: deck,
+    });
+    expect(items).toHaveLength(1);
+    const item = items[0] as { kind: string; id: string; label: string; disabled?: boolean };
+    expect(item.kind).toBe('action');
+    expect(item.id).toBe('draw');
+    expect(item.label).toBe('Draw');
+    expect(item.disabled).toBe(true);
+  });
+
+  test('"Draw" is enabled when caller has a main hand', () => {
+    const hand = scene.spawn('hand', ctx);
+    hand.owner = 0;
+    hand.getComponent(HandComponent)!.setState({ isMainHand: true });
+    const deck = scene.spawn('deck', ctx);
+    const items = deck.getComponent(DeckComponent)!.onContextMenu({
+      recipientSeat: 0, isHost: true, entity: deck,
+    });
+    const item = items[0] as { disabled?: boolean };
+    expect(item.disabled).toBe(false);
+  });
+
+  test('"Draw" is greyed out when recipientSeat is null', () => {
+    const deck = scene.spawn('deck', ctx);
+    const items = deck.getComponent(DeckComponent)!.onContextMenu({
+      recipientSeat: null, isHost: true, entity: deck,
+    });
+    const item = items[0] as { disabled?: boolean };
+    expect(item.disabled).toBe(true);
+  });
+});
+
