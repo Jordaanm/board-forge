@@ -557,5 +557,6 @@ function entityToObjectSummary(entity: Entity): ObjectSummary {
     objectType: entity.type as SpawnableType,
     tags:       [...entity.tags],
     props,
+    parentId:   entity.parentId,
   };
 }

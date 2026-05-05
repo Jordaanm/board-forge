@@ -76,12 +76,15 @@ export class MergeService {
   }
 
   // Drains the queue, running merges for any pairs still passing canMerge.
-  // Called from World.tick() after physics.step().
-  processQueued(): void {
-    if (this.queued.length === 0) return;
+  // Called from World.tick() after physics.step(). Returns the number of
+  // successful merges so callers can refresh derived state (e.g. notify
+  // World subscribers that parentId/children just changed).
+  processQueued(): number {
+    if (this.queued.length === 0) return 0;
     const pairs = this.queued;
     this.queued = [];
     const merged = new Set<string>();
+    let count = 0;
     for (const [aId, bId] of pairs) {
       if (merged.has(aId) || merged.has(bId)) continue;
       const a = this.scene.getEntity(aId);
@@ -91,8 +94,10 @@ export class MergeService {
       if (result) {
         merged.add(aId);
         merged.add(bId);
+        count++;
       }
     }
+    return count;
   }
 
   canMerge(a: Entity, b: Entity): boolean {

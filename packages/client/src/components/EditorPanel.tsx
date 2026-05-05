@@ -10,6 +10,7 @@ export interface ObjectSummary {
   objectType: SpawnableType;
   tags: string[];
   props: Record<string, unknown>;
+  parentId: string | null;
 }
 
 interface Props {
@@ -249,27 +250,105 @@ function KeyLightSection({
 function SceneGraphList({
   objects, selectedId, onSelect,
 }: { objects: ObjectSummary[]; selectedId: string | null; onSelect: (id: string | null) => void }) {
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const toggle = (id: string) => setExpanded(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
+  const byId      = new Map(objects.map(o => [o.id, o]));
+  const childrenOf = new Map<string | null, ObjectSummary[]>();
+  for (const o of objects) {
+    const p = o.parentId && byId.has(o.parentId) ? o.parentId : null;
+    const arr = childrenOf.get(p) ?? [];
+    arr.push(o);
+    childrenOf.set(p, arr);
+  }
+  const roots = childrenOf.get(null) ?? [];
+
   return (
     <div style={SECTION}>
       <div style={SECTION_LABEL}>Objects ({objects.length})</div>
       {objects.length === 0 && <div style={{ color: '#666', fontSize: 12 }}>No objects yet</div>}
-      {objects.map(o => {
-        const isSel = o.id === selectedId;
-        return (
-          <div
-            key={o.id}
-            style={{
-              ...LIST_ROW,
-              background: isSel ? 'rgba(80,140,220,0.3)' : 'transparent',
-            }}
-            onClick={() => onSelect(isSel ? null : o.id)}
-          >
-            <span>{o.id}</span>
-            <span style={{ color: '#888' }}>{resolveObjectMeta(o.objectType).label}</span>
-          </div>
-        );
-      })}
+      {roots.map(o => (
+        <SceneGraphNode
+          key={o.id}
+          node={o}
+          depth={0}
+          childrenOf={childrenOf}
+          expanded={expanded}
+          selectedId={selectedId}
+          onToggle={toggle}
+          onSelect={onSelect}
+        />
+      ))}
     </div>
+  );
+}
+
+function SceneGraphNode({
+  node, depth, childrenOf, expanded, selectedId, onToggle, onSelect,
+}: {
+  node:        ObjectSummary;
+  depth:       number;
+  childrenOf:  Map<string | null, ObjectSummary[]>;
+  expanded:    Set<string>;
+  selectedId:  string | null;
+  onToggle:    (id: string) => void;
+  onSelect:    (id: string | null) => void;
+}) {
+  const kids   = childrenOf.get(node.id) ?? [];
+  const hasKids = kids.length > 0;
+  const isOpen = expanded.has(node.id);
+  const isSel  = node.id === selectedId;
+
+  return (
+    <>
+      <div
+        style={{
+          ...LIST_ROW,
+          paddingLeft: 8 + depth * 12,
+          background:  isSel ? 'rgba(80,140,220,0.3)' : 'transparent',
+        }}
+        onClick={() => onSelect(isSel ? null : node.id)}
+      >
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
+          <span
+            onClick={e => { e.stopPropagation(); if (hasKids) onToggle(node.id); }}
+            style={{
+              display:        'inline-flex',
+              alignItems:     'center',
+              justifyContent: 'center',
+              width:          22,
+              height:         22,
+              marginLeft:     -4,
+              color:          '#aaa',
+              cursor:         hasKids ? 'pointer' : 'default',
+              fontSize:       16,
+              lineHeight:     1,
+              userSelect:     'none',
+            }}
+          >
+            {hasKids ? (isOpen ? '▾' : '▸') : ''}
+          </span>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{node.id}</span>
+        </span>
+        <span style={{ color: '#888', flexShrink: 0, marginLeft: 6 }}>{resolveObjectMeta(node.objectType).label}</span>
+      </div>
+      {hasKids && isOpen && kids.map(k => (
+        <SceneGraphNode
+          key={k.id}
+          node={k}
+          depth={depth + 1}
+          childrenOf={childrenOf}
+          expanded={expanded}
+          selectedId={selectedId}
+          onToggle={onToggle}
+          onSelect={onSelect}
+        />
+      ))}
+    </>
   );
 }
 

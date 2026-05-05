@@ -308,7 +308,7 @@ class WorldImpl implements World, HandleRouter {
       this.tickTweens(dtSeconds);
       this.syncZoneBodies();
       this.physics.step(dtSeconds);
-      this.merge?.processQueued();
+      const mergeCount = this.merge?.processQueued() ?? 0;
       this.enforceTableBounds();
       this.syncFromPhysics();
 
@@ -321,6 +321,12 @@ class WorldImpl implements World, HandleRouter {
       // privacy scrubbing now live in RtcTransport (issue #7).
       for (const msg of reliable)   this.transport.send(msg, { reliable: true  });
       for (const msg of unreliable) this.transport.send(msg, { reliable: false });
+
+      // Merges mutate parentId / children / isContained without going through
+      // any path that already calls notify(), so subscribers (e.g. EditorPanel)
+      // never see the new hierarchy until the next unrelated change. Refresh
+      // here so the scene-graph view reflects card→deck reparenting in real time.
+      if (mergeCount > 0) this.notify();
     }
 
     this.tickIndex++;
