@@ -1,0 +1,63 @@
+.hand-panel {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 8px 12px;
+  background: rgba(20, 20, 32, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  color: #e8e8e8;
+  font-family: sans-serif;
+  font-size: 12px;
+  max-width: min(80vw, 720px);
+  overflow-x: auto;
+}
+
+.hand-panel__placeholder {
+  padding: 22px 18px;
+  color: #888;
+  font-style: italic;
+  font-size: 12px;
+  text-align: center;
+}
+
+.hand-panel__tile {
+  position: relative;
+  width: 64px;
+  height: 90px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+  flex-shrink: 0;
+  transition: transform 0.1s ease, border-color 0.1s ease;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.hand-panel__tile:hover {
+  border-color: rgba(255, 255, 255, 0.4);
+  transform: translateY(-2px);
+}
+
+.hand-panel__tile--selected {
+  border-color: #ffd740;
+  box-shadow: 0 0 0 2px rgba(255, 215, 64, 0.4);
+}
+
+.hand-panel__tile-fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: #888;
+  text-align: center;
+  padding: 4px;
+  word-break: break-word;
+  pointer-events: none;
+}

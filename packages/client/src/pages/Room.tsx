@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ThreeCanvas, type ReplicationTarget } from '../ThreeCanvas';
+import { ThreeCanvas, type ReplicationTarget, type HandView } from '../ThreeCanvas';
 import { ConnectionManager } from '../net/ConnectionManager';
 import { EditorPanel, type ObjectSummary } from '../components/EditorPanel';
 import { ContextMenu } from '../components/ContextMenu';
@@ -8,6 +8,7 @@ import { Toolbar } from '../components/Toolbar';
 import { HostActionBar } from '../components/HostActionBar';
 import { AnchorLayout } from '../components/AnchorLayout';
 import { UIPanel } from '../components/UIPanel';
+import { HandPanel } from '../components/HandPanel';
 import { TOOL_CATALOGUE } from '../input/tools';
 import { type ContextMenuRequest, dispatchMenuAction } from '../input/ContextMenuController';
 import { type Entity } from '../entity/Entity';
@@ -53,6 +54,7 @@ export function Room({ roomId, isHost }: Props) {
   const [selfPeerId,   setSelfPeerId]   = useState<string | null>(null);
   const [activeToolId, setActiveToolId] = useState<string>(TOOL_CATALOGUE[0]?.id ?? 'grab');
   const [showAllZones, setShowAllZones] = useState(false);
+  const [handView, setHandView]         = useState<HandView | null>(null);
 
   const sendRef            = useRef<(msg: ChannelMessage, opts?: { reliable?: boolean }) => void>(noop);
   const sendToRef          = useRef<(peerId: string, msg: ChannelMessage, opts?: { reliable?: boolean }) => void>(noop);
@@ -79,6 +81,8 @@ export function Room({ roomId, isHost }: Props) {
   const setActiveToolRef   = useRef<(toolId: string) => boolean>(() => false);
   const getActiveToolRef   = useRef<() => string>(() => activeToolId);
   const setShowAllZonesRef = useRef<(on: boolean) => void>(noop);
+  const setHandViewRef     = useRef<(view: HandView | null) => void>(noop);
+  const requestHandTileMenuRef = useRef<(entityId: string, x: number, y: number) => void>(noop);
   const claimSeatRef       = useRef<(seatIndex: SeatIndex) => void>(noop);
   const kickPeerRef        = useRef<(peerId: string) => void>(noop);
   const banPeerRef         = useRef<(peerId: string) => void>(noop);
@@ -88,6 +92,7 @@ export function Room({ roomId, isHost }: Props) {
   onObjectsChangeRef.current = (objs) => setObjects(objs);
   onSelectRef.current        = (id) => setSelectedId(id);
   getActiveToolRef.current   = () => activeToolId;
+  setHandViewRef.current     = (view) => setHandView(view);
 
   useEffect(() => {
     let manager: RoomStateManager | null = null;
@@ -305,6 +310,8 @@ export function Room({ roomId, isHost }: Props) {
         setActiveToolRef={setActiveToolRef}
         getActiveToolRef={getActiveToolRef}
         setShowAllZonesRef={setShowAllZonesRef}
+        setHandViewRef={setHandViewRef}
+        requestHandTileMenuRef={requestHandTileMenuRef}
       />
 
       <AnchorLayout>
@@ -365,6 +372,17 @@ export function Room({ roomId, isHost }: Props) {
               <div className="room__share-label">Share this link with your guest:</div>
               <div className="room__share-url">{shareUrl}</div>
             </div>
+          </UIPanel>
+        )}
+
+        {handView && (
+          <UIPanel anchor="bottom-center" order={20}>
+            <HandPanel
+              cards={handView.cards}
+              selectedId={selectedId}
+              onSelectTile={(id) => setSelectedId(id)}
+              onTileContextMenu={(id, x, y) => requestHandTileMenuRef.current(id, x, y)}
+            />
           </UIPanel>
         )}
       </AnchorLayout>

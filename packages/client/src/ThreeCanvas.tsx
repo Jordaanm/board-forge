@@ -14,6 +14,9 @@ import { ValueComponent } from './entity/components/ValueComponent';
 import { DiceComponent } from './entity/components/DiceComponent';
 import { ZoneComponent } from './entity/components/ZoneComponent';
 import { HandComponent } from './entity/components/HandComponent';
+import { FlatViewComponent } from './entity/components/FlatViewComponent';
+import { aggregateContextMenu } from './entity/contextMenu';
+import { type CardTile } from './components/HandPanel';
 import { MoveGizmo } from './scene/MoveGizmo';
 import { CameraController } from './camera/CameraController';
 import { ToolDispatcher, TOOL_CATALOGUE, type Tool } from './input/tools';
@@ -60,6 +63,13 @@ interface Props {
   setActiveToolRef:    MutableRefObject<(toolId: string) => boolean>;
   getActiveToolRef:    MutableRefObject<() => string>;
   setShowAllZonesRef:  MutableRefObject<(on: boolean) => void>;
+  setHandViewRef:      MutableRefObject<(view: HandView | null) => void>;
+  requestHandTileMenuRef: MutableRefObject<(entityId: string, x: number, y: number) => void>;
+}
+
+export interface HandView {
+  handEntityId: string;
+  cards:        CardTile[];
 }
 
 export function ThreeCanvas({
@@ -70,6 +80,7 @@ export function ThreeCanvas({
   freeCameraRef, onObjectsChangeRef,
   onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,
   setShowAllZonesRef,
+  setHandViewRef, requestHandTileMenuRef,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -225,6 +236,27 @@ export function ThreeCanvas({
 
     setShowAllZonesRef.current = (on) => { ZoneComponent.showAllZones = on; };
 
+    // Compose a ContextMenuRequest for a hand-panel tile right-click. Reuses
+    // the same aggregation pipeline as 3D right-clicks so component-contributed
+    // items (e.g. CardComponent flip) appear identically.
+    requestHandTileMenuRef.current = (entityId, x, y) => {
+      const handle = world.get(entityId);
+      if (!handle) return;
+      const entity = handle.entity;
+      const seat = getSelfSeatRef.current();
+      const items = aggregateContextMenu(entity, {
+        recipientSeat: seat, isHost, entity,
+      });
+      if (items.length === 0) return;
+      onContextMenuRef.current({
+        x, y,
+        entityId:   entity.id,
+        entityName: entity.name,
+        entityTags: [...entity.tags],
+        items,
+      });
+    };
+
     const unsubscribe = world.subscribe(() => {
       if (highlightId && !world.get(highlightId)) {
         highlightId = null;
@@ -304,6 +336,7 @@ export function ThreeCanvas({
     // ── Animation loop ────────────────────────────────────────────────────
     let lastTime = performance.now();
     let animId: number;
+    let lastHandViewKey = '__init';
 
     const animate = () => {
       animId = requestAnimationFrame(animate);
@@ -337,6 +370,15 @@ export function ThreeCanvas({
 
       // Drive zone debug-mesh visibility from selection + global toggle.
       world.forEach((h) => h.entity.getComponent(ZoneComponent)?.updateDebugVisibility());
+
+      // Hand panel — re-derive view each frame and push to React only when
+      // the view's identity key changes. Cheap (one walk per frame).
+      const view = deriveHandView(world, getSelfSeatRef.current());
+      const key  = handViewKey(view);
+      if (key !== lastHandViewKey) {
+        lastHandViewKey = key;
+        setHandViewRef.current(view);
+      }
 
       if (highlightHelper) highlightHelper.update();
 
@@ -395,7 +437,7 @@ export function ThreeCanvas({
     updatePropRef, updateTablePropRef, updateSkydomePropRef, updateKeyLightPropRef,
     freeCameraRef, onObjectsChangeRef,
     onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,
-    setShowAllZonesRef,
+    setShowAllZonesRef, setHandViewRef, requestHandTileMenuRef,
   ]);
 
   return (
@@ -403,6 +445,42 @@ export function ThreeCanvas({
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
     </div>
   );
+}
+
+// Resolves the viewer's main hand entity and its current contents into a
+// HandView for the bottom-center hand panel. Returns null when the viewer has
+// no main hand (unseated, or seated with no isMainHand=true hand).
+function deriveHandView(world: World, selfSeat: SeatIndex | null): HandView | null {
+  if (selfSeat === null) return null;
+  let mainHand: Entity | null = null;
+  world.forEach((h) => {
+    if (mainHand) return;
+    const e = h.entity;
+    if (e.owner !== selfSeat) return;
+    const hand = e.getComponent(HandComponent);
+    if (hand?.state.isMainHand) mainHand = e;
+  });
+  if (!mainHand) return null;
+  const zone = (mainHand as Entity).getComponent(ZoneComponent);
+  if (!zone) return null;
+
+  const cards: CardTile[] = [];
+  for (const id of zone.state.containedIds) {
+    const cardEntity = world.get(id)?.entity;
+    if (!cardEntity) continue;
+    const flat = cardEntity.getComponent(FlatViewComponent);
+    cards.push({
+      id,
+      name:       cardEntity.name,
+      textureRef: flat?.state.textureRef ?? '',
+    });
+  }
+  return { handEntityId: (mainHand as Entity).id, cards };
+}
+
+function handViewKey(view: HandView | null): string {
+  if (!view) return '';
+  return view.handEntityId + '|' + view.cards.map(c => c.id + ':' + c.textureRef).join(',');
 }
 
 // Editor-panel view of an entity. Mirrors SceneSystemV2.derivePropsView until
