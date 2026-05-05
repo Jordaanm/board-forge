@@ -272,6 +272,43 @@ describe('MergeService.merge — card↔deck', () => {
   });
 });
 
+describe('MergeService.recheckMergeOverlaps', () => {
+  test('merges with a contacted entity that passes canMerge', () => {
+    const a = spawnCard({ id: 'a', pos: [0, 0.5, 0], category: 'x' });
+    const b = spawnCard({ id: 'b', pos: [0, 0.7, 0], category: 'x' });
+    merge.noteBeginContact(a, b);
+    // Held cards never trigger merge; simulate held-then-released by toggling.
+    a.heldBy = 0;
+    expect(merge.recheckMergeOverlaps(a)).toBeNull();
+    a.heldBy = null;
+    const result = merge.recheckMergeOverlaps(a);
+    expect(result).not.toBeNull();
+    expect(a.isContained).toBe(true);
+    expect(b.isContained).toBe(true);
+  });
+
+  test('skips a contact whose entity has been despawned', () => {
+    const a = spawnCard({ id: 'a', category: 'x' });
+    const b = spawnCard({ id: 'b', category: 'x' });
+    merge.noteBeginContact(a, b);
+    scene.removeEntity('b');
+    expect(merge.recheckMergeOverlaps(a)).toBeNull();
+  });
+
+  test('ignores contacts past their endContact', () => {
+    const a = spawnCard({ id: 'a', category: 'x' });
+    const b = spawnCard({ id: 'b', category: 'x' });
+    merge.noteBeginContact(a, b);
+    merge.noteEndContact(a, b);
+    expect(merge.recheckMergeOverlaps(a)).toBeNull();
+  });
+
+  test('no-op when entity has no contacts', () => {
+    const a = spawnCard({ id: 'a', category: 'x' });
+    expect(merge.recheckMergeOverlaps(a)).toBeNull();
+  });
+});
+
 describe('MergeService — public spawnable filter', () => {
   test('deck spawnable is registered as internal', async () => {
     const { getSpawnable, listPublicSpawnables } = await import('./SpawnableRegistry');

@@ -86,7 +86,7 @@ This also covers user story 11 (drag a card from the hand panel onto a deck on t
 
 ---
 
-## Issue #4 — Hold-release merge recheck
+## Issue #4 — Hold-release merge recheck ✅ Completed
 
 ### What to build
 
@@ -96,11 +96,11 @@ Extend `HoldService` release path to call `MergeService.recheckMergeOverlaps(ent
 
 ### Acceptance criteria
 
-- [ ] `MergeService.recheckMergeOverlaps(entity)` iterates current contacts and calls `merge` for any pair passing `canMerge`.
-- [ ] `HoldService.release` calls `recheckMergeOverlaps` on the released entity (host only).
-- [ ] Manual test: pick up a card, drag it onto a deck, release while still in physical contact → merge fires.
-- [ ] Manual test: pick up a deck, sweep over a settled card, release while in contact → merge fires (covers user story 8 inverse — held suppresses, release fires).
-- [ ] Held card's release that lands on nothing is unaffected.
+- [x] `MergeService.recheckMergeOverlaps(entity)` iterates current contacts and calls `merge` for any pair passing `canMerge`.
+- [x] `HoldService.release` calls `recheckMergeOverlaps` on the released entity (host only).
+- [x] Manual test: pick up a card, drag it onto a deck, release while still in physical contact → merge fires.
+- [x] Manual test: pick up a deck, sweep over a settled card, release while in contact → merge fires (covers user story 8 inverse — held suppresses, release fires).
+- [x] Held card's release that lands on nothing is unaffected.
 
 ### Blocked by
 

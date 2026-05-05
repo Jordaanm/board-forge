@@ -90,6 +90,7 @@ class WorldImpl implements World, HandleRouter {
   private readonly guestInput: GuestInputHandler | null;
   private readonly policy:     ReplicationPolicy;
   private mergeBeginContact:   ((e: { bodyA: import('cannon-es').Body; bodyB: import('cannon-es').Body }) => void) | null = null;
+  private mergeEndContact:     ((e: { bodyA: import('cannon-es').Body; bodyB: import('cannon-es').Body }) => void) | null = null;
 
   private readonly getPeerSeat: (peerId: string) => SeatIndex | null;
 
@@ -124,6 +125,7 @@ class WorldImpl implements World, HandleRouter {
       this.merge      = new MergeService(this.scene, this.replicator, {
         spawnAt: (type, position) => this.spawnEntityAt(type, position),
       });
+      this.hold.setMergeService(this.merge);
       this.hostInput  = new HostInputDispatcher(this.hold, this.getPeerSeat, this.scene);
       this.guestInput = new GuestInputHandler(this.hold, this.getPeerSeat, this.scene);
       this.installBeginContactHandler();
@@ -190,9 +192,17 @@ class WorldImpl implements World, HandleRouter {
       const a = this.findEntityByBody(e.bodyA);
       const b = this.findEntityByBody(e.bodyB);
       if (!a || !b) return;
+      this.merge!.noteBeginContact(a, b);
       this.merge!.enqueueContact(a, b);
     };
+    this.mergeEndContact = (e) => {
+      const a = this.findEntityByBody(e.bodyA);
+      const b = this.findEntityByBody(e.bodyB);
+      if (!a || !b) return;
+      this.merge!.noteEndContact(a, b);
+    };
     this.physics.world.addEventListener('beginContact', this.mergeBeginContact);
+    this.physics.world.addEventListener('endContact',   this.mergeEndContact);
   }
 
   private findEntityByBody(body: import('cannon-es').Body): Entity | undefined {
@@ -739,6 +749,10 @@ class WorldImpl implements World, HandleRouter {
     if (this.physics && this.mergeBeginContact) {
       this.physics.world.removeEventListener('beginContact', this.mergeBeginContact);
       this.mergeBeginContact = null;
+    }
+    if (this.physics && this.mergeEndContact) {
+      this.physics.world.removeEventListener('endContact', this.mergeEndContact);
+      this.mergeEndContact = null;
     }
 
     this.scene.world = null;

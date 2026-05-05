@@ -31,11 +31,42 @@ export class MergeService {
   // the beginContact dispatch is unsafe — cannon-es is mid-iteration.
   private queued: Array<[string, string]> = [];
 
+  // Live contact map fed by World's beginContact / endContact handlers.
+  // Symmetric: both directions of every pair are recorded. Used by
+  // `recheckMergeOverlaps` (HoldService.release path — issue #4) so a card
+  // released into an existing contact still fires the merge even though
+  // beginContact has long passed.
+  private contacts = new Map<string, Set<string>>();
+
   constructor(
     private readonly scene:      SceneImpl,
     private readonly replicator: HostReplicatorV2,
     private readonly host:       MergeHostFacade,
   ) {}
+
+  noteBeginContact(a: Entity, b: Entity): void {
+    addContact(this.contacts, a.id, b.id);
+  }
+
+  noteEndContact(a: Entity, b: Entity): void {
+    removeContact(this.contacts, a.id, b.id);
+  }
+
+  // Re-fires merge logic for any entity currently overlapping `entity`'s
+  // physics body. Called by HoldService.release so a card released while
+  // already touching a deck still merges. Issue #4 of issues--deck.md.
+  recheckMergeOverlaps(entity: Entity): Entity | null {
+    const set = this.contacts.get(entity.id);
+    if (!set) return null;
+    for (const otherId of [...set]) {
+      const other = this.scene.getEntity(otherId);
+      if (!other) continue;
+      if (this.canMerge(entity, other)) {
+        return this.merge(entity, other);
+      }
+    }
+    return null;
+  }
 
   // Host-only. Called by the World's beginContact handler. Defers the actual
   // merge work to the next `processQueued()` call.
@@ -154,6 +185,20 @@ export class MergeService {
 
     return deck;
   }
+}
+
+function addContact(map: Map<string, Set<string>>, a: string, b: string): void {
+  let setA = map.get(a);
+  if (!setA) { setA = new Set(); map.set(a, setA); }
+  setA.add(b);
+  let setB = map.get(b);
+  if (!setB) { setB = new Set(); map.set(b, setB); }
+  setB.add(a);
+}
+
+function removeContact(map: Map<string, Set<string>>, a: string, b: string): void {
+  map.get(a)?.delete(b);
+  map.get(b)?.delete(a);
 }
 
 function setEntityIsContained(entity: Entity, value: boolean, repl: HostReplicatorV2): void {
