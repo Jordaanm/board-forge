@@ -192,7 +192,13 @@ export function ThreeCanvas({
       physics:     physicsWorld ?? undefined,
       getPeerSeat: isHost ? (peerId) => getPeerSeatRef.current(peerId) : undefined,
       captureThumb: isHost
-        ? () => captureCanvasThumbnail(renderer.domElement, { width: 192, height: 108, quality: 0.8 })
+        ? () => {
+            // WebGLRenderer defaults to preserveDrawingBuffer:false, so the
+            // canvas backbuffer is cleared after each rAF. Re-render before
+            // capture so toDataURL reads a populated buffer instead of blank.
+            renderer.render(scene, camera);
+            return captureCanvasThumbnail(renderer.domElement, { width: 192, height: 108, quality: 0.8 });
+          }
         : undefined,
     });
     worldRef = world;
