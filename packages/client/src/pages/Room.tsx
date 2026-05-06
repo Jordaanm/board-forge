@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { ThreeCanvas, type ReplicationTarget, type HandView } from '../ThreeCanvas';
 import { ConnectionManager } from '../net/ConnectionManager';
 import { EditorPanel, type ObjectSummary } from '../components/EditorPanel';
-import { ScriptPanel } from '../components/ScriptPanel';
 import { ContextMenu } from '../components/ContextMenu';
 import { PlayersPanel } from '../components/PlayersPanel';
 import { Toolbar } from '../components/Toolbar';
@@ -384,18 +383,11 @@ export function Room({ roomId, isHost }: Props) {
               lastLoaded={lastLoaded}
               currentEntityCount={objects.length}
               historyService={historyService}
-            />
-          </UIPanel>
-        )}
-
-        {isHost && (
-          <UIPanel anchor="top-left" order={20}>
-            <ScriptPanel
-              source={scriptSource}
-              onChange={setScriptSource}
-              onSave={() => saveScriptSourceRef.current(scriptSource)}
-              onRun={(src) => runScriptRef.current(src)}
-              errorLog={scriptErrorLog}
+              scriptSource={scriptSource}
+              onScriptChange={setScriptSource}
+              onScriptSave={() => saveScriptSourceRef.current(scriptSource)}
+              onScriptRun={(src) => runScriptRef.current(src)}
+              scriptErrorLog={scriptErrorLog}
             />
           </UIPanel>
         )}

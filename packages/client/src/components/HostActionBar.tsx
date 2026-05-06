@@ -7,19 +7,27 @@ import { SpawnObjectModal } from './SpawnObjectModal';
 import { LoadSceneModal } from './LoadSceneModal';
 import { RevertConfirmModal } from './RevertConfirmModal';
 import { HistoryModal } from './HistoryModal';
+import { ScriptEditorModal } from './ScriptEditorModal';
 import { type SaveEnvelope } from '../entity/SaveFile';
 import { type LastLoaded, type SceneHistoryService } from '../entity/SceneHistoryService';
+import { type RunResult } from '../scripting/ScriptHost';
+import { type ScriptErrorLog } from '../scripting/ScriptErrorLog';
 
 interface Props {
-  onSpawn:           (type: string) => void;
-  showAllZones:      boolean;
+  onSpawn:              (type: string) => void;
+  showAllZones:         boolean;
   onToggleShowAllZones: (on: boolean) => void;
-  onSave:            () => void;
-  onLoad:            (envelope: SaveEnvelope, filename: string) => void;
-  onRevert:          () => void;
-  lastLoaded:        LastLoaded | null;
-  currentEntityCount: number;
-  historyService:    SceneHistoryService | null;
+  onSave:               () => void;
+  onLoad:               (envelope: SaveEnvelope, filename: string) => void;
+  onRevert:             () => void;
+  lastLoaded:           LastLoaded | null;
+  currentEntityCount:   number;
+  historyService:       SceneHistoryService | null;
+  scriptSource:         string;
+  onScriptChange:       (next: string) => void;
+  onScriptSave:         () => void;
+  onScriptRun:          (source: string) => Promise<RunResult>;
+  scriptErrorLog:       ScriptErrorLog | null;
 }
 
 const BAR: React.CSSProperties = {
@@ -83,7 +91,22 @@ const FILE_TIMESTAMP: React.CSSProperties = {
   color: '#888',
 };
 
-export function HostActionBar({ onSpawn, showAllZones, onToggleShowAllZones, onSave, onLoad, onRevert, lastLoaded, currentEntityCount, historyService }: Props) {
+export function HostActionBar({
+  onSpawn,
+  showAllZones,
+  onToggleShowAllZones,
+  onSave,
+  onLoad,
+  onRevert,
+  lastLoaded,
+  currentEntityCount,
+  historyService,
+  scriptSource,
+  onScriptChange,
+  onScriptSave,
+  onScriptRun,
+  scriptErrorLog,
+}: Props) {
   const [revertOpen, setRevertOpen] = useState(false);
   const canRevert = lastLoaded !== null;
 
@@ -101,6 +124,13 @@ export function HostActionBar({ onSpawn, showAllZones, onToggleShowAllZones, onS
         Revert
       </button>
       <HistoryModal service={historyService} />
+      <ScriptEditorModal
+        source={scriptSource}
+        onChange={onScriptChange}
+        onSave={onScriptSave}
+        onRun={onScriptRun}
+        errorLog={scriptErrorLog}
+      />
       {lastLoaded && (
         <span style={FILE_LABEL}>
           <span style={FILE_NAME}>{lastLoaded.filename}</span>
