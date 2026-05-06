@@ -6,11 +6,14 @@
 // produced by `World.snapshot`. `thumbnail` is a lossless PNG data URL (so
 // the future steganography path can embed the save payload in the pixels
 // without JPEG resampling corrupting it); `savedAt` is an ISO timestamp;
-// `script` is reserved as `null` until scripting lands.
+// `script` carries the host's authored script source plus its `initialised`
+// flag (issues--scripting-v1.md §2).
 //
 // Validation on `decode` rejects unknown `format`, unknown `version`, missing
 // required fields, or any unknown component `typeId` in `scene`. Optional
-// fields (`thumbnail`, `savedAt`, `script`) are tolerated when absent.
+// fields (`thumbnail`, `savedAt`, `script`) are tolerated when absent — a
+// missing `script` is treated as `{ source: '', initialised: false }` so
+// pre-scripting save files keep loading.
 
 import { type EntitySerialized } from './Scene';
 import { componentRegistry } from './ComponentRegistry';
@@ -18,19 +21,27 @@ import { componentRegistry } from './ComponentRegistry';
 export const SAVE_FORMAT  = 'vtt-scene';
 export const SAVE_VERSION = 1;
 
+export interface SavedScript {
+  source:      string;
+  initialised: boolean;
+}
+
+export const EMPTY_SCRIPT: SavedScript = { source: '', initialised: false };
+
 export interface SaveEnvelope {
   format:    typeof SAVE_FORMAT;
   version:   typeof SAVE_VERSION;
   savedAt:   string;
   thumbnail: string | null;
   scene:     EntitySerialized[];
-  script:    null;
+  script:    SavedScript;
 }
 
 export interface EncodeOptions {
   scene:     readonly EntitySerialized[];
   thumbnail: string | null;
   savedAt?:  string;  // defaults to new Date().toISOString()
+  script?:   SavedScript;
 }
 
 export function encodeSaveFile(opts: EncodeOptions): SaveEnvelope {
@@ -40,7 +51,7 @@ export function encodeSaveFile(opts: EncodeOptions): SaveEnvelope {
     savedAt:   opts.savedAt ?? new Date().toISOString(),
     thumbnail: opts.thumbnail,
     scene:     [...opts.scene],
-    script:    null,
+    script:    opts.script ?? { ...EMPTY_SCRIPT },
   };
 }
 
@@ -88,8 +99,25 @@ export function decodeSaveFile(text: string): SaveEnvelope {
     savedAt,
     thumbnail,
     scene,
-    script:    null,
+    script:    decodeScript(obj.script),
   };
+}
+
+function decodeScript(raw: unknown): SavedScript {
+  if (raw === undefined || raw === null) return { ...EMPTY_SCRIPT };
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new SaveFileError('Field "script" must be an object.');
+  }
+  const s = raw as Record<string, unknown>;
+  const source = s.source ?? '';
+  if (typeof source !== 'string') {
+    throw new SaveFileError('Field "script.source" must be a string.');
+  }
+  const initialised = s.initialised ?? false;
+  if (typeof initialised !== 'boolean') {
+    throw new SaveFileError('Field "script.initialised" must be a boolean.');
+  }
+  return { source, initialised };
 }
 
 function validateEntitySerialized(raw: unknown, index: number): EntitySerialized {

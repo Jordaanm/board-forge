@@ -19,11 +19,38 @@ export type RunResult =
   | { ok: true }
   | { ok: false; error: string };
 
+// Persisted per-room script state. `source` is the authored TS the host
+// last saved; `initialised` flips to true after `onSceneInitialised` fires
+// (issue #3).
+export interface ScriptState {
+  source:      string;
+  initialised: boolean;
+}
+
 export class ScriptHost {
   private readonly console_: ScriptHostOptions['console'];
+  private state_: ScriptState = { source: '', initialised: false };
 
   constructor(opts: ScriptHostOptions = {}) {
     this.console_ = opts.console ?? console;
+  }
+
+  // Authoritative state slot for save/load. Returns a defensive copy so
+  // callers can't mutate the live record.
+  getScriptState(): ScriptState {
+    return { source: this.state_.source, initialised: this.state_.initialised };
+  }
+
+  // Replaces the entire state slot — used by save-file load. `initialised`
+  // gating against re-firing `onSceneInitialised` lands in #3.
+  loadScriptState(state: ScriptState): void {
+    this.state_ = { source: state.source, initialised: state.initialised };
+  }
+
+  // Save Script — writes the textarea source into room state. `initialised`
+  // is preserved.
+  setSource(source: string): void {
+    this.state_ = { source, initialised: this.state_.initialised };
   }
 
   async runScript(source: string): Promise<RunResult> {

@@ -23,7 +23,7 @@ import { RoomStateManager } from '../seats/RoomStateManager';
 import { RoomStateClient } from '../seats/RoomStateClient';
 import type { RoomStateMessage, RoomStateSnapshot } from '../seats/RoomState';
 import { type SceneHistoryService, type LastLoaded } from '../entity/SceneHistoryService';
-import { type RunResult } from '../scripting/ScriptHost';
+import { type RunResult, type ScriptState } from '../scripting/ScriptHost';
 import './Room.css';
 
 type Status = 'connecting' | 'connected' | 'disconnected' | 'room-full';
@@ -103,6 +103,8 @@ export function Room({ roomId, isHost }: Props) {
   const onLastLoadedChangeRef = useRef<(loaded: LastLoaded | null) => void>(noop);
   const onHistoryServiceChangeRef = useRef<(svc: SceneHistoryService | null) => void>(noop);
   const runScriptRef       = useRef<(source: string) => Promise<RunResult>>(() => Promise.resolve({ ok: false, error: 'Canvas not ready.' }));
+  const saveScriptSourceRef = useRef<(source: string) => void>(noop);
+  const loadScriptStateRef  = useRef<(state: ScriptState) => void>(noop);
   onLastLoadedChangeRef.current     = (loaded) => setLastLoaded(loaded);
   onHistoryServiceChangeRef.current = (svc)    => setHistoryService(svc);
 
@@ -345,6 +347,8 @@ export function Room({ roomId, isHost }: Props) {
         onLastLoadedChangeRef={onLastLoadedChangeRef}
         onHistoryServiceChangeRef={onHistoryServiceChangeRef}
         runScriptRef={runScriptRef}
+        saveScriptSourceRef={saveScriptSourceRef}
+        loadScriptStateRef={loadScriptStateRef}
       />
 
       <AnchorLayout>
@@ -368,6 +372,8 @@ export function Room({ roomId, isHost }: Props) {
                   savedAt:  envelope.savedAt,
                 });
                 replaceSceneRef.current(envelope.scene);
+                loadScriptStateRef.current(envelope.script);
+                setScriptSource(envelope.script.source);
               }}
               onRevert={() => sceneHistoryRef.current?.revert()}
               lastLoaded={lastLoaded}
@@ -382,7 +388,7 @@ export function Room({ roomId, isHost }: Props) {
             <ScriptPanel
               source={scriptSource}
               onChange={setScriptSource}
-              onSave={() => { /* wired up in #2 */ }}
+              onSave={() => saveScriptSourceRef.current(scriptSource)}
               onRun={(src) => runScriptRef.current(src)}
             />
           </UIPanel>

@@ -37,13 +37,22 @@ describe('SaveFile.encode', () => {
     expect(env.savedAt).toBe('2026-05-06T12:00:00.000Z');
     expect(env.thumbnail).toBeNull();
     expect(env.scene).toEqual(sampleScene);
-    expect(env.script).toBeNull();
+    expect(env.script).toEqual({ source: '', initialised: false });
   });
 
   test('defaults savedAt to current ISO timestamp', () => {
     const env = encodeSaveFile({ scene: [], thumbnail: null });
     expect(typeof env.savedAt).toBe('string');
     expect(env.savedAt.length).toBeGreaterThan(0);
+  });
+
+  test('carries the supplied script through', () => {
+    const env = encodeSaveFile({
+      scene:     [],
+      thumbnail: null,
+      script:    { source: 'export default class extends Game {}', initialised: true },
+    });
+    expect(env.script).toEqual({ source: 'export default class extends Game {}', initialised: true });
   });
 });
 
@@ -61,6 +70,16 @@ describe('SaveFile round-trip', () => {
     expect(decoded.savedAt).toBe('2026-05-06T12:00:00.000Z');
   });
 
+  test('encode → JSON → decode preserves the script slot', () => {
+    const env = encodeSaveFile({
+      scene:     [],
+      thumbnail: null,
+      script:    { source: 'src here', initialised: true },
+    });
+    const decoded = decodeSaveFile(JSON.stringify(env));
+    expect(decoded.script).toEqual({ source: 'src here', initialised: true });
+  });
+
   test('decode tolerates missing optional fields', () => {
     const text = JSON.stringify({
       format:  SAVE_FORMAT,
@@ -71,6 +90,19 @@ describe('SaveFile round-trip', () => {
     expect(decoded.thumbnail).toBeNull();
     expect(decoded.savedAt).toBe('');
     expect(decoded.scene).toEqual([]);
+    // Pre-scripting saves carry no `script` field — decode treats as empty.
+    expect(decoded.script).toEqual({ source: '', initialised: false });
+  });
+
+  test('decode tolerates a null script (older draft)', () => {
+    const text = JSON.stringify({
+      format:  SAVE_FORMAT,
+      version: SAVE_VERSION,
+      scene:   [],
+      script:  null,
+    });
+    const decoded = decodeSaveFile(text);
+    expect(decoded.script).toEqual({ source: '', initialised: false });
   });
 });
 
@@ -112,6 +144,36 @@ describe('SaveFile.decode validation', () => {
 
   test('rejects non-object root', () => {
     expect(() => decodeSaveFile('[]')).toThrow(SaveFileError);
+  });
+
+  test('rejects malformed script (string)', () => {
+    const text = JSON.stringify({
+      format:  SAVE_FORMAT,
+      version: SAVE_VERSION,
+      scene:   [],
+      script:  'not an object',
+    });
+    expect(() => decodeSaveFile(text)).toThrow(/script/i);
+  });
+
+  test('rejects malformed script.source', () => {
+    const text = JSON.stringify({
+      format:  SAVE_FORMAT,
+      version: SAVE_VERSION,
+      scene:   [],
+      script:  { source: 42, initialised: false },
+    });
+    expect(() => decodeSaveFile(text)).toThrow(/source/i);
+  });
+
+  test('rejects malformed script.initialised', () => {
+    const text = JSON.stringify({
+      format:  SAVE_FORMAT,
+      version: SAVE_VERSION,
+      scene:   [],
+      script:  { source: '', initialised: 'yes' },
+    });
+    expect(() => decodeSaveFile(text)).toThrow(/initialised/i);
   });
 });
 

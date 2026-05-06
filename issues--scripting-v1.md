@@ -38,7 +38,7 @@ Touches every layer:
 
 ---
 
-## #2 — Source persistence in save format
+## #2 — Source persistence in save format ✅ Done
 
 **Type:** AFK
 **Blocked by:** #1
@@ -54,11 +54,11 @@ The Save Script button persists the textarea's source into room state, the save-
 
 ### Acceptance criteria
 
-- [ ] Host types a script, clicks Save Script, downloads a save file via the existing save flow; opening the JSON shows `script: { source: "...", initialised: false }`.
-- [ ] Loading that save in a fresh session populates the panel's textarea with the saved source.
-- [ ] Loading an existing pre-scripting save (no `script` field) succeeds, with the panel showing an empty textarea.
-- [ ] Decoding a save with malformed `script` (e.g. `script: "not an object"`) throws a `SaveFileError`.
-- [ ] Unit tests cover `SaveFile` encode/decode for the new shape, the back-compat path, and the malformed-script rejection.
+- [x] Host types a script, clicks Save Script, downloads a save file via the existing save flow; opening the JSON shows `script: { source: "...", initialised: false }`.
+- [x] Loading that save in a fresh session populates the panel's textarea with the saved source.
+- [x] Loading an existing pre-scripting save (no `script` field) succeeds, with the panel showing an empty textarea.
+- [x] Decoding a save with malformed `script` (e.g. `script: "not an object"`) throws a `SaveFileError`.
+- [x] Unit tests cover `SaveFile` encode/decode for the new shape, the back-compat path, and the malformed-script rejection.
 
 ### Stories covered
 

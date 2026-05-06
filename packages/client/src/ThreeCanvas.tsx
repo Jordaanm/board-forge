@@ -19,7 +19,7 @@ import { aggregateContextMenu } from './entity/contextMenu';
 import { encodeSaveFile, downloadSaveFile } from './entity/SaveFile';
 import { captureCanvasThumbnail } from './entity/thumbnail';
 import { type SceneHistoryService, type LastLoaded } from './entity/SceneHistoryService';
-import { type RunResult } from './scripting/ScriptHost';
+import { type RunResult, type ScriptState } from './scripting/ScriptHost';
 import { type CardTile } from './components/HandPanel';
 import { DEFAULT_PRIVATE_FIELDS } from './seats/PrivacyScrubber';
 import { MoveGizmo } from './scene/MoveGizmo';
@@ -81,6 +81,8 @@ interface Props {
   onLastLoadedChangeRef: MutableRefObject<(loaded: LastLoaded | null) => void>;
   onHistoryServiceChangeRef: MutableRefObject<(svc: SceneHistoryService | null) => void>;
   runScriptRef:        MutableRefObject<(source: string) => Promise<RunResult>>;
+  saveScriptSourceRef: MutableRefObject<(source: string) => void>;
+  loadScriptStateRef:  MutableRefObject<(state: ScriptState) => void>;
 }
 
 export interface HandView {
@@ -98,7 +100,7 @@ export function ThreeCanvas({
   setShowAllZonesRef,
   setHandViewRef, requestHandTileMenuRef, playCardToTableRef, reorderHandRef,
   saveSceneRef, replaceSceneRef, sceneHistoryRef, onLastLoadedChangeRef,
-  onHistoryServiceChangeRef, runScriptRef,
+  onHistoryServiceChangeRef, runScriptRef, saveScriptSourceRef, loadScriptStateRef,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -340,7 +342,11 @@ export function ThreeCanvas({
         // animation-loop frame even if Save is clicked between frames.
         renderer.render(scene, camera);
         const thumbnail = captureCanvasThumbnail(renderer.domElement, { width: 480, height: 270 });
-        const envelope = encodeSaveFile({ scene: world.snapshot(), thumbnail });
+        const envelope = encodeSaveFile({
+          scene:     world.snapshot(),
+          thumbnail,
+          script:    world.scripting?.getScriptState(),
+        });
         downloadSaveFile(envelope);
       };
 
@@ -352,6 +358,14 @@ export function ThreeCanvas({
         const sh = world.scripting;
         if (!sh) return Promise.resolve({ ok: false, error: 'Scripting unavailable.' });
         return sh.runScript(source);
+      };
+
+      saveScriptSourceRef.current = (source) => {
+        world.scripting?.setSource(source);
+      };
+
+      loadScriptStateRef.current = (state) => {
+        world.scripting?.loadScriptState(state);
       };
 
       spawnRef.current        = (type) => { world.spawn(type); };
@@ -502,6 +516,8 @@ export function ThreeCanvas({
       saveSceneRef.current    = () => {};
       replaceSceneRef.current = () => {};
       runScriptRef.current    = () => Promise.resolve({ ok: false, error: 'Canvas torn down.' });
+      saveScriptSourceRef.current = () => {};
+      loadScriptStateRef.current  = () => {};
       sceneHistoryRef.current = null;
       onHistoryServiceChangeRef.current(null);
       drawFromDeckRef.current = () => {};
@@ -530,7 +546,7 @@ export function ThreeCanvas({
     onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,
     setShowAllZonesRef, setHandViewRef, requestHandTileMenuRef, playCardToTableRef,
     reorderHandRef, saveSceneRef, replaceSceneRef, sceneHistoryRef, onLastLoadedChangeRef,
-    onHistoryServiceChangeRef, runScriptRef,
+    onHistoryServiceChangeRef, runScriptRef, saveScriptSourceRef, loadScriptStateRef,
   ]);
 
   return (
