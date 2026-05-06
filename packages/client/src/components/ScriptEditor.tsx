@@ -14,6 +14,7 @@ import Editor, { type BeforeMount, loader } from '@monaco-editor/react';
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
 import * as monaco from 'monaco-editor';
+import scriptGlobalsDts from '../scripting/script-globals.dts?raw';
 
 // Worker selection runs at module load (this module is the lazy entry, so
 // initialisation cost lives in the lazy chunk too). Editor uses base
@@ -41,10 +42,11 @@ if (typeof window !== 'undefined') {
   (window as unknown as { monaco?: typeof monaco }).monaco = monaco;
 }
 
-// One-time TS-service compiler options. The `beforeMount` callback gets a
-// `monaco` value with the typescript language service typed correctly
-// (the top-level `monaco-editor` module's published types deprecated
-// the namespace path that worked in older versions).
+// One-time TS-service compiler options + extra-lib registration. The
+// `beforeMount` callback gets a `monaco` value with the typescript
+// language service typed correctly (the top-level `monaco-editor` module's
+// published types deprecated the namespace path that worked in older
+// versions).
 let configured = false;
 const configureTypeScriptDefaults: BeforeMount = (m) => {
   if (configured) return;
@@ -58,6 +60,13 @@ const configureTypeScriptDefaults: BeforeMount = (m) => {
     moduleResolution:     m.languages.typescript.ModuleResolutionKind.NodeJs,
     lib:                  ['es2022'],
   });
+  // The `.dts` artifact is loaded as a raw string via Vite's `?raw`
+  // suffix and registered as an extra-lib. URI is distinct from the
+  // model URI so resolution doesn't conflict with the user-script model.
+  m.languages.typescript.typescriptDefaults.addExtraLib(
+    scriptGlobalsDts,
+    'file:///script-globals.d.ts',
+  );
 };
 
 interface Props {

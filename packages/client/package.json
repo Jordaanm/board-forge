@@ -6,9 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "gen:script-globals": "tsx scripts/gen-script-globals.ts"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
