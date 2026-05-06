@@ -159,7 +159,7 @@ The PoC scenario lands here: a script registers a listener on a die and logs eac
 
 ---
 
-## #6 — `customData` full stack
+## #6 — `customData` full stack ✅ Done
 
 **Type:** AFK
 **Blocked by:** #4
@@ -178,13 +178,13 @@ Authors get a per-entity string map for persistent state, fully wired through re
 
 ### Acceptance criteria
 
-- [ ] A script that does `entity.setData('score', '0')` then `entity.setData('score', String(Number(entity.getData('score')) + 1))` increments correctly across multiple invocations.
-- [ ] After `setData`, `getData` returns the new value.
-- [ ] `deleteData` followed by `getData` returns `undefined`.
-- [ ] Mutating an entity's `customData` on the host triggers an `entity-patch` to guests; the guest's `Entity.customData` reflects the new state.
-- [ ] Save → load round-trip preserves `customData` keys and values exactly.
-- [ ] Loading a pre-scripting save (entities without `customData`) succeeds and yields entities with empty `customData` maps.
-- [ ] Unit tests cover the round-trip (host mutate → wire → guest apply), save/load symmetry, and the back-compat path.
+- [x] A script that does `entity.setData('score', '0')` then `entity.setData('score', String(Number(entity.getData('score')) + 1))` increments correctly across multiple invocations.
+- [x] After `setData`, `getData` returns the new value.
+- [x] `deleteData` followed by `getData` returns `undefined`.
+- [x] Mutating an entity's `customData` on the host triggers an `entity-patch` to guests; the guest's `Entity.customData` reflects the new state.
+- [x] Save → load round-trip preserves `customData` keys and values exactly.
+- [x] Loading a pre-scripting save (entities without `customData`) succeeds and yields entities with empty `customData` maps.
+- [x] Unit tests cover the round-trip (host mutate → wire → guest apply), save/load symmetry, and the back-compat path.
 
 ### Stories covered
 

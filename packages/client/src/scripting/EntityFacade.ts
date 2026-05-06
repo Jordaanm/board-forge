@@ -85,4 +85,19 @@ export class EntityFacade {
     const isNumeric = value.trim() !== '' && Number.isFinite(Number(value));
     comp.setState({ value, isNumeric });
   }
+
+  // Per-entity persistent string map for cross-Run state. Mutations are
+  // immediately visible on the host and replicate to guests as a full-map
+  // entity-patch (issue #6 of issues--scripting-v1.md).
+  setData(key: string, value: string): void {
+    this.entity_.setCustomData(key, value);
+  }
+
+  getData(key: string): string | undefined {
+    return this.entity_.getCustomData(key);
+  }
+
+  deleteData(key: string): boolean {
+    return this.entity_.deleteCustomData(key);
+  }
 }

@@ -171,6 +171,50 @@ describe('ScriptHost listener registry — PoC scenario (#5)', () => {
   });
 });
 
+describe('EntityFacade.setData / getData / deleteData (#6)', () => {
+  test('increments via setData/getData survive across multiple Runs', async () => {
+    const scene = new StubScene();
+    scene.add(makeDie('d-1'));
+    const c = recordingConsole();
+    const host = new ScriptHost({ scene, console: c });
+
+    const incrementScript = `
+      export default class extends Game {
+        onScriptLoaded(s) {
+          const d = s.getObjectById('d-1');
+          const cur = Number(d.getData('score') ?? '0');
+          d.setData('score', String(cur + 1));
+          console.log(d.getData('score'));
+        }
+      }
+    `;
+
+    await host.runScript(incrementScript);
+    await host.runScript(incrementScript);
+    await host.runScript(incrementScript);
+    expect(c.logs).toEqual(['1', '2', '3']);
+  });
+
+  test('deleteData → getData returns undefined', async () => {
+    const scene = new StubScene();
+    scene.add(makeDie('d-1'));
+    const c = recordingConsole();
+    const host = new ScriptHost({ scene, console: c });
+
+    await host.runScript(`
+      export default class extends Game {
+        onScriptLoaded(s) {
+          const d = s.getObjectById('d-1');
+          d.setData('k', 'v');
+          d.deleteData('k');
+          console.log(String(d.getData('k')));
+        }
+      }
+    `);
+    expect(c.logs).toEqual(['undefined']);
+  });
+});
+
 describe('EntityFacade.setValue (#5)', () => {
   test('updates the underlying ValueComponent state and dispatches value-changed', async () => {
     const scene = new StubScene();

@@ -20,6 +20,10 @@ export type EntityFieldsPartial = Partial<{
   parentId:      string | null;
   children:      string[];
   isContained:   boolean;
+  // Full-map snapshot — guests overwrite their `Entity.customData` with this
+  // record on each patch (issue #6 of issues--scripting-v1.md). Per-key
+  // delta is deferred.
+  customData:    Record<string, string>;
 }>;
 
 // Per-component patch — payload inside a `component-patches` envelope.

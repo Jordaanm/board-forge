@@ -20,6 +20,7 @@ export interface EntitySerialized {
   parentId:      string | null;
   children:      string[];
   isContained?:  boolean;  // optional in serialised form for back-compat with pre-deck snapshots
+  customData?:   Record<string, string>;  // optional for back-compat with pre-scripting saves
   components:    Record<string, object>;  // typeId → component.toJSON()
 }
 
@@ -87,6 +88,7 @@ export class SceneImpl {
         parentId:      snap.parentId,
         children:      snap.children,
         isContained:   snap.isContained,
+        customData:    snap.customData,
       });
       for (const [typeId, state] of Object.entries(snap.components)) {
         const cls = this.registry.get(typeId);
@@ -195,7 +197,7 @@ export function entityToSerialized(e: Entity): EntitySerialized {
   for (const [typeId, comp] of e.components) {
     components[typeId] = comp.toJSON();
   }
-  return {
+  const out: EntitySerialized = {
     id:            e.id,
     type:          e.type,
     name:          e.name,
@@ -207,4 +209,10 @@ export function entityToSerialized(e: Entity): EntitySerialized {
     isContained:   e.isContained,
     components,
   };
+  // Omit when empty so pre-scripting saves stay byte-identical and the
+  // round-trip on entities that never used customData stays clean.
+  if (e.customData.size > 0) {
+    out.customData = Object.fromEntries(e.customData);
+  }
+  return out;
 }

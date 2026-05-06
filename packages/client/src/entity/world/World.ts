@@ -943,6 +943,11 @@ function mergeEntityFields(entity: Entity, partial: EntityFieldsPartial): void {
       comp.onIsContainedChanged(partial.isContained);
     }
   }
+  if (partial.customData !== undefined) {
+    // Full-map overwrite (issue #6 of issues--scripting-v1.md). Per-key
+    // delta is deferred — guests rebuild the Map from the supplied record.
+    entity.customData = new Map(Object.entries(partial.customData));
+  }
 }
 
 function nowMs(): number {

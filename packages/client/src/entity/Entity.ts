@@ -17,6 +17,7 @@ export interface EntityInit {
   parentId?:      string | null;
   children?:      readonly string[];
   isContained?:   boolean;
+  customData?:    Readonly<Record<string, string>>;
 }
 
 export class Entity {
@@ -32,6 +33,11 @@ export class Entity {
   // issues--deck.md). MeshComponent toggles `group.visible`; PhysicsComponent
   // adds/removes its body from the world. Replicated via entity-patch.
   isContained:   boolean;
+  // Per-entity string map for script-authored persistent state (issue #6 of
+  // issues--scripting-v1.md). Routed through `EntityFacade.setData/getData/
+  // deleteData`; mutations enqueue a full-map `entity-patch` so guests
+  // overwrite. Save-format leaf is a plain object.
+  customData:    Map<string, string>;
   components:    Map<string, EntityComponent<any>>;
   // Transient — not serialised.
   heldBy:        SeatIndex | null;
@@ -53,6 +59,7 @@ export class Entity {
     this.parentId      = init.parentId      ?? null;
     this.children      = init.children      ? [...init.children] : [];
     this.isContained   = init.isContained   ?? false;
+    this.customData    = new Map(init.customData ? Object.entries(init.customData) : []);
     this.components    = new Map();
     this.heldBy        = null;
     this.scene         = null;
@@ -101,6 +108,34 @@ export class Entity {
 
   dispatchEvent<T = unknown>(event: string, payload: T): void {
     this.bus.dispatch(event, payload);
+  }
+
+  // customData mutators (issue #6 of issues--scripting-v1.md). Each
+  // mutation enqueues a full-map `entity-patch` so guests overwrite their
+  // local Map. Per-key delta is deferred. No-op enqueue if the entity isn't
+  // yet attached to a host scene (constructor-time mutations during
+  // SpawnableDef apply later in the spawn flow).
+  setCustomData(key: string, value: string): void {
+    this.customData.set(key, value);
+    this.replicateCustomData();
+  }
+
+  getCustomData(key: string): string | undefined {
+    return this.customData.get(key);
+  }
+
+  deleteCustomData(key: string): boolean {
+    const had = this.customData.delete(key);
+    if (had) this.replicateCustomData();
+    return had;
+  }
+
+  private replicateCustomData(): void {
+    const replicator = this.scene?.world ?? null;
+    if (!replicator) return;
+    replicator.enqueueEntityPatch(this.id, {
+      customData: Object.fromEntries(this.customData),
+    });
   }
 }
 
