@@ -258,6 +258,16 @@ const CONFIRM_BTN: React.CSSProperties = {
 
 const EMPTY_ENTRIES: ScriptErrorEntry[] = [];
 
+// Shown as the editor's starting content on first open with no persisted
+// source. Comments — host can delete them or replace them with a real
+// class. First Save persists whatever's in the textarea.
+const SEED_SOURCE = `// Edit and click Run.
+//
+// export default class extends Game {
+//   onScriptLoaded(scene) { console.log('hi') }
+// }
+`;
+
 export function ScriptEditorModal({ source, onChange, onSave, onRun, getSavedSource, errorLog }: Props) {
   const centerAnchor              = useAnchorTarget('center');
   const [open, setOpen]           = useState(false);
@@ -265,6 +275,11 @@ export function ScriptEditorModal({ source, onChange, onSave, onRun, getSavedSou
   // When set, an inline confirm overlay covers the dialog body. The host
   // chose to close while dirty; clearing this either closes or cancels.
   const [confirmingClose, setConfirmingClose] = useState(false);
+  // True from the moment we seed the editor with the example until the host
+  // either edits it or closes the modal. While active, dirty-tracking
+  // ignores the seed so opening + closing without touching anything is
+  // silent. Cleared on close so a re-open re-evaluates the seed condition.
+  const [seedActive, setSeedActive] = useState(false);
 
   const entries = useScriptErrorLog(errorLog ?? null);
 
@@ -301,34 +316,65 @@ export function ScriptEditorModal({ source, onChange, onSave, onRun, getSavedSou
     }
   };
 
+  // Trigger handler. Seeds the editor with the commented example when both
+  // the live source and the persisted source are empty — first-time open
+  // for a brand-new room. If the host re-opens with a stale unedited seed,
+  // the close path below has reverted source to '' so the seed fires again
+  // consistently.
+  const handleOpenClick = () => {
+    if (source === '' && getSavedSource() === '') {
+      onChange(SEED_SOURCE);
+      setSeedActive(true);
+    }
+    setOpen(true);
+  };
+
+  // Forwards textarea/Monaco edits to the parent. Any keystroke means the
+  // host engaged with the seed, so dirty-tracking should now treat the
+  // content as a real edit.
+  const handleChange = (next: string) => {
+    if (seedActive) setSeedActive(false);
+    onChange(next);
+  };
+
+  const isDirty = () => source !== getSavedSource() && !seedActive;
+
   // Close interceptor. Radix calls this for Esc, X, and outside-click. If
-  // the live source matches the runtime's persisted source, close cleanly;
-  // otherwise show the confirm overlay.
+  // the live source matches the runtime's persisted source (or is the
+  // untouched seed), close cleanly; otherwise show the confirm overlay.
   const handleOpenChange = (next: boolean) => {
     if (next) {
       setOpen(true);
       return;
     }
-    if (source !== getSavedSource()) {
+    if (isDirty()) {
       setConfirmingClose(true);
       return;
     }
-    setOpen(false);
+    closeImmediately();
   };
 
   const closeImmediately = () => {
+    // If the host closed without engaging with the seed, revert to truly
+    // empty so the next open re-fires the seed flow consistently.
+    if (seedActive) onChange('');
+    setSeedActive(false);
     setConfirmingClose(false);
     setOpen(false);
   };
 
   const handleSaveAndClose = () => {
     onSave();
-    closeImmediately();
+    setSeedActive(false);
+    setConfirmingClose(false);
+    setOpen(false);
   };
 
   const handleDiscardAndClose = () => {
     onChange(getSavedSource());
-    closeImmediately();
+    setSeedActive(false);
+    setConfirmingClose(false);
+    setOpen(false);
   };
 
   const handleCancelClose = () => {
@@ -337,7 +383,7 @@ export function ScriptEditorModal({ source, onChange, onSave, onRun, getSavedSou
 
   return (
     <>
-      <button type="button" style={TRIGGER_BTN} onClick={() => setOpen(true)}>
+      <button type="button" style={TRIGGER_BTN} onClick={handleOpenClick}>
         Edit Script
       </button>
       <Dialog.Root open={open} onOpenChange={handleOpenChange}>
@@ -355,7 +401,7 @@ export function ScriptEditorModal({ source, onChange, onSave, onRun, getSavedSou
                 style={TEXTAREA}
                 value={source}
                 spellCheck={false}
-                onChange={e => onChange(e.target.value)}
+                onChange={e => handleChange(e.target.value)}
                 placeholder="export default class extends Game { onScriptLoaded() { console.log('hi') } }"
               />
               <div style={BUTTON_ROW}>
