@@ -1,43 +1,23 @@
 ## TODO
 
-Host Tools:
-  * Scene Graph
-  * Editor Panel
-  * Spawnables Menu
-  * Scripting
-  * Player Management
+### Major Features
+* Scripting
+* Multiselect
+* Magnets (sticking points on the surface of an entity)
+* PDF Viewer
+* Scriptable UI
+
+### Minor Features
+* Drag to resize Zone/Hand
+* HiddenInfo Zone
+* Selecting an item in the scene highlights it in the scene graph panel.
+* Double clicking an item in the scene graph panel selects it in the scene.
+* Bag container entity
+
 ### Bugs
 * Tint menu closes immediately when you click on it, making it difficult to properly pick a colour.
 
-### Minor Features
-* Selecting an item in the scene highlights it in the scene graph panel.
-* Double clicking an item in the scene graph panel selects it in the scene.
 
-### Context menu cleanup (post-PRD-2)
+### Cleanup
 * Remove the transitional `__delete` host-local built-in from `ContextMenuController.ts`.
 * Decide whether Delete becomes a base-class action on every entity or moves into the editor panel UX. Either way, drop the special-cased id in `dispatchMenuAction`.
-
-
-### Add containers
-
-* Container types objects are able to hold other objects.
-  * Containers can be nested.
-  * Containers have a "filter" property, which is a list of tags. Only objects with all of the tags in the filter can be added to the container.
-
-* Containers act as the parent of all objects they contain in the scene graph
-
-* Bags are a container type that can hold any number of objects, of any type
-  * Bags have a "capacity" property, which is the maximum number of objects that can be added to the bag.
-    * If the bag is full, adding a new object will fail.
-    * If the "capacity" property is set to 0, the bag can hold an unlimited number of objects.
-  * Dropping an object onto a bag will add it to the bag.
-    * If a player is holding/dragging that object, it will be forcibly dropped
-  * "Draw next item" action will remove an object from the bag and place it in the scene, being controlled/dragged by the player that used the action.
-
-* Decks are a container type that hold cards.
-  * When 2 cards of the same category are dropped onto one another, they will spontaenously form a deck, to which both cards will be added.
-  * When a card is dropped onto a deck, it will be added to the deck.
-  * Decks have a "shuffle" action that randomises the order of the cards in the deck.
-  * Decks have a "Draw X Cards" action that will draw X cards from the deck and place them in the hand of the player that used the action.
-  * Decks have a "Deal X Cards" action that will deal X cards from the deck to each player in the scene.
-    * Cards will be dealt one at a time, in case there aren't enough cards in the deck.
