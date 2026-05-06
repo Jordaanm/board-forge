@@ -273,11 +273,31 @@ export function ScriptEditorModal({ source, onChange, onSave, onRun, getSavedSou
   // value is intentionally not surfaced separately — the same error has
   // already become a log entry by the time runScript resolves.
   const handleRun = async () => {
+    if (running) return;
     setRunning(true);
     try {
       await onRun(source);
     } finally {
       setRunning(false);
+    }
+  };
+
+  // Ctrl/Cmd + S → Save (preventDefault blocks the browser save-page dialog).
+  // Ctrl/Cmd + Enter → Run. Both fire from anywhere inside Dialog.Content
+  // (React event bubbling) so the textarea/Monaco-with-focus path is
+  // covered without a separate listener. Disabled while the close-confirm
+  // overlay is up — input belongs to the confirm at that point.
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (confirmingClose) return;
+    const mod = e.ctrlKey || e.metaKey;
+    if (mod && e.key === 's') {
+      e.preventDefault();
+      onSave();
+      return;
+    }
+    if (mod && e.key === 'Enter') {
+      e.preventDefault();
+      void handleRun();
     }
   };
 
@@ -323,7 +343,7 @@ export function ScriptEditorModal({ source, onChange, onSave, onRun, getSavedSou
       <Dialog.Root open={open} onOpenChange={handleOpenChange}>
         <Dialog.Portal container={centerAnchor ?? undefined}>
           <Dialog.Overlay style={OVERLAY} />
-          <Dialog.Content style={CONTENT} aria-describedby={undefined}>
+          <Dialog.Content style={CONTENT} aria-describedby={undefined} onKeyDown={handleKeyDown}>
             <div style={HEADER}>
               <Dialog.Title style={TITLE}>Script Editor</Dialog.Title>
               <Dialog.Close asChild>
