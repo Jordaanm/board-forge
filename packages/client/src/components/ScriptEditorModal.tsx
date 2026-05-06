@@ -422,7 +422,12 @@ export function ScriptEditorModal({ source, onChange, onSave, onRun, getSavedSou
             <div style={BODY}>
               <ScriptEditorErrorBoundary source={source} onChange={handleChange}>
                 <Suspense fallback={<div style={EDITOR_LOADING}>Loading editor…</div>}>
-                  <ScriptEditor source={source} onChange={handleChange} />
+                  <ScriptEditor
+                    source={source}
+                    onChange={handleChange}
+                    onSave={onSave}
+                    onRun={() => void handleRun()}
+                  />
                 </Suspense>
               </ScriptEditorErrorBoundary>
               <div style={BUTTON_ROW}>

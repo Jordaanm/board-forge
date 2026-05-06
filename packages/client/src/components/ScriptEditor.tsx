@@ -10,7 +10,8 @@
 // `lib` is ES-only (no DOM) since user scripts run inside a SES
 // Compartment without window/document.
 
-import Editor, { type BeforeMount, loader } from '@monaco-editor/react';
+import { useRef } from 'react';
+import Editor, { type BeforeMount, type OnMount, loader } from '@monaco-editor/react';
 import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
 import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
 import * as monaco from 'monaco-editor';
@@ -72,6 +73,13 @@ const configureTypeScriptDefaults: BeforeMount = (m) => {
 interface Props {
   source:   string;
   onChange: (next: string) => void;
+  // When the editor has keyboard focus, Monaco's own keymap intercepts
+  // Ctrl/Cmd+S and Ctrl/Cmd+Enter before they bubble out to the dialog's
+  // onKeyDown handler. These callbacks bind directly to the editor's
+  // command registry as a backstop so the bindings work regardless of
+  // which element has focus.
+  onSave:   () => void;
+  onRun:    () => void;
 }
 
 // `resize: vertical` paints a drag handle at the bottom-right corner. CSS
@@ -93,7 +101,23 @@ const WRAPPER: React.CSSProperties = {
 // cursor + undo history survive closing and reopening the modal.
 const MODEL_PATH = 'user-script.ts';
 
-export default function ScriptEditor({ source, onChange }: Props) {
+export default function ScriptEditor({ source, onChange, onSave, onRun }: Props) {
+  // editor.addCommand callbacks capture closures at mount time, so we use
+  // refs to call the latest props without re-mounting the editor.
+  const onSaveRef = useRef(onSave);
+  const onRunRef  = useRef(onRun);
+  onSaveRef.current = onSave;
+  onRunRef.current  = onRun;
+
+  const handleMount: OnMount = (editor, m) => {
+    editor.addCommand(m.KeyMod.CtrlCmd | m.KeyCode.KeyS, () => {
+      onSaveRef.current();
+    });
+    editor.addCommand(m.KeyMod.CtrlCmd | m.KeyCode.Enter, () => {
+      onRunRef.current();
+    });
+  };
+
   return (
     <div style={WRAPPER}>
       <Editor
@@ -104,6 +128,7 @@ export default function ScriptEditor({ source, onChange }: Props) {
         value={source}
         onChange={(v) => onChange(v ?? '')}
         beforeMount={configureTypeScriptDefaults}
+        onMount={handleMount}
         options={{
           minimap:              { enabled: false },
           fontSize:             13,
