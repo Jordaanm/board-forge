@@ -185,6 +185,42 @@ describe('ScriptHost.loadScript — save-file load auto-Run (#3)', () => {
   });
 });
 
+describe('ScriptHost.errorLog (#7)', () => {
+  test('a hook that throws produces one entry with the source label', async () => {
+    const c = recordingConsole();
+    const host = new ScriptHost({ console: c });
+    await host.runScript(`
+      export default class extends Game {
+        onScriptLoaded() { throw new Error('boom'); }
+      }
+    `);
+    const entries = host.errorLog.list();
+    expect(entries).toHaveLength(1);
+    expect(entries[0].source).toBe('onScriptLoaded');
+    expect(entries[0].firstLine).toContain('boom');
+  });
+
+  test('compile errors do NOT enter the runtime log', async () => {
+    const c = recordingConsole();
+    const host = new ScriptHost({ console: c });
+    const result = await host.runScript(`export default class { not valid`);
+    expect(result.ok).toBe(false);
+    expect(host.errorLog.list()).toEqual([]);
+  });
+
+  test('console.error continues to receive every error in addition to the panel log', async () => {
+    const c = recordingConsole();
+    const host = new ScriptHost({ console: c });
+    await host.runScript(`
+      export default class extends Game {
+        onScriptLoaded() { throw new Error('boom'); }
+      }
+    `);
+    expect(c.errors.length).toBeGreaterThan(0);
+    expect(host.errorLog.list()).toHaveLength(1);
+  });
+});
+
 describe('ScriptHost.setSource (#3)', () => {
   test('does not touch initialised', async () => {
     const c = recordingConsole();

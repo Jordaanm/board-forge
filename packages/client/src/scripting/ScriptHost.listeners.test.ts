@@ -1,4 +1,4 @@
-import { describe, test, expect, vi } from 'vitest';
+import { describe, test, expect } from 'vitest';
 import { Entity } from '../entity/Entity';
 import { type EntityScene } from '../entity/EntityComponent';
 import { ValueComponent } from '../entity/components/ValueComponent';
@@ -143,31 +143,88 @@ describe('ScriptHost listener registry — PoC scenario (#5)', () => {
     expect(c.logs).toEqual(['Die-d-1 6']);
   });
 
-  test('listener exception is isolated and reported via console.error', async () => {
+  test('listener exception is isolated and reported through the host console', async () => {
     const scene = new StubScene();
     scene.add(makeDie('d-1'));
     const c = recordingConsole();
     const host = new ScriptHost({ scene, console: c });
-    // Listener errors land on the global console (issue #7 routes them to a
-    // structured panel log; for #5 console.error is acceptable).
-    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    try {
-      await host.runScript(`
-        export default class extends Game {
-          onScriptLoaded(scene) {
-            const d = scene.getObjectById('d-1');
-            d.addEventListener('value-changed', () => { throw new Error('boom'); });
-            d.addEventListener('value-changed', e => console.log('still-ran', e.value));
-          }
+    await host.runScript(`
+      export default class extends Game {
+        onScriptLoaded(scene) {
+          const d = scene.getObjectById('d-1');
+          d.addEventListener('value-changed', () => { throw new Error('boom'); });
+          d.addEventListener('value-changed', e => console.log('still-ran', e.value));
         }
-      `);
-      scene.getEntity('d-1')!.getComponent(ValueComponent)!.setState({ value: '6', isNumeric: true });
-      expect(c.logs).toEqual(['still-ran 6']);
-      expect(spy).toHaveBeenCalled();
-    } finally {
-      spy.mockRestore();
+      }
+    `);
+    scene.getEntity('d-1')!.getComponent(ValueComponent)!.setState({ value: '6', isNumeric: true });
+    expect(c.logs).toEqual(['still-ran 6']);
+    expect(c.errors.length).toBeGreaterThan(0);
+  });
+});
+
+describe('ScriptErrorLog integration with listeners (#7)', () => {
+  test('a listener that throws on every dispatch produces one entry per invocation; older entries roll off', async () => {
+    const scene = new StubScene();
+    scene.add(makeDie('d-1'));
+    const c = recordingConsole();
+    const host = new ScriptHost({ scene, console: c });
+
+    await host.runScript(`
+      export default class extends Game {
+        onScriptLoaded(s) {
+          s.getObjectById('d-1').addEventListener('value-changed', () => {
+            throw new Error('listener-boom');
+          });
+        }
+      }
+    `);
+
+    // Dispatch more than the log cap (10) so older entries roll off.
+    for (let i = 0; i < 12; i++) {
+      scene.getEntity('d-1')!.getComponent(ValueComponent)!.setState({
+        value: String(i),
+        isNumeric: true,
+      });
     }
+
+    const entries = host.errorLog.list();
+    expect(entries.length).toBe(10);
+    expect(entries.every(e => e.source === 'event:value-changed')).toBe(true);
+    expect(entries.every(e => e.firstLine.includes('listener-boom'))).toBe(true);
+  });
+
+  test('subscribers are notified on push and on clear', async () => {
+    const scene = new StubScene();
+    scene.add(makeDie('d-1', '1'));
+    const c = recordingConsole();
+    const host = new ScriptHost({ scene, console: c });
+
+    let notifyCount = 0;
+    host.errorLog.subscribe(() => { notifyCount++; });
+
+    await host.runScript(`
+      export default class extends Game {
+        onScriptLoaded(s) {
+          s.getObjectById('d-1').addEventListener('value-changed', () => {
+            throw new Error('boom');
+          });
+        }
+      }
+    `);
+
+    // Initial die value is '1'; rolling to a different value triggers
+    // value-changed. Setting back to a previously-seen value still
+    // dispatches as long as it differs from the prior face.
+    scene.getEntity('d-1')!.getComponent(ValueComponent)!.setState({ value: '6', isNumeric: true });
+    expect(notifyCount).toBe(1);
+
+    scene.getEntity('d-1')!.getComponent(ValueComponent)!.setState({ value: '4', isNumeric: true });
+    expect(notifyCount).toBe(2);
+
+    host.errorLog.clear();
+    expect(notifyCount).toBe(3);
   });
 });
 

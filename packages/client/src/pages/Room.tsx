@@ -24,6 +24,7 @@ import { RoomStateClient } from '../seats/RoomStateClient';
 import type { RoomStateMessage, RoomStateSnapshot } from '../seats/RoomState';
 import { type SceneHistoryService, type LastLoaded } from '../entity/SceneHistoryService';
 import { type RunResult, type ScriptState } from '../scripting/ScriptHost';
+import { type ScriptErrorLog } from '../scripting/ScriptErrorLog';
 import './Room.css';
 
 type Status = 'connecting' | 'connected' | 'disconnected' | 'room-full';
@@ -61,6 +62,7 @@ export function Room({ roomId, isHost }: Props) {
   const [lastLoaded, setLastLoaded]     = useState<LastLoaded | null>(null);
   const [historyService, setHistoryService] = useState<SceneHistoryService | null>(null);
   const [scriptSource, setScriptSource]     = useState<string>('');
+  const [scriptErrorLog, setScriptErrorLog] = useState<ScriptErrorLog | null>(null);
 
   const sendRef            = useRef<(msg: ChannelMessage, opts?: { reliable?: boolean }) => void>(noop);
   const sendToRef          = useRef<(peerId: string, msg: ChannelMessage, opts?: { reliable?: boolean }) => void>(noop);
@@ -105,6 +107,8 @@ export function Room({ roomId, isHost }: Props) {
   const runScriptRef       = useRef<(source: string) => Promise<RunResult>>(() => Promise.resolve({ ok: false, error: 'Canvas not ready.' }));
   const saveScriptSourceRef = useRef<(source: string) => void>(noop);
   const loadScriptStateRef  = useRef<(state: ScriptState) => void>(noop);
+  const onErrorLogChangeRef = useRef<(log: ScriptErrorLog | null) => void>(noop);
+  onErrorLogChangeRef.current = (log) => setScriptErrorLog(log);
   onLastLoadedChangeRef.current     = (loaded) => setLastLoaded(loaded);
   onHistoryServiceChangeRef.current = (svc)    => setHistoryService(svc);
 
@@ -349,6 +353,7 @@ export function Room({ roomId, isHost }: Props) {
         runScriptRef={runScriptRef}
         saveScriptSourceRef={saveScriptSourceRef}
         loadScriptStateRef={loadScriptStateRef}
+        onErrorLogChangeRef={onErrorLogChangeRef}
       />
 
       <AnchorLayout>
@@ -390,6 +395,7 @@ export function Room({ roomId, isHost }: Props) {
               onChange={setScriptSource}
               onSave={() => saveScriptSourceRef.current(scriptSource)}
               onRun={(src) => runScriptRef.current(src)}
+              errorLog={scriptErrorLog}
             />
           </UIPanel>
         )}

@@ -26,6 +26,7 @@ import { loadModule } from './Sandbox';
 import { Game } from './Game';
 import { SceneFacade } from './SceneFacade';
 import { type ScriptRunContext } from './EntityFacade';
+import { ScriptErrorLog } from './ScriptErrorLog';
 import { type EntityScene } from '../entity/EntityComponent';
 
 export interface ScriptHostOptions {
@@ -52,6 +53,10 @@ export interface ScriptState {
 export class ScriptHost {
   private readonly console_: ScriptHostOptions['console'];
   private readonly scene_:   EntityScene | null;
+  // Bounded ring buffer of runtime errors surfaced to the script panel
+  // (issue #7). Hook errors and listener errors both funnel here; compile
+  // errors do NOT (they render inline beneath the textarea).
+  private readonly errorLog_ = new ScriptErrorLog();
   private state_: ScriptState = { source: '', initialised: false };
   // Most recent successfully-instantiated user class. Held so a failed
   // re-Run (compile error) leaves it live — listeners attached against it
@@ -66,6 +71,12 @@ export class ScriptHost {
   constructor(opts: ScriptHostOptions = {}) {
     this.console_ = opts.console ?? console;
     this.scene_   = opts.scene   ?? null;
+  }
+
+  // Bounded ring of runtime errors (hook + listener). Subscribe via
+  // `errorLog.subscribe(fn)` to re-render the script panel.
+  get errorLog(): ScriptErrorLog {
+    return this.errorLog_;
   }
 
   // Authoritative state slot for save/load. Returns a defensive copy so
@@ -107,7 +118,11 @@ export class ScriptHost {
     // and listener registrations don't survive across Runs. The new context
     // is installed AFTER teardown of the previous Run so failed Runs don't
     // double-register against the same set.
-    const ctx: ScriptRunContext = { registrations: [] };
+    const ctx: ScriptRunContext = {
+      registrations: [],
+      errorLog:      this.errorLog_,
+      console:       this.console_,
+    };
     const scene = this.scene_ ? new SceneFacade(this.scene_, ctx) : {};
 
     let ns;
@@ -177,6 +192,7 @@ export class ScriptHost {
       (fn as (s: unknown) => void).call(instance, scene);
     } catch (e) {
       this.console_?.error(`[script] ${name} threw:`, e);
+      this.errorLog_.push(name, e);
     }
   }
 }

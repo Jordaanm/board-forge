@@ -192,7 +192,7 @@ Authors get a per-entity string map for persistent state, fully wired through re
 
 ---
 
-## #7 — Runtime error log UI
+## #7 — Runtime error log UI ✅ Done
 
 **Type:** AFK
 **Blocked by:** #1
@@ -209,12 +209,12 @@ Promote the runtime-error path from `console.error`-only to a structured log sur
 
 ### Acceptance criteria
 
-- [ ] A script that throws inside `onScriptLoaded` shows up as one entry in the panel's error list with the correct source label.
-- [ ] A listener that throws on every dispatch produces one entry per invocation; older entries roll off once the cap is hit.
-- [ ] `Clear` empties the list.
-- [ ] Devtools `console.error` continues to receive every error in addition to the panel log.
-- [ ] Subscribers (the panel) are notified on push and on clear.
-- [ ] Unit tests cover `ScriptErrorLog` (cap, drop-oldest, ordering preserved, `clear()`, subscriber notifications).
+- [x] A script that throws inside `onScriptLoaded` shows up as one entry in the panel's error list with the correct source label.
+- [x] A listener that throws on every dispatch produces one entry per invocation; older entries roll off once the cap is hit.
+- [x] `Clear` empties the list.
+- [x] Devtools `console.error` continues to receive every error in addition to the panel log.
+- [x] Subscribers (the panel) are notified on push and on clear.
+- [x] Unit tests cover `ScriptErrorLog` (cap, drop-oldest, ordering preserved, `clear()`, subscriber notifications).
 
 ### Stories covered
 

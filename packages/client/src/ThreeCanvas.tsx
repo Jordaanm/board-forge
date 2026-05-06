@@ -20,6 +20,7 @@ import { encodeSaveFile, downloadSaveFile } from './entity/SaveFile';
 import { captureCanvasThumbnail } from './entity/thumbnail';
 import { type SceneHistoryService, type LastLoaded } from './entity/SceneHistoryService';
 import { type RunResult, type ScriptState } from './scripting/ScriptHost';
+import { type ScriptErrorLog } from './scripting/ScriptErrorLog';
 import { type CardTile } from './components/HandPanel';
 import { DEFAULT_PRIVATE_FIELDS } from './seats/PrivacyScrubber';
 import { MoveGizmo } from './scene/MoveGizmo';
@@ -83,6 +84,7 @@ interface Props {
   runScriptRef:        MutableRefObject<(source: string) => Promise<RunResult>>;
   saveScriptSourceRef: MutableRefObject<(source: string) => void>;
   loadScriptStateRef:  MutableRefObject<(state: ScriptState) => void>;
+  onErrorLogChangeRef: MutableRefObject<(log: ScriptErrorLog | null) => void>;
 }
 
 export interface HandView {
@@ -101,6 +103,7 @@ export function ThreeCanvas({
   setHandViewRef, requestHandTileMenuRef, playCardToTableRef, reorderHandRef,
   saveSceneRef, replaceSceneRef, sceneHistoryRef, onLastLoadedChangeRef,
   onHistoryServiceChangeRef, runScriptRef, saveScriptSourceRef, loadScriptStateRef,
+  onErrorLogChangeRef,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -360,6 +363,8 @@ export function ThreeCanvas({
         return sh.runScript(source);
       };
 
+      onErrorLogChangeRef.current(world.scripting?.errorLog ?? null);
+
       saveScriptSourceRef.current = (source) => {
         world.scripting?.setSource(source);
       };
@@ -524,6 +529,7 @@ export function ThreeCanvas({
       runScriptRef.current    = () => Promise.resolve({ ok: false, error: 'Canvas torn down.' });
       saveScriptSourceRef.current = () => {};
       loadScriptStateRef.current  = () => {};
+      onErrorLogChangeRef.current(null);
       sceneHistoryRef.current = null;
       onHistoryServiceChangeRef.current(null);
       drawFromDeckRef.current = () => {};
@@ -553,6 +559,7 @@ export function ThreeCanvas({
     setShowAllZonesRef, setHandViewRef, requestHandTileMenuRef, playCardToTableRef,
     reorderHandRef, saveSceneRef, replaceSceneRef, sceneHistoryRef, onLastLoadedChangeRef,
     onHistoryServiceChangeRef, runScriptRef, saveScriptSourceRef, loadScriptStateRef,
+    onErrorLogChangeRef,
   ]);
 
   return (

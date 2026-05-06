@@ -13,6 +13,7 @@ import { type Entity } from '../entity/Entity';
 import { type Listener } from '../entity/EntityEventBus';
 import { type SeatIndex } from '../seats/SeatLayout';
 import { ValueComponent } from '../entity/components/ValueComponent';
+import { type ScriptErrorLog } from './ScriptErrorLog';
 
 export interface ReadOnlyComponentView {
   readonly state: Readonly<Record<string, unknown>>;
@@ -24,8 +25,17 @@ export interface ReadOnlyComponentView {
 export interface ScriptRunContext {
   // Each addEventListener call appends one record so teardown can iterate
   // and call removeListener against the underlying bus. Cleared after
-  // teardown.
-  registrations: Array<{ entity: Entity; event: string; cb: Listener }>;
+  // teardown. The recorded `cb` is the wrapped callback (so removal
+  // matches what was actually attached to the bus); `userCb` is the
+  // original passed by the script so `removeEventListener(name, cb)` can
+  // identify the right entry.
+  registrations: Array<{ entity: Entity; event: string; userCb: Listener; cb: Listener }>;
+  // Optional error sink — when present, listener exceptions funnel here
+  // (issue #7 of issues--scripting-v1.md). Tests that don't care can omit.
+  errorLog?:     ScriptErrorLog;
+  // Optional console hook for listener exceptions; defaults to the global
+  // console. Letting tests inject this keeps assertions deterministic.
+  console?:      Pick<Console, 'error'>;
 }
 
 export class EntityFacade {
@@ -60,20 +70,36 @@ export class EntityFacade {
   // Subscribe to a domain event on this entity. The registration is tracked
   // on the active Run so the next Run's teardown removes it; scripts must
   // not assume listeners survive a re-Run.
+  //
+  // The user's callback is wrapped so a thrown exception funnels into the
+  // run-context's error log (issue #7) and `console.error`, then is
+  // swallowed — preserving the bus's "one bad listener doesn't abort the
+  // others" contract from #5.
   addEventListener(event: string, cb: Listener): void {
-    this.entity_.addEventListener(event, cb);
-    this.ctx.registrations.push({ entity: this.entity_, event, cb });
+    const wrapped: Listener = (payload) => {
+      try {
+        cb(payload);
+      } catch (e) {
+        const consoleSink = this.ctx.console ?? console;
+        consoleSink.error(`[script] listener for ${event} threw:`, e);
+        this.ctx.errorLog?.push(`event:${event}`, e);
+      }
+    };
+    this.entity_.addEventListener(event, wrapped);
+    this.ctx.registrations.push({ entity: this.entity_, event, userCb: cb, cb: wrapped });
   }
 
-  // Removes only the targeted callback. Also drops the matching entry from
-  // the per-Run registry so teardown doesn't re-call removeListener for a
-  // stale registration.
+  // Removes only the targeted callback. Looks up the wrapped function by
+  // matching the original user callback, then detaches that wrapped one
+  // from the bus and drops the registration entry.
   removeEventListener(event: string, cb: Listener): void {
-    this.entity_.removeEventListener(event, cb);
     const idx = this.ctx.registrations.findIndex(
-      r => r.entity === this.entity_ && r.event === event && r.cb === cb,
+      r => r.entity === this.entity_ && r.event === event && r.userCb === cb,
     );
-    if (idx >= 0) this.ctx.registrations.splice(idx, 1);
+    if (idx < 0) return;
+    const r = this.ctx.registrations[idx];
+    this.entity_.removeEventListener(event, r.cb);
+    this.ctx.registrations.splice(idx, 1);
   }
 
   // Mutator — routes through ValueComponent.setState which dispatches
