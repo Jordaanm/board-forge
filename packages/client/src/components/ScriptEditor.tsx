@@ -74,6 +74,11 @@ interface Props {
   onChange: (next: string) => void;
 }
 
+// `resize: vertical` paints a drag handle at the bottom-right corner. CSS
+// requires `overflow: !visible` for the handle to render. The Editor
+// component runs `editor.layout()` via `automaticLayout: true` (set in
+// the Editor options below) so Monaco recomputes its viewport when the
+// wrapper resizes.
 const WRAPPER: React.CSSProperties = {
   flex:         '1 1 auto',
   minHeight:    220,
@@ -81,6 +86,7 @@ const WRAPPER: React.CSSProperties = {
   borderRadius: 3,
   overflow:     'hidden',
   background:   '#1e1e1e',
+  resize:       'vertical',
 };
 
 // Stable URI lets @monaco-editor/react reuse the model across mounts so
