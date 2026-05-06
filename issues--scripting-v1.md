@@ -222,7 +222,7 @@ Promote the runtime-error path from `console.error`-only to a structured log sur
 
 ---
 
-## #8 — Prod-only `lockdown()`
+## #8 — Prod-only `lockdown()` ✅ Done
 
 **Type:** AFK
 **Blocked by:** #1
@@ -237,10 +237,10 @@ Application bootstrap conditionally calls SES `lockdown()` once, at the top of t
 
 ### Acceptance criteria
 
-- [ ] In a prod build, `Object.freeze(Array.prototype)` (or equivalent indicator) confirms intrinsics are frozen.
-- [ ] In a dev build, intrinsics are not frozen; HMR continues to work; the app boots without warnings.
-- [ ] No measurable slowdown to dev startup attributable to SES.
-- [ ] A short comment at the bootstrap site documents the why and the dev/prod split.
+- [x] In a prod build, `Object.freeze(Array.prototype)` (or equivalent indicator) confirms intrinsics are frozen.
+- [x] In a dev build, intrinsics are not frozen; HMR continues to work; the app boots without warnings.
+- [x] No measurable slowdown to dev startup attributable to SES.
+- [x] A short comment at the bootstrap site documents the why and the dev/prod split.
 
 ### Stories covered
 

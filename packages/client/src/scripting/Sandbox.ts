@@ -21,6 +21,31 @@ export interface ModuleNamespace {
   [k: string]: unknown;
 }
 
+// Prod-build sanity check (issue #8). If lockdown ran successfully, JS
+// intrinsics are frozen — we sample `Array.prototype` as the canonical
+// indicator. Dev builds skip lockdown deliberately, so the warning only
+// fires in prod. Warns at most once per session.
+let lockdownChecked = false;
+function warnIfProdLockdownMissing(): void {
+  if (lockdownChecked) return;
+  lockdownChecked = true;
+  const isProd = (() => {
+    try {
+      return Boolean((import.meta as unknown as { env?: { PROD?: boolean } }).env?.PROD);
+    } catch {
+      return false;
+    }
+  })();
+  if (!isProd) return;
+  if (Object.isFrozen(Array.prototype)) return;
+  // eslint-disable-next-line no-console
+  console.warn(
+    '[scripting] SES lockdown() did not run in this prod build — script ' +
+      'isolation is weakened. Verify scripting/bootstrap.ts is the first ' +
+      'import in main.tsx.',
+  );
+}
+
 // Loads CommonJS-shaped `jsSource` inside a fresh Compartment with the given
 // globals, then returns the captured `exports` (so callers can read
 // `.default`). Throws on parse / evaluation errors.
@@ -28,6 +53,8 @@ export function loadModule(
   jsSource: string,
   globals: Record<string, unknown>,
 ): ModuleNamespace {
+  warnIfProdLockdownMissing();
+
   const exportsObj: ModuleNamespace = {};
   const moduleObj  = { exports: exportsObj };
 
