@@ -24,8 +24,14 @@
 import { compileTypescript } from './Compiler';
 import { loadModule } from './Sandbox';
 import { Game } from './Game';
+import { SceneFacade } from './SceneFacade';
+import { type EntityScene } from '../entity/EntityComponent';
 
 export interface ScriptHostOptions {
+  // The scene this host queries. Optional so unit tests that don't exercise
+  // the scene API can keep constructing a bare `new ScriptHost()`. Wiring
+  // is done by World on host construction.
+  scene?: EntityScene;
   // Injected so tests can substitute a recording console.
   console?: Pick<Console, 'log' | 'error' | 'warn' | 'info' | 'debug'>;
 }
@@ -44,6 +50,7 @@ export interface ScriptState {
 
 export class ScriptHost {
   private readonly console_: ScriptHostOptions['console'];
+  private readonly scene_:   EntityScene | null;
   private state_: ScriptState = { source: '', initialised: false };
   // Most recent successfully-instantiated user class. Held so a failed
   // re-Run (compile error) leaves it live — listeners attached against it
@@ -52,6 +59,7 @@ export class ScriptHost {
 
   constructor(opts: ScriptHostOptions = {}) {
     this.console_ = opts.console ?? console;
+    this.scene_   = opts.scene   ?? null;
   }
 
   // Authoritative state slot for save/load. Returns a defensive copy so
@@ -89,11 +97,16 @@ export class ScriptHost {
       return { ok: false, error: compiled.error };
     }
 
+    // Fresh SceneFacade per Run so EntityFacade caches don't survive across
+    // Runs (each Run gets its own per-Run state surface). Falls back to an
+    // empty placeholder when no scene is wired up (unit tests).
+    const scene = this.scene_ ? new SceneFacade(this.scene_) : {};
+
     let ns;
     try {
       ns = loadModule(compiled.js, {
         Game,
-        scene:   {},
+        scene,
         console: this.console_,
       });
     } catch (e) {
@@ -129,7 +142,6 @@ export class ScriptHost {
     // Run does NOT persist `source` — Save Script (`setSource`) is the
     // explicit save path. The user might click Run on a draft they don't
     // want saved yet.
-    const scene = {};
     if (!this.state_.initialised) {
       this.invokeHook(instance, 'onSceneInitialised', scene);
       this.state_ = { source: this.state_.source, initialised: true };

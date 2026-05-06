@@ -146,7 +146,7 @@ class WorldImpl implements World, HandleRouter {
         { cap: opts.historyCap, captureThumb: opts.captureThumb },
       );
       this.hostInput.setHistoryService(this.history_);
-      this.scripting_ = new ScriptHost();
+      this.scripting_ = new ScriptHost({ scene: this.scene });
       this.installBeginContactHandler();
     } else {
       this.physics    = null;

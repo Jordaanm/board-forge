@@ -100,7 +100,7 @@ The Save Script button persists the textarea's source into room state, the save-
 
 ---
 
-## #4 — Scene query + read-only entity facade
+## #4 — Scene query + read-only entity facade ✅ Done
 
 **Type:** AFK
 **Blocked by:** #1
@@ -116,11 +116,11 @@ The `scene` global exposed to scripts becomes a real `SceneFacade` that wraps `S
 
 ### Acceptance criteria
 
-- [ ] A script that does `scene.getObjectsByTag('die').map(d => d.name)` returns the names of all dice in the room.
-- [ ] `scene.getObjectById('not-real')` returns `undefined`.
-- [ ] `entity.tags` returns the entity's tag list; mutating the returned array does not affect the underlying entity.
-- [ ] `entity.getComponent('value')` returns an object with the component's `state` accessible; calling component mutators on the result does not work (read-only).
-- [ ] Unit tests cover `SceneFacade` (query happy path, missing-id, no-tag-match) and `EntityFacade` (read-only invariants).
+- [x] A script that does `scene.getObjectsByTag('die').map(d => d.name)` returns the names of all dice in the room.
+- [x] `scene.getObjectById('not-real')` returns `undefined`.
+- [x] `entity.tags` returns the entity's tag list; mutating the returned array does not affect the underlying entity.
+- [x] `entity.getComponent('value')` returns an object with the component's `state` accessible; calling component mutators on the result does not work (read-only).
+- [x] Unit tests cover `SceneFacade` (query happy path, missing-id, no-tag-match) and `EntityFacade` (read-only invariants).
 
 ### Stories covered
 
