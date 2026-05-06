@@ -33,7 +33,8 @@
       "Bash(echo \"exit=$?\")",
       "PowerShell(New-Item *)",
       "Bash(bun add *)",
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "Bash(xargs grep *)"
     ]
   }
 }
