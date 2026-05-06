@@ -17,3 +17,7 @@ playground-temp
 temp
 TODOs.md
 .eslintcache
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
