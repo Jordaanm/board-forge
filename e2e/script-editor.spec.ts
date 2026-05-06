@@ -24,10 +24,15 @@ async function setMonacoValue(page: Page, value: string): Promise<void> {
   }, value);
 }
 
+// Slice 13: explicit two-stage Monaco mount assertion. First the
+// editor's outer container must appear; then the view-lines element
+// (which only renders after the model is attached) must be visible.
+// Splitting these two assertions makes the failure message clear:
+// "monaco-editor not visible" vs "view-lines not visible" point to
+// different root causes (chunk load failure vs model wiring).
 async function waitForEditorReady(dialog: Locator): Promise<void> {
-  // The .view-lines element renders only after Monaco has its model in
-  // place — a stable proxy for "the editor is mounted and showing content".
-  await expect(dialog.locator('.monaco-editor .view-lines')).toBeVisible({ timeout: 15_000 });
+  await expect(dialog.locator('.monaco-editor')).toBeVisible({ timeout: 15_000 });
+  await expect(dialog.locator('.monaco-editor .view-lines')).toBeVisible({ timeout: 5_000 });
 }
 
 // Smoke test — covers the full PR1+Monaco surface end-to-end:
