@@ -5,11 +5,15 @@ import { type ScriptErrorLog, type ScriptErrorEntry } from '../scripting/ScriptE
 import { useAnchorTarget } from './AnchorLayout';
 
 interface Props {
-  source:    string;
-  onChange:  (next: string) => void;
-  onSave:    () => void;
-  onRun:     (source: string) => Promise<RunResult>;
-  errorLog?: ScriptErrorLog | null;
+  source:         string;
+  onChange:       (next: string) => void;
+  onSave:         () => void;
+  onRun:          (source: string) => Promise<RunResult>;
+  // Returns the runtime's currently-persisted source. Called on close-attempt
+  // to compute dirty state. Single source of truth — modal does not mirror
+  // the baseline in React.
+  getSavedSource: () => string;
+  errorLog?:      ScriptErrorLog | null;
 }
 
 const TRIGGER_BTN: React.CSSProperties = {
@@ -33,6 +37,7 @@ const OVERLAY: React.CSSProperties = {
 };
 
 const CONTENT: React.CSSProperties = {
+  position:      'relative',
   width:         '90vw',
   maxWidth:      1400,
   height:        '88vh',
@@ -175,13 +180,65 @@ const LOG_META: React.CSSProperties = {
   fontSize: 10,
 };
 
+const CONFIRM_BACKDROP: React.CSSProperties = {
+  position:       'absolute',
+  inset:          0,
+  background:     'rgba(0,0,0,0.55)',
+  display:        'flex',
+  alignItems:     'center',
+  justifyContent: 'center',
+  zIndex:         1,
+  borderRadius:   8,
+};
+
+const CONFIRM_BOX: React.CSSProperties = {
+  width:        360,
+  background:   'rgba(28,28,40,0.98)',
+  border:       '1px solid rgba(255,255,255,0.18)',
+  borderRadius: 6,
+  padding:      '16px 18px',
+  boxShadow:    '0 8px 28px rgba(0,0,0,0.6)',
+};
+
+const CONFIRM_TITLE: React.CSSProperties = {
+  fontSize:   14,
+  fontWeight: 600,
+  marginBottom: 6,
+};
+
+const CONFIRM_BODY: React.CSSProperties = {
+  fontSize:    12,
+  color:       '#bdbdc0',
+  marginBottom: 14,
+  lineHeight:  1.4,
+};
+
+const CONFIRM_ROW: React.CSSProperties = {
+  display: 'flex',
+  gap:     8,
+};
+
+const CONFIRM_BTN: React.CSSProperties = {
+  background:   'rgba(255,255,255,0.1)',
+  border:       '1px solid rgba(255,255,255,0.2)',
+  color:        '#e8e8e8',
+  padding:      '6px 10px',
+  borderRadius: 4,
+  cursor:       'pointer',
+  fontSize:     12,
+  flex:         1,
+};
+
 const EMPTY_ENTRIES: ScriptErrorEntry[] = [];
 
-export function ScriptEditorModal({ source, onChange, onSave, onRun, errorLog }: Props) {
-  const centerAnchor          = useAnchorTarget('center');
-  const [open, setOpen]       = useState(false);
-  const [error, setError]     = useState<string | null>(null);
-  const [running, setRunning] = useState(false);
+export function ScriptEditorModal({ source, onChange, onSave, onRun, getSavedSource, errorLog }: Props) {
+  const centerAnchor              = useAnchorTarget('center');
+  const [open, setOpen]           = useState(false);
+  const [error, setError]         = useState<string | null>(null);
+  const [running, setRunning]     = useState(false);
+  // When set, an inline confirm overlay covers the dialog body. The host
+  // chose to close while dirty; clearing this either closes or cancels.
+  const [confirmingClose, setConfirmingClose] = useState(false);
 
   const entries = useScriptErrorLog(errorLog ?? null);
 
@@ -200,12 +257,46 @@ export function ScriptEditorModal({ source, onChange, onSave, onRun, errorLog }:
     }
   };
 
+  // Close interceptor. Radix calls this for Esc, X, and outside-click. If
+  // the live source matches the runtime's persisted source, close cleanly;
+  // otherwise show the confirm overlay.
+  const handleOpenChange = (next: boolean) => {
+    if (next) {
+      setOpen(true);
+      return;
+    }
+    if (source !== getSavedSource()) {
+      setConfirmingClose(true);
+      return;
+    }
+    setOpen(false);
+  };
+
+  const closeImmediately = () => {
+    setConfirmingClose(false);
+    setOpen(false);
+  };
+
+  const handleSaveAndClose = () => {
+    onSave();
+    closeImmediately();
+  };
+
+  const handleDiscardAndClose = () => {
+    onChange(getSavedSource());
+    closeImmediately();
+  };
+
+  const handleCancelClose = () => {
+    setConfirmingClose(false);
+  };
+
   return (
     <>
       <button type="button" style={TRIGGER_BTN} onClick={() => setOpen(true)}>
         Edit Script
       </button>
-      <Dialog.Root open={open} onOpenChange={setOpen}>
+      <Dialog.Root open={open} onOpenChange={handleOpenChange}>
         <Dialog.Portal container={centerAnchor ?? undefined}>
           <Dialog.Overlay style={OVERLAY} />
           <Dialog.Content style={CONTENT} aria-describedby={undefined}>
@@ -234,10 +325,41 @@ export function ScriptEditorModal({ source, onChange, onSave, onRun, errorLog }:
                 <ErrorLogList entries={entries} onClear={() => errorLog.clear()} />
               )}
             </div>
+            {confirmingClose && (
+              <CloseConfirm
+                onSave={handleSaveAndClose}
+                onDiscard={handleDiscardAndClose}
+                onCancel={handleCancelClose}
+              />
+            )}
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
     </>
+  );
+}
+
+interface CloseConfirmProps {
+  onSave:    () => void;
+  onDiscard: () => void;
+  onCancel:  () => void;
+}
+
+function CloseConfirm({ onSave, onDiscard, onCancel }: CloseConfirmProps) {
+  return (
+    <div style={CONFIRM_BACKDROP} role="dialog" aria-modal="true" aria-label="Unsaved changes">
+      <div style={CONFIRM_BOX}>
+        <div style={CONFIRM_TITLE}>Unsaved changes</div>
+        <div style={CONFIRM_BODY}>
+          You have unsaved edits. Save them, discard them, or stay in the editor.
+        </div>
+        <div style={CONFIRM_ROW}>
+          <button type="button" style={CONFIRM_BTN} onClick={onSave}>Save &amp; close</button>
+          <button type="button" style={CONFIRM_BTN} onClick={onDiscard}>Discard &amp; close</button>
+          <button type="button" style={CONFIRM_BTN} onClick={onCancel}>Cancel</button>
+        </div>
+      </div>
+    </div>
   );
 }
 

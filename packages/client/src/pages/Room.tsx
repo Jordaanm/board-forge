@@ -104,8 +104,9 @@ export function Room({ roomId, isHost }: Props) {
   const onLastLoadedChangeRef = useRef<(loaded: LastLoaded | null) => void>(noop);
   const onHistoryServiceChangeRef = useRef<(svc: SceneHistoryService | null) => void>(noop);
   const runScriptRef       = useRef<(source: string) => Promise<RunResult>>(() => Promise.resolve({ ok: false, error: 'Canvas not ready.' }));
-  const saveScriptSourceRef = useRef<(source: string) => void>(noop);
-  const loadScriptStateRef  = useRef<(state: ScriptState) => void>(noop);
+  const saveScriptSourceRef    = useRef<(source: string) => void>(noop);
+  const getSavedScriptSourceRef = useRef<() => string>(() => '');
+  const loadScriptStateRef     = useRef<(state: ScriptState) => void>(noop);
   const onErrorLogChangeRef = useRef<(log: ScriptErrorLog | null) => void>(noop);
   onErrorLogChangeRef.current = (log) => setScriptErrorLog(log);
   onLastLoadedChangeRef.current     = (loaded) => setLastLoaded(loaded);
@@ -351,6 +352,7 @@ export function Room({ roomId, isHost }: Props) {
         onHistoryServiceChangeRef={onHistoryServiceChangeRef}
         runScriptRef={runScriptRef}
         saveScriptSourceRef={saveScriptSourceRef}
+        getSavedScriptSourceRef={getSavedScriptSourceRef}
         loadScriptStateRef={loadScriptStateRef}
         onErrorLogChangeRef={onErrorLogChangeRef}
       />
@@ -387,6 +389,7 @@ export function Room({ roomId, isHost }: Props) {
               onScriptChange={setScriptSource}
               onScriptSave={() => saveScriptSourceRef.current(scriptSource)}
               onScriptRun={(src) => runScriptRef.current(src)}
+              getSavedScriptSource={() => getSavedScriptSourceRef.current()}
               scriptErrorLog={scriptErrorLog}
             />
           </UIPanel>

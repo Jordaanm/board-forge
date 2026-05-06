@@ -83,6 +83,7 @@ interface Props {
   onHistoryServiceChangeRef: MutableRefObject<(svc: SceneHistoryService | null) => void>;
   runScriptRef:        MutableRefObject<(source: string) => Promise<RunResult>>;
   saveScriptSourceRef: MutableRefObject<(source: string) => void>;
+  getSavedScriptSourceRef: MutableRefObject<() => string>;
   loadScriptStateRef:  MutableRefObject<(state: ScriptState) => void>;
   onErrorLogChangeRef: MutableRefObject<(log: ScriptErrorLog | null) => void>;
 }
@@ -102,7 +103,7 @@ export function ThreeCanvas({
   setShowAllZonesRef,
   setHandViewRef, requestHandTileMenuRef, playCardToTableRef, reorderHandRef,
   saveSceneRef, replaceSceneRef, sceneHistoryRef, onLastLoadedChangeRef,
-  onHistoryServiceChangeRef, runScriptRef, saveScriptSourceRef, loadScriptStateRef,
+  onHistoryServiceChangeRef, runScriptRef, saveScriptSourceRef, getSavedScriptSourceRef, loadScriptStateRef,
   onErrorLogChangeRef,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -369,6 +370,10 @@ export function ThreeCanvas({
         world.scripting?.setSource(source);
       };
 
+      getSavedScriptSourceRef.current = () => {
+        return world.scripting?.getScriptState().source ?? '';
+      };
+
       loadScriptStateRef.current = (state) => {
         // `loadScript` overwrites the state slot then runs the script if a
         // source is present, so the auto-Run on save-file load follows the
@@ -528,6 +533,7 @@ export function ThreeCanvas({
       replaceSceneRef.current = () => {};
       runScriptRef.current    = () => Promise.resolve({ ok: false, error: 'Canvas torn down.' });
       saveScriptSourceRef.current = () => {};
+      getSavedScriptSourceRef.current = () => '';
       loadScriptStateRef.current  = () => {};
       onErrorLogChangeRef.current(null);
       sceneHistoryRef.current = null;
@@ -558,7 +564,7 @@ export function ThreeCanvas({
     onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,
     setShowAllZonesRef, setHandViewRef, requestHandTileMenuRef, playCardToTableRef,
     reorderHandRef, saveSceneRef, replaceSceneRef, sceneHistoryRef, onLastLoadedChangeRef,
-    onHistoryServiceChangeRef, runScriptRef, saveScriptSourceRef, loadScriptStateRef,
+    onHistoryServiceChangeRef, runScriptRef, saveScriptSourceRef, getSavedScriptSourceRef, loadScriptStateRef,
     onErrorLogChangeRef,
   ]);
 

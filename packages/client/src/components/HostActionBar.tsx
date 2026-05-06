@@ -27,6 +27,7 @@ interface Props {
   onScriptChange:       (next: string) => void;
   onScriptSave:         () => void;
   onScriptRun:          (source: string) => Promise<RunResult>;
+  getSavedScriptSource: () => string;
   scriptErrorLog:       ScriptErrorLog | null;
 }
 
@@ -105,6 +106,7 @@ export function HostActionBar({
   onScriptChange,
   onScriptSave,
   onScriptRun,
+  getSavedScriptSource,
   scriptErrorLog,
 }: Props) {
   const [revertOpen, setRevertOpen] = useState(false);
@@ -129,6 +131,7 @@ export function HostActionBar({
         onChange={onScriptChange}
         onSave={onScriptSave}
         onRun={onScriptRun}
+        getSavedSource={getSavedScriptSource}
         errorLog={scriptErrorLog}
       />
       {lastLoaded && (
