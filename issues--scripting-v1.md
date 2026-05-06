@@ -66,7 +66,7 @@ The Save Script button persists the textarea's source into room state, the save-
 
 ---
 
-## #3 — Idempotent Run with init flag + auto-Run on save load
+## #3 — Idempotent Run with init flag + auto-Run on save load ✅ Done
 
 **Type:** AFK
 **Blocked by:** #1, #2
@@ -86,13 +86,13 @@ The Save Script button persists the textarea's source into room state, the save-
 
 ### Acceptance criteria
 
-- [ ] On a fresh room: clicking Run Script with a script that defines both hooks fires `onSceneInitialised` once, then `onScriptLoaded`. `room.script.initialised` is now `true`.
-- [ ] Clicking Run Script a second time fires only `onScriptLoaded`. `onSceneInitialised` does not re-fire.
-- [ ] Loading a hand-crafted save with `initialised: false` runs both hooks; loading a save with `initialised: true` runs only `onScriptLoaded`.
-- [ ] An exception thrown by `onSceneInitialised` is caught; `onScriptLoaded` still fires for the same Run.
-- [ ] A compile failure on a re-Run leaves the previously-running instance alive (its listeners would still fire if any were registered).
-- [ ] Undoing a scene mutation (via the existing history flow) does not call into `ScriptHost`; no extra hook invocations and no listener double-registration.
-- [ ] Integration tests cover all six combinations of (fresh / re-Run / save-load) × (`initialised` true / false).
+- [x] On a fresh room: clicking Run Script with a script that defines both hooks fires `onSceneInitialised` once, then `onScriptLoaded`. `room.script.initialised` is now `true`.
+- [x] Clicking Run Script a second time fires only `onScriptLoaded`. `onSceneInitialised` does not re-fire.
+- [x] Loading a hand-crafted save with `initialised: false` runs both hooks; loading a save with `initialised: true` runs only `onScriptLoaded`.
+- [x] An exception thrown by `onSceneInitialised` is caught; `onScriptLoaded` still fires for the same Run.
+- [x] A compile failure on a re-Run leaves the previously-running instance alive (its listeners would still fire if any were registered).
+- [x] Undoing a scene mutation (via the existing history flow) does not call into `ScriptHost`; no extra hook invocations and no listener double-registration.
+- [x] Integration tests cover all six combinations of (fresh / re-Run / save-load) × (`initialised` true / false).
 
 ### Stories covered
 

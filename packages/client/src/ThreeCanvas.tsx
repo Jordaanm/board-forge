@@ -365,7 +365,13 @@ export function ThreeCanvas({
       };
 
       loadScriptStateRef.current = (state) => {
-        world.scripting?.loadScriptState(state);
+        // `loadScript` overwrites the state slot then runs the script if a
+        // source is present, so the auto-Run on save-file load follows the
+        // same Run flow as a manual click. Returns a Promise we don't
+        // await — the panel doesn't need to block on hook execution.
+        const sh = world.scripting;
+        if (!sh) return;
+        void sh.loadScript(state);
       };
 
       spawnRef.current        = (type) => { world.spawn(type); };

@@ -1,10 +1,25 @@
 // Orchestrates compile → sandbox → instantiate → run-hooks for the host's
 // authored script. Composed into `World` only on host construction.
 //
-// First-iteration surface is intentionally tiny: `runScript(source)` does
-// the whole pipeline and surfaces the compile error (if any). Idempotent
-// re-Runs, listener teardown, save-load auto-Run, scene facade, error log
-// all land in later issues (#3, #5, #7).
+// `runScript(source)` is the Run flow:
+//   1. Compile new source. On failure: leave the previous instance live,
+//      surface the diagnostic, do nothing else.
+//   2. Tear down the previous Run's listener registrations (no-op until #5).
+//   3. Instantiate the new class.
+//   4. If `state.initialised === false`: invoke `onSceneInitialised(scene)`,
+//      flip the flag to `true`, then `onScriptLoaded(scene)`. Otherwise:
+//      `onScriptLoaded(scene)` only. Each hook is wrapped in try/catch
+//      individually so an exception in one doesn't abort the rest.
+//
+// `loadScript({source, initialised})` is the save-file-load entrypoint —
+// World invokes it after `replaceScene` populates entities. It overwrites
+// the state slot then runs the same flow, so a save authored before the
+// first init still fires `onSceneInitialised` exactly once on load.
+//
+// History undo/redo deliberately routes through `replaceScene` only and
+// does NOT re-Run the script: listeners attached against entities that
+// survive undo continue to work, and we don't want each undo to fire the
+// hooks again.
 
 import { compileTypescript } from './Compiler';
 import { loadModule } from './Sandbox';
@@ -21,7 +36,7 @@ export type RunResult =
 
 // Persisted per-room script state. `source` is the authored TS the host
 // last saved; `initialised` flips to true after `onSceneInitialised` fires
-// (issue #3).
+// for the first time on this room.
 export interface ScriptState {
   source:      string;
   initialised: boolean;
@@ -30,6 +45,10 @@ export interface ScriptState {
 export class ScriptHost {
   private readonly console_: ScriptHostOptions['console'];
   private state_: ScriptState = { source: '', initialised: false };
+  // Most recent successfully-instantiated user class. Held so a failed
+  // re-Run (compile error) leaves it live — listeners attached against it
+  // (issue #5) keep working until a successful Run replaces it.
+  private currentInstance: Game | null = null;
 
   constructor(opts: ScriptHostOptions = {}) {
     this.console_ = opts.console ?? console;
@@ -41,8 +60,8 @@ export class ScriptHost {
     return { source: this.state_.source, initialised: this.state_.initialised };
   }
 
-  // Replaces the entire state slot — used by save-file load. `initialised`
-  // gating against re-firing `onSceneInitialised` lands in #3.
+  // Replaces the entire state slot. Used by tests and the save-file-load
+  // path before `loadScript` runs the new source. Does not invoke hooks.
   loadScriptState(state: ScriptState): void {
     this.state_ = { source: state.source, initialised: state.initialised };
   }
@@ -53,9 +72,22 @@ export class ScriptHost {
     this.state_ = { source, initialised: this.state_.initialised };
   }
 
+  // Save-file-load entrypoint. Replaces the state slot then runs the same
+  // flow as `runScript` so the loaded `initialised` flag governs whether
+  // `onSceneInitialised` fires.
+  async loadScript(state: ScriptState): Promise<RunResult> {
+    this.loadScriptState(state);
+    if (!state.source) return { ok: true };
+    return this.runScript(state.source);
+  }
+
   async runScript(source: string): Promise<RunResult> {
     const compiled = await compileTypescript(source);
-    if (!compiled.ok) return { ok: false, error: compiled.error };
+    if (!compiled.ok) {
+      // Compile failure: leave the previously-running instance + listeners
+      // alive. Surface the diagnostic.
+      return { ok: false, error: compiled.error };
+    }
 
     let ns;
     try {
@@ -77,6 +109,10 @@ export class ScriptHost {
       return { ok: false, error: msg };
     }
 
+    // Tear down the previous Run's listener registrations. No-op until #5
+    // adds the registry; preserved as a hook so the Run flow stays stable.
+    this.teardownPreviousRun();
+
     let instance: Game;
     try {
       instance = new (Cls as new () => Game)();
@@ -85,11 +121,31 @@ export class ScriptHost {
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
 
+    // Install the new instance before firing hooks so an exception during
+    // a hook still leaves the new instance current (its listeners, once #5
+    // lands, will be torn down on the next Run regardless).
+    this.currentInstance = instance;
+
+    // Run does NOT persist `source` — Save Script (`setSource`) is the
+    // explicit save path. The user might click Run on a draft they don't
+    // want saved yet.
     const scene = {};
-    this.invokeHook(instance, 'onSceneInitialised', scene);
+    if (!this.state_.initialised) {
+      this.invokeHook(instance, 'onSceneInitialised', scene);
+      this.state_ = { source: this.state_.source, initialised: true };
+    }
     this.invokeHook(instance, 'onScriptLoaded', scene);
 
     return { ok: true };
+  }
+
+  // Hook — placeholder until #5 lands a real listener registry. Kept as
+  // an explicit step in the Run flow so the order doesn't drift; reads the
+  // current instance reference to discipline the lifecycle.
+  private teardownPreviousRun(): void {
+    if (!this.currentInstance) return;
+    // #5 will: iterate the per-Run listener registration set, call
+    // removeListener on the underlying buses, clear the set.
   }
 
   private invokeHook(instance: Game, name: 'onSceneInitialised' | 'onScriptLoaded', scene: unknown): void {
