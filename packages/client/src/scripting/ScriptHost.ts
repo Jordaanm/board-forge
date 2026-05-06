@@ -53,9 +53,10 @@ export interface ScriptState {
 export class ScriptHost {
   private readonly console_: ScriptHostOptions['console'];
   private readonly scene_:   EntityScene | null;
-  // Bounded ring buffer of runtime errors surfaced to the script panel
-  // (issue #7). Hook errors and listener errors both funnel here; compile
-  // errors do NOT (they render inline beneath the textarea).
+  // Bounded ring buffer of script errors surfaced to the script panel
+  // (issue #7). Hook errors, listener errors, AND startup-failure errors
+  // (compile, module-load, structural, constructor) all funnel here so the
+  // panel has a single unified stream. Source labels differentiate kind.
   private readonly errorLog_ = new ScriptErrorLog();
   private state_: ScriptState = { source: '', initialised: false };
   // Most recent successfully-instantiated user class. Held so a failed
@@ -110,7 +111,9 @@ export class ScriptHost {
     const compiled = await compileTypescript(source);
     if (!compiled.ok) {
       // Compile failure: leave the previously-running instance + listeners
-      // alive. Surface the diagnostic.
+      // alive. Surface the diagnostic in the log AND in the result so the
+      // panel can render the error inline as a log entry.
+      this.errorLog_.push('compile', new Error(compiled.error));
       return { ok: false, error: compiled.error };
     }
 
@@ -135,6 +138,7 @@ export class ScriptHost {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       this.console_?.error('[script] module load failed:', e);
+      this.errorLog_.push('compile', e);
       return { ok: false, error: msg };
     }
 
@@ -142,6 +146,7 @@ export class ScriptHost {
     if (typeof Cls !== 'function') {
       const msg = 'Script must `export default` a class extending Game.';
       this.console_?.error('[script]', msg);
+      this.errorLog_.push('compile', new Error(msg));
       return { ok: false, error: msg };
     }
 
@@ -155,6 +160,7 @@ export class ScriptHost {
       instance = new (Cls as new () => Game)();
     } catch (e) {
       this.console_?.error('[script] constructor threw:', e);
+      this.errorLog_.push('constructor', e);
       return { ok: false, error: e instanceof Error ? e.message : String(e) };
     }
 

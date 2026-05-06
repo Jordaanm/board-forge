@@ -118,18 +118,6 @@ const BUTTON: React.CSSProperties = {
   flex:         1,
 };
 
-const ERROR_BLOCK: React.CSSProperties = {
-  padding:      '6px 8px',
-  background:   'rgba(220,80,80,0.15)',
-  border:       '1px solid rgba(220,80,80,0.4)',
-  borderRadius: 3,
-  color:        '#ffb0b0',
-  fontFamily:   'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-  fontSize:     11,
-  whiteSpace:   'pre-wrap',
-  flexShrink:   0,
-};
-
 const LOG_LIST: React.CSSProperties = {
   maxHeight:  '25%',
   overflowY:  'auto',
@@ -173,6 +161,45 @@ const LOG_ENTRY: React.CSSProperties = {
   fontSize:     11,
   whiteSpace:   'pre-wrap',
   wordBreak:    'break-word',
+};
+
+// Compile failures look distinct from runtime hook/listener throws so the
+// host can tell at a glance whether the script never started or failed
+// mid-execution.
+const LOG_ENTRY_COMPILE: React.CSSProperties = {
+  ...LOG_ENTRY,
+  background: 'rgba(80,140,220,0.10)',
+  border:     '1px solid rgba(80,140,220,0.30)',
+  color:      '#bcd0f0',
+};
+
+const BADGE_BASE: React.CSSProperties = {
+  display:       'inline-block',
+  padding:       '1px 6px',
+  borderRadius:  3,
+  fontSize:      9,
+  textTransform: 'uppercase',
+  letterSpacing: 0.6,
+  fontWeight:    600,
+  marginRight:   6,
+};
+
+const BADGE_COMPILE: React.CSSProperties = {
+  ...BADGE_BASE,
+  background: 'rgba(80,140,220,0.25)',
+  color:      '#cfdef7',
+};
+
+const BADGE_HOOK: React.CSSProperties = {
+  ...BADGE_BASE,
+  background: 'rgba(220,80,80,0.25)',
+  color:      '#ffd0d0',
+};
+
+const BADGE_EVENT: React.CSSProperties = {
+  ...BADGE_BASE,
+  background: 'rgba(220,140,80,0.25)',
+  color:      '#ffe0c0',
 };
 
 const LOG_META: React.CSSProperties = {
@@ -234,7 +261,6 @@ const EMPTY_ENTRIES: ScriptErrorEntry[] = [];
 export function ScriptEditorModal({ source, onChange, onSave, onRun, getSavedSource, errorLog }: Props) {
   const centerAnchor              = useAnchorTarget('center');
   const [open, setOpen]           = useState(false);
-  const [error, setError]         = useState<string | null>(null);
   const [running, setRunning]     = useState(false);
   // When set, an inline confirm overlay covers the dialog body. The host
   // chose to close while dirty; clearing this either closes or cancels.
@@ -242,16 +268,14 @@ export function ScriptEditorModal({ source, onChange, onSave, onRun, getSavedSou
 
   const entries = useScriptErrorLog(errorLog ?? null);
 
-  useEffect(() => {
-    if (entries.length > 0) setError(null);
-  }, [entries.length]);
-
+  // Run failures (compile / module-load / structural / constructor / hook)
+  // funnel through the unified error log via ScriptHost. The result.error
+  // value is intentionally not surfaced separately — the same error has
+  // already become a log entry by the time runScript resolves.
   const handleRun = async () => {
     setRunning(true);
-    setError(null);
     try {
-      const result = await onRun(source);
-      if (!result.ok) setError(result.error);
+      await onRun(source);
     } finally {
       setRunning(false);
     }
@@ -320,7 +344,6 @@ export function ScriptEditorModal({ source, onChange, onSave, onRun, getSavedSou
                   {running ? 'Running…' : 'Run Script'}
                 </button>
               </div>
-              {error && <div style={ERROR_BLOCK}>{error}</div>}
               {errorLog && (
                 <ErrorLogList entries={entries} onClear={() => errorLog.clear()} />
               )}
@@ -369,17 +392,19 @@ function ErrorLogList({
   return (
     <div style={LOG_LIST}>
       <div style={LOG_HEADER}>
-        <span style={LOG_LABEL}>Runtime errors ({entries.length})</span>
+        <span style={LOG_LABEL}>Script errors ({entries.length})</span>
         <button type="button" style={LOG_CLEAR} onClick={onClear} disabled={entries.length === 0}>
           Clear
         </button>
       </div>
       {entries.length === 0 ? (
-        <div style={{ color: '#666', fontSize: 11 }}>No runtime errors.</div>
+        <div style={{ color: '#666', fontSize: 11 }}>No script errors.</div>
       ) : (
-        entries.map((e, i) => (
-          <div key={`${e.timestamp}-${i}`} style={LOG_ENTRY}>
+        // Newest at top — matches typical log UX.
+        [...entries].reverse().map((e, i) => (
+          <div key={`${e.timestamp}-${i}`} style={entryStyle(e.source)}>
             <div style={LOG_META}>
+              <span style={badgeStyle(e.source)}>{badgeLabel(e.source)}</span>
               {formatTime(e.timestamp)} · {e.source}
             </div>
             <div>{e.firstLine}</div>
@@ -388,6 +413,24 @@ function ErrorLogList({
       )}
     </div>
   );
+}
+
+function entryStyle(source: string): React.CSSProperties {
+  if (source === 'compile') return LOG_ENTRY_COMPILE;
+  return LOG_ENTRY;
+}
+
+function badgeStyle(source: string): React.CSSProperties {
+  if (source === 'compile') return BADGE_COMPILE;
+  if (source.startsWith('event:')) return BADGE_EVENT;
+  return BADGE_HOOK;
+}
+
+function badgeLabel(source: string): string {
+  if (source === 'compile') return 'compile';
+  if (source === 'constructor') return 'constructor';
+  if (source.startsWith('event:')) return 'event';
+  return 'hook';
 }
 
 function useScriptErrorLog(log: ScriptErrorLog | null): ScriptErrorEntry[] {

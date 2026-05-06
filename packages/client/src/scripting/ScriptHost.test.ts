@@ -200,12 +200,40 @@ describe('ScriptHost.errorLog (#7)', () => {
     expect(entries[0].firstLine).toContain('boom');
   });
 
-  test('compile errors do NOT enter the runtime log', async () => {
+  test('compile errors enter the unified log with source=compile', async () => {
     const c = recordingConsole();
     const host = new ScriptHost({ console: c });
     const result = await host.runScript(`export default class { not valid`);
     expect(result.ok).toBe(false);
-    expect(host.errorLog.list()).toEqual([]);
+    const entries = host.errorLog.list();
+    expect(entries).toHaveLength(1);
+    expect(entries[0].source).toBe('compile');
+  });
+
+  test('module-load failures (e.g. structural assertion) enter the log with source=compile', async () => {
+    const c = recordingConsole();
+    const host = new ScriptHost({ console: c });
+    // Valid TS that compiles but does not export a class extending Game.
+    const result = await host.runScript(`export default 42`);
+    expect(result.ok).toBe(false);
+    const entries = host.errorLog.list();
+    expect(entries).toHaveLength(1);
+    expect(entries[0].source).toBe('compile');
+  });
+
+  test('constructor throws enter the log with source=constructor', async () => {
+    const c = recordingConsole();
+    const host = new ScriptHost({ console: c });
+    const result = await host.runScript(`
+      export default class extends Game {
+        constructor() { super(); throw new Error('ctor-boom'); }
+      }
+    `);
+    expect(result.ok).toBe(false);
+    const entries = host.errorLog.list();
+    expect(entries).toHaveLength(1);
+    expect(entries[0].source).toBe('constructor');
+    expect(entries[0].firstLine).toContain('ctor-boom');
   });
 
   test('console.error continues to receive every error in addition to the panel log', async () => {

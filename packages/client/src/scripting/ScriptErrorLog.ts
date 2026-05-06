@@ -1,7 +1,8 @@
-// Bounded ring buffer of script runtime errors. Subscribers (the script
-// panel) re-render on push and clear. ScriptHost funnels every caught hook
-// error and every caught listener error into this log. Compile errors
-// render inline beneath the textarea — they do NOT enter this log.
+// Bounded ring buffer of script errors. Subscribers (the script panel)
+// re-render on push and clear. ScriptHost funnels every caught hook
+// error, every caught listener error, AND startup-failure errors
+// (compile, module-load, structural, constructor) into this log so the
+// panel renders a single unified stream — sources differentiate kind.
 
 export interface ScriptErrorEntry {
   // ms since epoch — lets the panel render relative or absolute time.
