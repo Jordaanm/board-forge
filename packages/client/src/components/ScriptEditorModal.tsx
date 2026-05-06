@@ -6,9 +6,20 @@ import { useAnchorTarget } from './AnchorLayout';
 import { ScriptEditorErrorBoundary } from './ScriptEditorErrorBoundary';
 
 // Lazy so Monaco's ~3MB worker bundles stay out of the initial Room render.
-// Hover preload on the trigger button (Slice 10) hides the load wait for
-// most clicks; cold clicks see the Suspense placeholder for ~1–2s.
+// Hover preload on the trigger button hides the load wait for most clicks;
+// cold clicks see the Suspense placeholder for ~1–2s.
 const ScriptEditor = lazy(() => import('./ScriptEditor'));
+
+// Kicks off the Monaco chunk fetch on mouseenter. Wrapped in a once-flag
+// so repeated hovers don't fire the import repeatedly. Browsers cache the
+// chunk after the first load anyway, but the flag avoids any redundant
+// promise allocation.
+let editorPreloadStarted = false;
+function preloadScriptEditor(): void {
+  if (editorPreloadStarted) return;
+  editorPreloadStarted = true;
+  void import('./ScriptEditor');
+}
 
 interface Props {
   source:         string;
@@ -389,7 +400,13 @@ export function ScriptEditorModal({ source, onChange, onSave, onRun, getSavedSou
 
   return (
     <>
-      <button type="button" style={TRIGGER_BTN} onClick={handleOpenClick}>
+      <button
+        type="button"
+        style={TRIGGER_BTN}
+        onClick={handleOpenClick}
+        onMouseEnter={preloadScriptEditor}
+        onFocus={preloadScriptEditor}
+      >
         Edit Script
       </button>
       <Dialog.Root open={open} onOpenChange={handleOpenChange}>
