@@ -19,6 +19,7 @@ import { aggregateContextMenu } from './entity/contextMenu';
 import { encodeSaveFile, downloadSaveFile } from './entity/SaveFile';
 import { captureCanvasThumbnail } from './entity/thumbnail';
 import { type SceneHistoryService, type LastLoaded } from './entity/SceneHistoryService';
+import { type RunResult } from './scripting/ScriptHost';
 import { type CardTile } from './components/HandPanel';
 import { DEFAULT_PRIVATE_FIELDS } from './seats/PrivacyScrubber';
 import { MoveGizmo } from './scene/MoveGizmo';
@@ -79,6 +80,7 @@ interface Props {
   sceneHistoryRef:     MutableRefObject<SceneHistoryService | null>;
   onLastLoadedChangeRef: MutableRefObject<(loaded: LastLoaded | null) => void>;
   onHistoryServiceChangeRef: MutableRefObject<(svc: SceneHistoryService | null) => void>;
+  runScriptRef:        MutableRefObject<(source: string) => Promise<RunResult>>;
 }
 
 export interface HandView {
@@ -96,7 +98,7 @@ export function ThreeCanvas({
   setShowAllZonesRef,
   setHandViewRef, requestHandTileMenuRef, playCardToTableRef, reorderHandRef,
   saveSceneRef, replaceSceneRef, sceneHistoryRef, onLastLoadedChangeRef,
-  onHistoryServiceChangeRef,
+  onHistoryServiceChangeRef, runScriptRef,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -346,6 +348,12 @@ export function ThreeCanvas({
         world.replaceScene(snaps as Parameters<typeof world.replaceScene>[0]);
       };
 
+      runScriptRef.current = (source) => {
+        const sh = world.scripting;
+        if (!sh) return Promise.resolve({ ok: false, error: 'Scripting unavailable.' });
+        return sh.runScript(source);
+      };
+
       spawnRef.current        = (type) => { world.spawn(type); };
       deleteObjectRef.current = (id)   => world.despawn(id);
       drawFromDeckRef.current = (deckId, count, seat) => world.drawFromDeck(deckId, count, seat);
@@ -493,6 +501,7 @@ export function ThreeCanvas({
       deleteObjectRef.current = () => {};
       saveSceneRef.current    = () => {};
       replaceSceneRef.current = () => {};
+      runScriptRef.current    = () => Promise.resolve({ ok: false, error: 'Canvas torn down.' });
       sceneHistoryRef.current = null;
       onHistoryServiceChangeRef.current(null);
       drawFromDeckRef.current = () => {};
@@ -521,7 +530,7 @@ export function ThreeCanvas({
     onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,
     setShowAllZonesRef, setHandViewRef, requestHandTileMenuRef, playCardToTableRef,
     reorderHandRef, saveSceneRef, replaceSceneRef, sceneHistoryRef, onLastLoadedChangeRef,
-    onHistoryServiceChangeRef,
+    onHistoryServiceChangeRef, runScriptRef,
   ]);
 
   return (

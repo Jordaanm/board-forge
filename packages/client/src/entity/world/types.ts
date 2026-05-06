@@ -16,6 +16,7 @@ import { type SeatIndex } from '../../seats/SeatLayout';
 import { type PhysicsWorld } from '../../physics/PhysicsWorld';
 import { type GuestInputMessage } from '../../net/SceneState';
 import { type SceneHistoryService } from '../SceneHistoryService';
+import { type ScriptHost } from '../../scripting/ScriptHost';
 
 // Inbound from the wire: scene-level replication plus guest input streams.
 export type WorldInboundMessage = SceneMessage | GuestInputMessage;
@@ -107,6 +108,9 @@ export interface World {
   // Host-only history surface (PRD § Save / Load — issue #4 onwards). Null on
   // guests, where Save / Load / Revert / History are not exposed.
   history: SceneHistoryService | null;
+
+  // Host-only scripting surface (issues--scripting-v1.md). Null on guests.
+  scripting: ScriptHost | null;
 
   // Transitional surface — `releasePeer` stays until input dispatch is fully
   // owned by World. Late-join (formerly `replayTo`) is now driven internally

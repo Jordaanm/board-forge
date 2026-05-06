@@ -36,6 +36,7 @@ import { TABLE_SURFACE_Y, TABLE_WIDTH, TABLE_DEPTH } from '../../scene/Table';
 import { type SeatIndex } from '../../seats/SeatLayout';
 import { canManipulate } from '../../seats/OwnershipPolicy';
 import { EntityHandleImpl, type HandleRouter } from './EntityHandle';
+import { ScriptHost } from '../../scripting/ScriptHost';
 import {
   type World,
   type WorldOptions,
@@ -92,6 +93,7 @@ class WorldImpl implements World, HandleRouter {
   private readonly hostInput:  HostInputDispatcher | null;
   private readonly guestInput: GuestInputHandler | null;
   private readonly history_:   SceneHistoryService | null;
+  private readonly scripting_: ScriptHost | null;
   private readonly policy:     ReplicationPolicy;
   private mergeBeginContact:   ((e: { bodyA: import('cannon-es').Body; bodyB: import('cannon-es').Body }) => void) | null = null;
   private mergeEndContact:     ((e: { bodyA: import('cannon-es').Body; bodyB: import('cannon-es').Body }) => void) | null = null;
@@ -144,6 +146,7 @@ class WorldImpl implements World, HandleRouter {
         { cap: opts.historyCap, captureThumb: opts.captureThumb },
       );
       this.hostInput.setHistoryService(this.history_);
+      this.scripting_ = new ScriptHost();
       this.installBeginContactHandler();
     } else {
       this.physics    = null;
@@ -154,6 +157,7 @@ class WorldImpl implements World, HandleRouter {
       this.hostInput  = null;
       this.guestInput = null;
       this.history_   = null;
+      this.scripting_ = null;
     }
 
     this.unsubscribeMessage  = this.transport.onMessage((peerId, msg) => this.handleInbound(peerId, msg));
@@ -464,6 +468,10 @@ class WorldImpl implements World, HandleRouter {
 
   get history(): SceneHistoryService | null {
     return this.history_;
+  }
+
+  get scripting(): ScriptHost | null {
+    return this.scripting_;
   }
 
   // Atomic scene replace (PRD § Save / Load). Cancels all holds, cascade-

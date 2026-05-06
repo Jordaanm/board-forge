@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ThreeCanvas, type ReplicationTarget, type HandView } from '../ThreeCanvas';
 import { ConnectionManager } from '../net/ConnectionManager';
 import { EditorPanel, type ObjectSummary } from '../components/EditorPanel';
+import { ScriptPanel } from '../components/ScriptPanel';
 import { ContextMenu } from '../components/ContextMenu';
 import { PlayersPanel } from '../components/PlayersPanel';
 import { Toolbar } from '../components/Toolbar';
@@ -22,6 +23,7 @@ import { RoomStateManager } from '../seats/RoomStateManager';
 import { RoomStateClient } from '../seats/RoomStateClient';
 import type { RoomStateMessage, RoomStateSnapshot } from '../seats/RoomState';
 import { type SceneHistoryService, type LastLoaded } from '../entity/SceneHistoryService';
+import { type RunResult } from '../scripting/ScriptHost';
 import './Room.css';
 
 type Status = 'connecting' | 'connected' | 'disconnected' | 'room-full';
@@ -58,6 +60,7 @@ export function Room({ roomId, isHost }: Props) {
   const [handView, setHandView]         = useState<HandView | null>(null);
   const [lastLoaded, setLastLoaded]     = useState<LastLoaded | null>(null);
   const [historyService, setHistoryService] = useState<SceneHistoryService | null>(null);
+  const [scriptSource, setScriptSource]     = useState<string>('');
 
   const sendRef            = useRef<(msg: ChannelMessage, opts?: { reliable?: boolean }) => void>(noop);
   const sendToRef          = useRef<(peerId: string, msg: ChannelMessage, opts?: { reliable?: boolean }) => void>(noop);
@@ -99,6 +102,7 @@ export function Room({ roomId, isHost }: Props) {
   const sceneHistoryRef    = useRef<SceneHistoryService | null>(null);
   const onLastLoadedChangeRef = useRef<(loaded: LastLoaded | null) => void>(noop);
   const onHistoryServiceChangeRef = useRef<(svc: SceneHistoryService | null) => void>(noop);
+  const runScriptRef       = useRef<(source: string) => Promise<RunResult>>(() => Promise.resolve({ ok: false, error: 'Canvas not ready.' }));
   onLastLoadedChangeRef.current     = (loaded) => setLastLoaded(loaded);
   onHistoryServiceChangeRef.current = (svc)    => setHistoryService(svc);
 
@@ -340,6 +344,7 @@ export function Room({ roomId, isHost }: Props) {
         sceneHistoryRef={sceneHistoryRef}
         onLastLoadedChangeRef={onLastLoadedChangeRef}
         onHistoryServiceChangeRef={onHistoryServiceChangeRef}
+        runScriptRef={runScriptRef}
       />
 
       <AnchorLayout>
@@ -368,6 +373,17 @@ export function Room({ roomId, isHost }: Props) {
               lastLoaded={lastLoaded}
               currentEntityCount={objects.length}
               historyService={historyService}
+            />
+          </UIPanel>
+        )}
+
+        {isHost && (
+          <UIPanel anchor="top-left" order={20}>
+            <ScriptPanel
+              source={scriptSource}
+              onChange={setScriptSource}
+              onSave={() => { /* wired up in #2 */ }}
+              onRun={(src) => runScriptRef.current(src)}
             />
           </UIPanel>
         )}
