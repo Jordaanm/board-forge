@@ -25,6 +25,7 @@ import { compileTypescript } from './Compiler';
 import { loadModule } from './Sandbox';
 import { Game } from './Game';
 import { SceneFacade } from './SceneFacade';
+import { type ScriptRunContext } from './EntityFacade';
 import { type EntityScene } from '../entity/EntityComponent';
 
 export interface ScriptHostOptions {
@@ -54,8 +55,13 @@ export class ScriptHost {
   private state_: ScriptState = { source: '', initialised: false };
   // Most recent successfully-instantiated user class. Held so a failed
   // re-Run (compile error) leaves it live — listeners attached against it
-  // (issue #5) keep working until a successful Run replaces it.
+  // keep working until a successful Run replaces it.
   private currentInstance: Game | null = null;
+  // Per-Run listener registrations. Each EntityFacade.addEventListener
+  // appends; teardown iterates and removes from the underlying buses.
+  // Replaced wholesale at the start of each successful Run so the previous
+  // Run's listeners are dropped before the new class instantiates.
+  private currentRunCtx: ScriptRunContext = { registrations: [] };
 
   constructor(opts: ScriptHostOptions = {}) {
     this.console_ = opts.console ?? console;
@@ -97,10 +103,12 @@ export class ScriptHost {
       return { ok: false, error: compiled.error };
     }
 
-    // Fresh SceneFacade per Run so EntityFacade caches don't survive across
-    // Runs (each Run gets its own per-Run state surface). Falls back to an
-    // empty placeholder when no scene is wired up (unit tests).
-    const scene = this.scene_ ? new SceneFacade(this.scene_) : {};
+    // Fresh ScriptRunContext + SceneFacade per Run so EntityFacade caches
+    // and listener registrations don't survive across Runs. The new context
+    // is installed AFTER teardown of the previous Run so failed Runs don't
+    // double-register against the same set.
+    const ctx: ScriptRunContext = { registrations: [] };
+    const scene = this.scene_ ? new SceneFacade(this.scene_, ctx) : {};
 
     let ns;
     try {
@@ -122,9 +130,10 @@ export class ScriptHost {
       return { ok: false, error: msg };
     }
 
-    // Tear down the previous Run's listener registrations. No-op until #5
-    // adds the registry; preserved as a hook so the Run flow stays stable.
+    // Tear down the previous Run's listener registrations before any new
+    // ones can be added. After this, the previous Run is fully retired.
     this.teardownPreviousRun();
+    this.currentRunCtx = ctx;
 
     let instance: Game;
     try {
@@ -135,8 +144,8 @@ export class ScriptHost {
     }
 
     // Install the new instance before firing hooks so an exception during
-    // a hook still leaves the new instance current (its listeners, once #5
-    // lands, will be torn down on the next Run regardless).
+    // a hook still leaves the new instance current (its listeners are
+    // tracked in the Run context and torn down on the next Run regardless).
     this.currentInstance = instance;
 
     // Run does NOT persist `source` — Save Script (`setSource`) is the
@@ -151,13 +160,14 @@ export class ScriptHost {
     return { ok: true };
   }
 
-  // Hook — placeholder until #5 lands a real listener registry. Kept as
-  // an explicit step in the Run flow so the order doesn't drift; reads the
-  // current instance reference to discipline the lifecycle.
+  // Iterates the per-Run registration set and detaches each listener from
+  // its underlying entity bus. Runs before the next Run's class instantiates
+  // so the new class never observes the previous Run's listeners.
   private teardownPreviousRun(): void {
-    if (!this.currentInstance) return;
-    // #5 will: iterate the per-Run listener registration set, call
-    // removeListener on the underlying buses, clear the set.
+    for (const r of this.currentRunCtx.registrations) {
+      r.entity.removeEventListener(r.event, r.cb);
+    }
+    this.currentRunCtx.registrations.length = 0;
   }
 
   private invokeHook(instance: Game, name: 'onSceneInitialised' | 'onScriptLoaded', scene: unknown): void {

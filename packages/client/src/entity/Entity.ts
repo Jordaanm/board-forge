@@ -5,6 +5,7 @@
 import { type SeatIndex } from '../seats/SeatLayout';
 import { type EntityComponent, type ComponentClass } from './EntityComponent';
 import { type SceneImpl } from './Scene';
+import { EntityEventBus, type Listener } from './EntityEventBus';
 
 export interface EntityInit {
   id:             string;
@@ -38,6 +39,9 @@ export class Entity {
   // despawn. attachComponent uses it to inject the World's replicator into
   // newly-attached components without a separate wire-up pass.
   scene:         SceneImpl | null;
+  // Per-entity event bus. Scripts subscribe via EntityFacade; components
+  // dispatch domain events through here. See `dispatchEvent`.
+  private readonly bus = new EntityEventBus();
 
   constructor(init: EntityInit) {
     this.id            = init.id;
@@ -82,6 +86,21 @@ export class Entity {
   cancelTween(): void {
     const tween = this.components.get('tween') as { cancel?: () => void } | undefined;
     tween?.cancel?.();
+  }
+
+  // Domain-event surface (issue #5 of issues--scripting-v1.md). Components
+  // call `dispatchEvent` from their setState path; scripts subscribe via
+  // `addEventListener` (routed through EntityFacade for teardown tracking).
+  addEventListener(event: string, cb: Listener): void {
+    this.bus.addListener(event, cb);
+  }
+
+  removeEventListener(event: string, cb: Listener): void {
+    this.bus.removeListener(event, cb);
+  }
+
+  dispatchEvent<T = unknown>(event: string, payload: T): void {
+    this.bus.dispatch(event, payload);
   }
 }
 

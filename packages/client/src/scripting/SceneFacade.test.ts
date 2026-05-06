@@ -38,7 +38,7 @@ describe('SceneFacade.getObjectById', () => {
   test('returns a facade for a known id', () => {
     const scene = new StubScene();
     scene.add(makeEntity('d-1'));
-    const facade = new SceneFacade(scene);
+    const facade = new SceneFacade(scene, { registrations: [] });
     const result = facade.getObjectById('d-1');
     expect(result).toBeDefined();
     expect(result?.id).toBe('d-1');
@@ -46,14 +46,14 @@ describe('SceneFacade.getObjectById', () => {
 
   test('returns undefined for an unknown id', () => {
     const scene = new StubScene();
-    const facade = new SceneFacade(scene);
+    const facade = new SceneFacade(scene, { registrations: [] });
     expect(facade.getObjectById('not-real')).toBeUndefined();
   });
 
   test('returns the same EntityFacade instance across repeat lookups (per-Run identity)', () => {
     const scene = new StubScene();
     scene.add(makeEntity('d-1'));
-    const facade = new SceneFacade(scene);
+    const facade = new SceneFacade(scene, { registrations: [] });
     expect(facade.getObjectById('d-1')).toBe(facade.getObjectById('d-1'));
   });
 });
@@ -65,7 +65,7 @@ describe('SceneFacade.getObjectsByTag', () => {
     scene.add(makeEntity('d-2', { tags: ['die', 'lucky'] }));
     scene.add(makeEntity('t-1', { tags: ['token'] }));
 
-    const facade = new SceneFacade(scene);
+    const facade = new SceneFacade(scene, { registrations: [] });
     const dice = facade.getObjectsByTag('die').map(d => d.id);
     expect(dice.sort()).toEqual(['d-1', 'd-2']);
   });
@@ -73,14 +73,14 @@ describe('SceneFacade.getObjectsByTag', () => {
   test('returns an empty array on no match', () => {
     const scene = new StubScene();
     scene.add(makeEntity('d-1', { tags: ['die'] }));
-    const facade = new SceneFacade(scene);
+    const facade = new SceneFacade(scene, { registrations: [] });
     expect(facade.getObjectsByTag('zzz')).toEqual([]);
   });
 
   test('returns the same instances as getObjectById', () => {
     const scene = new StubScene();
     scene.add(makeEntity('d-1', { tags: ['die'] }));
-    const facade = new SceneFacade(scene);
+    const facade = new SceneFacade(scene, { registrations: [] });
     const byTag = facade.getObjectsByTag('die')[0];
     const byId  = facade.getObjectById('d-1');
     expect(byTag).toBe(byId);
@@ -91,7 +91,7 @@ describe('EntityFacade — read-only invariants', () => {
   test('exposes id, type, name, tags', () => {
     const scene = new StubScene();
     scene.add(makeEntity('d-1', { type: 'die', tags: ['die', 'lucky'] }));
-    const facade = new SceneFacade(scene);
+    const facade = new SceneFacade(scene, { registrations: [] });
     const e = facade.getObjectById('d-1')!;
     expect(e.id).toBe('d-1');
     expect(e.type).toBe('die');
@@ -103,7 +103,7 @@ describe('EntityFacade — read-only invariants', () => {
     const scene = new StubScene();
     const raw = makeEntity('d-1', { tags: ['die'] });
     scene.add(raw);
-    const e = new SceneFacade(scene).getObjectById('d-1')!;
+    const e = new SceneFacade(scene, { registrations: [] }).getObjectById('d-1')!;
     e.tags.push('mutated');
     expect(raw.tags).toEqual(['die']);
   });
@@ -111,7 +111,7 @@ describe('EntityFacade — read-only invariants', () => {
   test('getComponent returns a frozen state view', () => {
     const scene = new StubScene();
     scene.add(makeEntity('d-1', { value: '6' }));
-    const e = new SceneFacade(scene).getObjectById('d-1')!;
+    const e = new SceneFacade(scene, { registrations: [] }).getObjectById('d-1')!;
 
     const view = e.getComponent('value');
     expect(view).toBeDefined();
@@ -126,7 +126,7 @@ describe('EntityFacade — read-only invariants', () => {
   test('getComponent returns undefined when the typeId is absent', () => {
     const scene = new StubScene();
     scene.add(makeEntity('d-1'));
-    const e = new SceneFacade(scene).getObjectById('d-1')!;
+    const e = new SceneFacade(scene, { registrations: [] }).getObjectById('d-1')!;
     expect(e.getComponent('value')).toBeUndefined();
   });
 
@@ -134,7 +134,7 @@ describe('EntityFacade — read-only invariants', () => {
     const scene = new StubScene();
     const raw = makeEntity('d-1', { value: '6' });
     scene.add(raw);
-    const e = new SceneFacade(scene).getObjectById('d-1')!;
+    const e = new SceneFacade(scene, { registrations: [] }).getObjectById('d-1')!;
     const view = e.getComponent('value')!;
 
     // The view is frozen; even forcing a write through bypassing the freeze
@@ -147,7 +147,7 @@ describe('EntityFacade — read-only invariants', () => {
   test('the EntityFacade has no setState / mutator surface for components', () => {
     const scene = new StubScene();
     scene.add(makeEntity('d-1', { value: '6' }));
-    const e = new SceneFacade(scene).getObjectById('d-1')!;
+    const e = new SceneFacade(scene, { registrations: [] }).getObjectById('d-1')!;
     const view = e.getComponent('value')!;
     expect((view as unknown as Record<string, unknown>).setState).toBeUndefined();
   });

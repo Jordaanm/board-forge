@@ -7,14 +7,16 @@
 // entity (script code can rely on `===` between two lookups).
 
 import { type EntityScene } from '../entity/EntityComponent';
-import { EntityFacade } from './EntityFacade';
+import { EntityFacade, type ScriptRunContext } from './EntityFacade';
 
 export class SceneFacade {
   private readonly scene: EntityScene;
+  private readonly ctx:   ScriptRunContext;
   private readonly cache = new Map<string, EntityFacade>();
 
-  constructor(scene: EntityScene) {
+  constructor(scene: EntityScene, ctx: ScriptRunContext) {
     this.scene = scene;
+    this.ctx   = ctx;
   }
 
   getObjectById(id: string): EntityFacade | undefined {
@@ -37,7 +39,7 @@ export class SceneFacade {
     if (cached) return cached;
     const entity = this.scene.getEntity(id);
     if (!entity) throw new Error(`SceneFacade.facadeFor: entity ${id} vanished`);
-    const fresh = new EntityFacade(entity);
+    const fresh = new EntityFacade(entity, this.ctx);
     this.cache.set(id, fresh);
     return fresh;
   }

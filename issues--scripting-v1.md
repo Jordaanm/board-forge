@@ -128,7 +128,7 @@ The `scene` global exposed to scripts becomes a real `SceneFacade` that wraps `S
 
 ---
 
-## #5 — `value-changed` event + listener teardown + `setValue`
+## #5 — `value-changed` event + listener teardown + `setValue` ✅ Done
 
 **Type:** AFK
 **Blocked by:** #4
@@ -145,13 +145,13 @@ The PoC scenario lands here: a script registers a listener on a die and logs eac
 
 ### Acceptance criteria
 
-- [ ] PoC: host writes a script that, in `onScriptLoaded`, calls `scene.getObjectsByTag('die').forEach(d => d.addEventListener('value-changed', e => console.log(d.name, e.value)))`. Rolling a die emits exactly one log with the settled value.
-- [ ] Setting `value` to its current value via `ValueComponent.setState` dispatches **nothing**.
-- [ ] After a re-Run, the previous listener does not fire on subsequent dispatches; the new listener does.
-- [ ] `entity.removeEventListener(name, cb)` removes only the targeted callback.
-- [ ] `entity.setValue('6')` updates the underlying `ValueComponent` state and replicates to guests via the existing patch flow.
-- [ ] An exception thrown inside a listener is caught (does not abort other listeners on the same dispatch); error path TBD by #7 — for now, `console.error` is acceptable.
-- [ ] Unit tests cover `EntityEventBus` (register/dispatch/remove, multi-listener fanout, dispatch with zero listeners), `ValueComponent` event emission (fires on change, silent on no-change), and `ScriptHost` listener teardown across Runs.
+- [x] PoC: host writes a script that, in `onScriptLoaded`, calls `scene.getObjectsByTag('die').forEach(d => d.addEventListener('value-changed', e => console.log(d.name, e.value)))`. Rolling a die emits exactly one log with the settled value.
+- [x] Setting `value` to its current value via `ValueComponent.setState` dispatches **nothing**.
+- [x] After a re-Run, the previous listener does not fire on subsequent dispatches; the new listener does.
+- [x] `entity.removeEventListener(name, cb)` removes only the targeted callback.
+- [x] `entity.setValue('6')` updates the underlying `ValueComponent` state and replicates to guests via the existing patch flow.
+- [x] An exception thrown inside a listener is caught (does not abort other listeners on the same dispatch); error path TBD by #7 — for now, `console.error` is acceptable.
+- [x] Unit tests cover `EntityEventBus` (register/dispatch/remove, multi-listener fanout, dispatch with zero listeners), `ValueComponent` event emission (fires on change, silent on no-change), and `ScriptHost` listener teardown across Runs.
 
 ### Stories covered
 
