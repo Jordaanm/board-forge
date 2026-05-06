@@ -34,7 +34,12 @@
       "PowerShell(New-Item *)",
       "Bash(bun add *)",
       "Bash(npm install *)",
-      "Bash(xargs grep *)"
+      "Bash(xargs grep *)",
+      "Bash(del *)",
+      "Bash(pnpm --filter client typecheck)",
+      "PowerShell(pnpm *)",
+      "PowerShell(npm *)",
+      "PowerShell(npx playwright *)"
     ]
   }
 }
