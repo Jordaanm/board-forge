@@ -1,7 +1,8 @@
 import { useEffect, useRef, type MutableRefObject } from 'react';
 import * as THREE from 'three';
 import { PhysicsWorld } from './physics/PhysicsWorld';
-import { createSkydome, applySkydomeProp, type SkydomeProps } from './scene/Skydome';
+import { type SkydomeProps } from './scene/Skydome';
+import { SkydomeComponent } from './entity/components/SkydomeComponent';
 import { createKeyLight, applyKeyLightProp, type KeyLightProps } from './scene/KeyLight';
 import { createWorld } from './entity/world';
 import { type World, type WorldInboundMessage } from './entity/world';
@@ -135,9 +136,6 @@ export function ThreeCanvas({
 
     const keyLight = createKeyLight();
     scene.add(keyLight);
-
-    const skydomeMesh = createSkydome();
-    scene.add(skydomeMesh);
 
     const rimLight = new THREE.DirectionalLight(0x9cc9ff, 0.35);
     rimLight.position.set(-6, 6, -4);
@@ -404,7 +402,10 @@ export function ThreeCanvas({
       };
     }
 
-    updateSkydomePropRef.current  = (key, value) => applySkydomeProp(skydomeMesh, key, value);
+    updateSkydomePropRef.current = (key, value) => {
+      if (key !== 'textureUrl') return;
+      world.getTable()?.entity.getComponent(SkydomeComponent)?.setState({ textureUrl: String(value ?? '') });
+    };
     updateKeyLightPropRef.current = (key, value) => applyKeyLightProp(keyLight, key, value);
 
     // ── Inbound message router ──────────────────────────────────────────

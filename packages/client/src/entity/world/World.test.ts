@@ -11,6 +11,7 @@ import { TransformComponent } from '../components/TransformComponent';
 import { ValueComponent } from '../components/ValueComponent';
 import { PhysicsComponent } from '../components/PhysicsComponent';
 import { TableComponent } from '../components/TableComponent';
+import { SkydomeComponent } from '../components/SkydomeComponent';
 import { TABLE_ENTITY_ID } from '../tableEntity';
 import { type World } from './types';
 import { type SeatIndex } from '../../seats/SeatLayout';
@@ -109,6 +110,17 @@ describe('World — Table boot path (table-as-entity slice 1)', () => {
     const b = pair.guest.getTableBounds();
     expect(b.halfWidth).toBeCloseTo(6, 5);
     expect(b.halfDepth).toBeCloseTo(4, 5);
+  });
+
+  test('SkydomeComponent textureUrl replicates host → guest (slice 2)', () => {
+    pair = setup();
+    pair.host.tick(0.016);  // replicate Table to guest
+    const hostSky = pair.host.get(TABLE_ENTITY_ID)!.get(SkydomeComponent)!;
+    hostSky.setState({ textureUrl: 'custom:sky/some-slug' });
+    pair.host.tick(0.016);
+
+    const guestSky = pair.guest.get(TABLE_ENTITY_ID)!.get(SkydomeComponent)!;
+    expect(guestSky.state.textureUrl).toBe('custom:sky/some-slug');
   });
 });
 

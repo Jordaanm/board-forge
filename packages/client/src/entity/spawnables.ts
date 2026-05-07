@@ -17,6 +17,7 @@ import { ZoneComponent } from './components/ZoneComponent';
 import { TweenComponent } from './components/TweenComponent';
 import { HandComponent } from './components/HandComponent';
 import { TableComponent } from './components/TableComponent';
+import { SkydomeComponent } from './components/SkydomeComponent';
 import { D6_FACE_MAP } from '../dice/d6';
 
 export function registerCorePrimitives(): void {
@@ -32,6 +33,7 @@ export function registerCorePrimitives(): void {
   if (!componentRegistry.has('tween'))     componentRegistry.register(TweenComponent);
   if (!componentRegistry.has('hand'))      componentRegistry.register(HandComponent);
   if (!componentRegistry.has('table'))     componentRegistry.register(TableComponent);
+  if (!componentRegistry.has('skydome'))   componentRegistry.register(SkydomeComponent);
 
   if (!getSpawnable('table')) registerSpawnable({
     type:        'table',
@@ -44,6 +46,7 @@ export function registerCorePrimitives(): void {
       { typeId: 'mesh',      state: { meshRef: 'prim:table-rect', textureRefs: { default: '' }, tint: '#4a3728', size: [12, 0.3, 8] } },
       { typeId: 'physics',   state: { mass: 0, friction: 0.5, restitution: 0.3, isLocked: true } },
       { typeId: 'table',     state: {} },
+      { typeId: 'skydome',   state: { textureUrl: '' } },
     ],
   });
 
