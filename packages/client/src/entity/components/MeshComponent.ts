@@ -20,6 +20,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { EntityComponent, type SpawnContext, type MenuContext, type MenuItem, type ActionContext } from '../EntityComponent';
 import { TransformComponent } from './TransformComponent';
+import { assetService } from '../../assets/AssetService';
 
 export type MeshSize = number | [number, number, number];
 
@@ -35,6 +36,7 @@ export class MeshComponent extends EntityComponent<MeshState> {
   static requires = ['transform'] as const;
 
   group!: THREE.Group;
+  private textureUnsubs: (() => void)[] = [];
 
   onSpawn(_ctx: SpawnContext): void {
     const transform = this.entity.getComponent(TransformComponent)!;
@@ -45,8 +47,14 @@ export class MeshComponent extends EntityComponent<MeshState> {
   }
 
   onDespawn(_ctx: SpawnContext): void {
+    this.unsubAllTextures();
     if (this.group.parent) this.group.parent.remove(this.group);
     disposeGroup(this.group);
+  }
+
+  private unsubAllTextures(): void {
+    for (const u of this.textureUnsubs) u();
+    this.textureUnsubs = [];
   }
 
   onPropertiesChanged(changed: Partial<MeshState>): void {
@@ -89,6 +97,7 @@ export class MeshComponent extends EntityComponent<MeshState> {
   }
 
   private rebuild(): void {
+    this.unsubAllTextures();
     disposeGroup(this.group);
     while (this.group.children.length) this.group.remove(this.group.children[0]);
     const built = buildMesh(this.state.meshRef, this.state.size);
@@ -97,18 +106,20 @@ export class MeshComponent extends EntityComponent<MeshState> {
   }
 
   private applyMaterialAttributes(): void {
+    this.unsubAllTextures();
     const tint  = this.state.tint || '#ffffff';
     const slots = this.state.textureRefs ?? {};
 
     const apply = (mat: THREE.Material, slot: string): void => {
       const lambert = mat as THREE.MeshLambertMaterial;
       lambert.color?.set(new THREE.Color(tint));
-      const url = slots[slot] || '';
-      if (url && typeof document !== 'undefined') {
-        new THREE.TextureLoader().load(url, (tex) => {
+      const ref = slots[slot] || '';
+      if (ref) {
+        const unsub = assetService.subscribe(ref, 'image', (tex) => {
           lambert.map = tex;
           lambert.needsUpdate = true;
         });
+        this.textureUnsubs.push(unsub);
       } else {
         lambert.map = null;
         lambert.needsUpdate = true;
