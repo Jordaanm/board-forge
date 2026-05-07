@@ -31,6 +31,8 @@ import { CardComponent } from '../components/CardComponent';
 import { ZoneComponent } from '../components/ZoneComponent';
 import { TweenComponent } from '../components/TweenComponent';
 import { HandComponent } from '../components/HandComponent';
+import { SkydomeComponent } from '../components/SkydomeComponent';
+import { LightingComponent } from '../components/LightingComponent';
 import { registerCorePrimitives } from '../spawnables';
 import { PhysicsWorld } from '../../physics/PhysicsWorld';
 import { TABLE_SURFACE_Y } from '../../scene/Table';
@@ -272,8 +274,10 @@ class WorldImpl implements World, HandleRouter {
     if (removed.length > 0) this.notify();
   }
 
-  // Mirrors SceneSystemV2.updateProp so existing EditorPanel writes preserve
-  // behaviour. Issue #4 collapses these into component-driven actions.
+  // Routes EditorPanel prop edits into the appropriate entity-level field or
+  // component setter. Prefixed keys (e.g. `mesh.scale`, `sky.textureUrl`)
+  // disambiguate components on entities that surface props from more than
+  // one (currently the singleton Table — `mesh`, `sky`, `light`).
   updateProp(id: string, key: string, value: unknown): void {
     const entity = this.scene.getEntity(id);
     if (!entity) return;
@@ -296,6 +300,15 @@ class WorldImpl implements World, HandleRouter {
       const owner = Number.isFinite(seat) && seat >= 0 ? (seat as SeatIndex) : null;
       entity.owner = owner;
       if (this.replicator) this.replicator.enqueueEntityPatch(entity.id, { owner });
+      this.notify();
+      return;
+    }
+
+    // Prefixed keys route to the named component on the entity. Keeps the
+    // Table editor schema flat (no nested sections) while still letting the
+    // host disambiguate where each prop lives.
+    if (key.includes('.')) {
+      this.applyPrefixedProp(entity, key, value);
       this.notify();
       return;
     }
@@ -336,6 +349,47 @@ class WorldImpl implements World, HandleRouter {
       }
     }
     this.notify();
+  }
+
+  private applyPrefixedProp(entity: Entity, key: string, value: unknown): void {
+    const dot    = key.indexOf('.');
+    const prefix = key.slice(0, dot);
+    const tail   = key.slice(dot + 1);
+
+    if (prefix === 'mesh') {
+      if (tail === 'meshRef') {
+        entity.getComponent(MeshComponent)?.setState({ meshRef: String(value ?? '') });
+        return;
+      }
+      if (tail === 'scale') {
+        const transform = entity.getComponent(TransformComponent);
+        if (!transform) return;
+        const s = Number(value);
+        const safe = Number.isFinite(s) && s > 0 ? s : 1;
+        transform.setState({
+          position: transform.state.position,
+          rotation: transform.state.rotation,
+          scale:    [safe, safe, safe],
+        });
+        return;
+      }
+      return;
+    }
+
+    if (prefix === 'sky' && tail === 'textureUrl') {
+      entity.getComponent(SkydomeComponent)?.setState({ textureUrl: String(value ?? '') });
+      return;
+    }
+
+    if (prefix === 'light') {
+      const lighting = entity.getComponent(LightingComponent);
+      if (!lighting) return;
+      if (tail === 'color')     lighting.setState({ keyColor:     String(value ?? '#ffffff') });
+      if (tail === 'intensity') {
+        const n = Number(value);
+        lighting.setState({ keyIntensity: Number.isFinite(n) && n >= 0 ? n : 0 });
+      }
+    }
   }
 
   // ── Per-frame driver ─────────────────────────────────────────────────────

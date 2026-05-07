@@ -19,11 +19,13 @@ export const BASE_MANIFEST_ENTRIES: AssetEntry[] = [
 ];
 
 export const PRIMITIVE_MANIFEST_ENTRIES: AssetEntry[] = [
-  { slug: 'prim:cube',   name: 'Cube',   type: 'model', url: 'primitive://cube',   preload: true },
-  { slug: 'prim:d6',     name: 'D6',     type: 'model', url: 'primitive://d6',     preload: true },
-  { slug: 'prim:card',   name: 'Card',   type: 'model', url: 'primitive://card',   preload: true },
-  { slug: 'prim:deck',   name: 'Deck',   type: 'model', url: 'primitive://deck',   preload: true },
-  { slug: 'prim:meeple', name: 'Meeple', type: 'model', url: 'primitive://meeple', preload: true },
+  { slug: 'prim:cube',         name: 'Cube',         type: 'model', url: 'primitive://cube',         preload: true },
+  { slug: 'prim:d6',           name: 'D6',           type: 'model', url: 'primitive://d6',           preload: true },
+  { slug: 'prim:card',         name: 'Card',         type: 'model', url: 'primitive://card',         preload: true },
+  { slug: 'prim:deck',         name: 'Deck',         type: 'model', url: 'primitive://deck',         preload: true },
+  { slug: 'prim:meeple',       name: 'Meeple',       type: 'model', url: 'primitive://meeple',       preload: true },
+  { slug: 'prim:table-rect',   name: 'Table (rect)', type: 'model', url: 'primitive://table-rect',   preload: true },
+  { slug: 'prim:table-circle', name: 'Table (round)', type: 'model', url: 'primitive://table-circle', preload: true },
 ];
 
 export const BASE_MANIFEST      = Manifest.from(BASE_MANIFEST_ENTRIES);

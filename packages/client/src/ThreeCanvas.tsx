@@ -1,10 +1,8 @@
 import { useEffect, useRef, type MutableRefObject } from 'react';
 import * as THREE from 'three';
 import { PhysicsWorld } from './physics/PhysicsWorld';
-import { type SkydomeProps } from './scene/Skydome';
 import { SkydomeComponent } from './entity/components/SkydomeComponent';
 import { LightingComponent } from './entity/components/LightingComponent';
-import { type KeyLightProps } from './scene/KeyLight';
 import { createWorld } from './entity/world';
 import { type World, type WorldInboundMessage } from './entity/world';
 import { RtcTransport } from './entity/world';
@@ -66,8 +64,6 @@ interface Props {
   shuffleDeckRef:      MutableRefObject<(deckId: string) => void>;
   dealFromDeckRef:     MutableRefObject<(deckId: string, count: number, callerSeat: SeatIndex | null) => void>;
   updatePropRef:       MutableRefObject<(id: string, key: string, value: unknown) => void>;
-  updateSkydomePropRef:  MutableRefObject<(key: keyof SkydomeProps, value: unknown) => void>;
-  updateKeyLightPropRef: MutableRefObject<(key: keyof KeyLightProps, value: unknown) => void>;
   freeCameraRef:       MutableRefObject<(on: boolean) => void>;
   onObjectsChangeRef:  MutableRefObject<(objects: ObjectSummary[]) => void>;
   onSelectRef:         MutableRefObject<(id: string | null) => void>;
@@ -102,7 +98,7 @@ export function ThreeCanvas({
   isHost, sendRef, sendToRef, getTargetsRef, getSelfSeatRef, getSelfPeerIdRef, getPeerSeatRef,
   onMsgRef, onPeerLeftRef, onPeerJoinedRef,
   spawnRef, rollRef, onContextMenuRef, deleteObjectRef, drawFromDeckRef, shuffleDeckRef, dealFromDeckRef,
-  updatePropRef, updateSkydomePropRef, updateKeyLightPropRef,
+  updatePropRef,
   freeCameraRef, onObjectsChangeRef,
   onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,
   setShowAllZonesRef,
@@ -319,13 +315,20 @@ export function ThreeCanvas({
       });
     };
 
+    const pushObjects = () => {
+      onObjectsChangeRef.current(world.all().map(h => entityToObjectSummary(h.entity)));
+    };
+    // Initial push: the Table is spawned in the World constructor before
+    // this subscribe runs, so a replay-on-subscribe is needed for React to
+    // see boot-time entities.
+    pushObjects();
     const unsubscribe = world.subscribe(() => {
       if (highlightId && !world.get(highlightId)) {
         highlightId = null;
         clearHighlightBox();
         grabTool.setSelection(null, dispatcher.getContext());
       }
-      onObjectsChangeRef.current(world.all().map(h => entityToObjectSummary(h.entity)));
+      pushObjects();
     });
 
     const contextCtrl = new ContextMenuController(
@@ -399,17 +402,6 @@ export function ThreeCanvas({
         world.forEach((h) => h.entity.getComponent(DiceComponent)?.roll());
       };
     }
-
-    updateSkydomePropRef.current = (key, value) => {
-      if (key !== 'textureUrl') return;
-      world.getTable()?.entity.getComponent(SkydomeComponent)?.setState({ textureUrl: String(value ?? '') });
-    };
-    updateKeyLightPropRef.current = (key, value) => {
-      const lighting = world.getTable()?.entity.getComponent(LightingComponent);
-      if (!lighting) return;
-      if (key === 'color')     lighting.setState({ keyColor:     String(value ?? '#ffffff') });
-      if (key === 'intensity') lighting.setState({ keyIntensity: Number(value) || 0 });
-    };
 
     // ── Inbound message router ──────────────────────────────────────────
     // Cursor traffic stays here (not a SceneMessage). Everything else is
@@ -539,8 +531,6 @@ export function ThreeCanvas({
       shuffleDeckRef.current  = () => {};
       dealFromDeckRef.current = () => {};
       updatePropRef.current      = () => {};
-      updateSkydomePropRef.current  = () => {};
-      updateKeyLightPropRef.current = () => {};
       freeCameraRef.current      = () => {};
       setHighlightRef.current    = () => {};
       getEntityRef.current       = () => undefined;
@@ -555,7 +545,7 @@ export function ThreeCanvas({
     isHost, sendRef, sendToRef, getTargetsRef, getSelfSeatRef, getSelfPeerIdRef, getPeerSeatRef,
     onMsgRef, onPeerLeftRef, onPeerJoinedRef,
     spawnRef, rollRef, onContextMenuRef, deleteObjectRef, drawFromDeckRef, shuffleDeckRef, dealFromDeckRef,
-    updatePropRef, updateSkydomePropRef, updateKeyLightPropRef,
+    updatePropRef,
     freeCameraRef, onObjectsChangeRef,
     onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,
     setShowAllZonesRef, setHandViewRef, requestHandTileMenuRef, playCardToTableRef,
@@ -608,14 +598,30 @@ function handViewKey(view: HandView | null): string {
 }
 
 // Editor-panel view of an entity. Mirrors SceneSystemV2.derivePropsView until
-// issue #4 migrates EditorPanel to read components directly.
+// the editor migrates to read components directly.
 function entityToObjectSummary(entity: Entity): ObjectSummary {
   const mesh  = entity.getComponent(MeshComponent);
   const value = entity.getComponent(ValueComponent);
   const zone  = entity.getComponent(ZoneComponent);
   const card  = entity.getComponent(CardComponent);
   const props: Record<string, unknown> = { name: entity.name };
-  if (entity.type === 'board' && mesh) {
+  if (entity.type === 'table') {
+    if (mesh) {
+      props['mesh.meshRef'] = mesh.state.meshRef;
+    }
+    const transform = entity.getComponent(TransformComponent);
+    if (transform) {
+      // UI exposes a single uniform scale slider; storage keeps per-axis.
+      props['mesh.scale'] = transform.state.scale[0];
+    }
+    const sky = entity.getComponent(SkydomeComponent);
+    if (sky) props['sky.textureUrl'] = sky.state.textureUrl;
+    const lighting = entity.getComponent(LightingComponent);
+    if (lighting) {
+      props['light.color']     = lighting.state.keyColor;
+      props['light.intensity'] = lighting.state.keyIntensity;
+    }
+  } else if (entity.type === 'board' && mesh) {
     const sz = mesh.state.size as [number, number, number];
     props.width      = sz[0];
     props.depth      = sz[2];

@@ -3,8 +3,7 @@ import * as THREE from 'three';
 import { type SpawnableType } from '../net/SceneState';
 import { resolveObjectMeta, type PropertyDef } from '../scene/objectMeta';
 import { SEAT_COLOURS } from '../seats/SeatLayout';
-import { type SkydomeProps } from '../scene/Skydome';
-import { type KeyLightProps } from '../scene/KeyLight';
+import { TABLE_ENTITY_ID } from '../entity/tableEntity';
 import { type ManifestStore } from '../assets/ManifestStore';
 import { type AssetType } from '../assets/Manifest';
 import { AssetPicker } from './AssetPicker';
@@ -23,14 +22,10 @@ interface Props {
   objects:              ObjectSummary[];
   selectedId:           string | null;
   isFreeCamera:         boolean;
-  skydomeProps:         SkydomeProps;
-  keyLightProps:        KeyLightProps;
   manifestStore:        ManifestStore | null;
   onSelect:             (id: string | null) => void;
   onRollDice:           () => void;
   onUpdateProp:         (id: string, key: string, value: unknown) => void;
-  onUpdateSkydomeProp:  (key: keyof SkydomeProps, value: unknown) => void;
-  onUpdateKeyLightProp: (key: keyof KeyLightProps, value: unknown) => void;
   onToggleFreeCamera:   (on: boolean) => void;
 }
 
@@ -121,10 +116,10 @@ const CHIP_X: React.CSSProperties = {
 };
 
 export function EditorPanel({
-  objects, selectedId, isFreeCamera, skydomeProps, keyLightProps,
+  objects, selectedId, isFreeCamera,
   manifestStore,
   onSelect, onRollDice, onUpdateProp,
-  onUpdateSkydomeProp, onUpdateKeyLightProp, onToggleFreeCamera,
+  onToggleFreeCamera,
 }: Props) {
   const [open, setOpen]           = useState(true);
   const [collapsed, setCollapsed] = useState(false);
@@ -159,68 +154,10 @@ export function EditorPanel({
         <>
           <SceneGraphList objects={objects} selectedId={selectedId} onSelect={onSelect} />
           <PropertyEditor selected={selected} manifestStore={manifestStore} onUpdateProp={onUpdateProp} />
-          <SkydomeSection skydomeProps={skydomeProps} manifestStore={manifestStore} onUpdateSkydomeProp={onUpdateSkydomeProp} />
-          <KeyLightSection keyLightProps={keyLightProps} onUpdateKeyLightProp={onUpdateKeyLightProp} />
           <RollSection onRollDice={onRollDice} />
           <CameraSection isFreeCamera={isFreeCamera} onToggleFreeCamera={onToggleFreeCamera} />
         </>
       )}
-    </div>
-  );
-}
-
-function SkydomeSection({
-  skydomeProps, manifestStore, onUpdateSkydomeProp,
-}: {
-  skydomeProps:        SkydomeProps;
-  manifestStore:       ManifestStore | null;
-  onUpdateSkydomeProp: (key: keyof SkydomeProps, value: unknown) => void;
-}) {
-  return (
-    <div style={SECTION}>
-      <div style={SECTION_LABEL}>Skydome</div>
-      <div>
-        <label style={{ display: 'block', color: '#aaa', fontSize: 11, marginBottom: 3 }}>Image</label>
-        <AssetField
-          assetType="image"
-          value={skydomeProps.textureUrl}
-          manifestStore={manifestStore}
-          onChange={(v) => onUpdateSkydomeProp('textureUrl', v)}
-        />
-      </div>
-    </div>
-  );
-}
-
-function KeyLightSection({
-  keyLightProps, onUpdateKeyLightProp,
-}: { keyLightProps: KeyLightProps; onUpdateKeyLightProp: (key: keyof KeyLightProps, value: unknown) => void }) {
-  return (
-    <div style={SECTION}>
-      <div style={SECTION_LABEL}>Key Light</div>
-      <div style={{ marginBottom: 8 }}>
-        <label style={{ display: 'block', color: '#aaa', fontSize: 11, marginBottom: 3 }}>Color</label>
-        <input
-          type="color"
-          style={{ ...INPUT, padding: 2, height: 28 }}
-          value={keyLightProps.color}
-          onChange={e => onUpdateKeyLightProp('color', e.target.value)}
-        />
-      </div>
-      <div>
-        <label style={{ display: 'block', color: '#aaa', fontSize: 11, marginBottom: 3 }}>
-          Intensity ({keyLightProps.intensity.toFixed(2)})
-        </label>
-        <input
-          type="range"
-          min={0}
-          max={5}
-          step={0.05}
-          style={{ ...INPUT, padding: 0, height: 24 }}
-          value={keyLightProps.intensity}
-          onChange={e => onUpdateKeyLightProp('intensity', parseFloat(e.target.value))}
-        />
-      </div>
     </div>
   );
 }
@@ -243,7 +180,12 @@ function SceneGraphList({
     arr.push(o);
     childrenOf.set(p, arr);
   }
-  const roots = childrenOf.get(null) ?? [];
+  // Pin the Table row at the top of the root list regardless of input order.
+  const rawRoots = childrenOf.get(null) ?? [];
+  const roots = [
+    ...rawRoots.filter(o => o.id === TABLE_ENTITY_ID),
+    ...rawRoots.filter(o => o.id !== TABLE_ENTITY_ID),
+  ];
 
   return (
     <div style={SECTION}>

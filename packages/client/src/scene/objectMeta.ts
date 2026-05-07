@@ -23,6 +23,21 @@ export interface ObjectMeta {
 }
 
 export const OBJECT_META: Record<string, ObjectMeta> = {
+  table: {
+    type:  'table',
+    label: 'Table',
+    propertySchema: [
+      // Prefixed keys disambiguate the three contributing components on the
+      // singleton Table entity; `World.updateProp` parses the prefix and
+      // routes to the appropriate component setter.
+      { key: 'mesh.meshRef',    label: 'Mesh',           type: 'asset:model' },
+      { key: 'mesh.scale',      label: 'Scale',          type: 'number'      },
+      { key: 'sky.textureUrl',  label: 'Sky',            type: 'asset:image' },
+      { key: 'light.color',     label: 'Light color',    type: 'color'       },
+      { key: 'light.intensity', label: 'Light intensity', type: 'number'     },
+    ],
+    actions: [],
+  },
   board: {
     type:  'board',
     label: 'Board',

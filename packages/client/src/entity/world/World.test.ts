@@ -13,6 +13,7 @@ import { PhysicsComponent } from '../components/PhysicsComponent';
 import { TableComponent } from '../components/TableComponent';
 import { SkydomeComponent } from '../components/SkydomeComponent';
 import { LightingComponent } from '../components/LightingComponent';
+import { MeshComponent } from '../components/MeshComponent';
 import { TABLE_ENTITY_ID } from '../tableEntity';
 import { type World } from './types';
 import { type SeatIndex } from '../../seats/SeatLayout';
@@ -122,6 +123,45 @@ describe('World — Table boot path (table-as-entity slice 1)', () => {
 
     const guestSky = pair.guest.get(TABLE_ENTITY_ID)!.get(SkydomeComponent)!;
     expect(guestSky.state.textureUrl).toBe('custom:sky/some-slug');
+  });
+
+  test('updateProp routes prefixed Table keys to the correct components (slice 4)', () => {
+    pair = setup();
+    pair.host.tick(0.016);  // replicate Table to guest
+
+    pair.host.updateProp(TABLE_ENTITY_ID, 'mesh.meshRef',    'prim:table-circle');
+    pair.host.updateProp(TABLE_ENTITY_ID, 'mesh.scale',      1.5);
+    pair.host.updateProp(TABLE_ENTITY_ID, 'sky.textureUrl',  'custom:sky/pretty');
+    pair.host.updateProp(TABLE_ENTITY_ID, 'light.color',     '#abcdef');
+    pair.host.updateProp(TABLE_ENTITY_ID, 'light.intensity', 0.5);
+
+    const hostTable = pair.host.get(TABLE_ENTITY_ID)!;
+    expect(hostTable.get(MeshComponent)!.state.meshRef).toBe('prim:table-circle');
+    expect(hostTable.get(TransformComponent)!.state.scale).toEqual([1.5, 1.5, 1.5]);
+    expect(hostTable.get(SkydomeComponent)!.state.textureUrl).toBe('custom:sky/pretty');
+    expect(hostTable.get(LightingComponent)!.state.keyColor).toBe('#abcdef');
+    expect(hostTable.get(LightingComponent)!.state.keyIntensity).toBeCloseTo(0.5, 5);
+
+    pair.host.tick(0.016);
+
+    const guestTable = pair.guest.get(TABLE_ENTITY_ID)!;
+    expect(guestTable.get(MeshComponent)!.state.meshRef).toBe('prim:table-circle');
+    expect(guestTable.get(TransformComponent)!.state.scale).toEqual([1.5, 1.5, 1.5]);
+    expect(guestTable.get(SkydomeComponent)!.state.textureUrl).toBe('custom:sky/pretty');
+    expect(guestTable.get(LightingComponent)!.state.keyColor).toBe('#abcdef');
+    expect(guestTable.get(LightingComponent)!.state.keyIntensity).toBeCloseTo(0.5, 5);
+  });
+
+  test('updateProp clamps a non-positive scale to 1', () => {
+    pair = setup();
+    pair.host.updateProp(TABLE_ENTITY_ID, 'mesh.scale', 0);
+    expect(pair.host.get(TABLE_ENTITY_ID)!.get(TransformComponent)!.state.scale).toEqual([1, 1, 1]);
+  });
+
+  test('updateProp clamps a negative light intensity to 0', () => {
+    pair = setup();
+    pair.host.updateProp(TABLE_ENTITY_ID, 'light.intensity', -1);
+    expect(pair.host.get(TABLE_ENTITY_ID)!.get(LightingComponent)!.state.keyIntensity).toBe(0);
   });
 
   test('LightingComponent state replicates host → guest (slice 3)', () => {
