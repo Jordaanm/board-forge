@@ -38,6 +38,13 @@ describe('SaveFile.encode', () => {
     expect(env.thumbnail).toBeNull();
     expect(env.scene).toEqual(sampleScene);
     expect(env.script).toEqual({ source: '', initialised: false });
+    expect(env.manifest).toEqual([]);
+  });
+
+  test('carries the supplied manifest through', () => {
+    const entry = { slug: 'custom:m', name: 'M', type: 'image' as const, url: 'http://x', preload: true };
+    const env   = encodeSaveFile({ scene: [], thumbnail: null, manifest: [entry] });
+    expect(env.manifest).toEqual([entry]);
   });
 
   test('defaults savedAt to current ISO timestamp', () => {
@@ -92,6 +99,15 @@ describe('SaveFile round-trip', () => {
     expect(decoded.scene).toEqual([]);
     // Pre-scripting saves carry no `script` field — decode treats as empty.
     expect(decoded.script).toEqual({ source: '', initialised: false });
+    // Pre-asset-system saves carry no `manifest` field — decode treats as empty.
+    expect(decoded.manifest).toEqual([]);
+  });
+
+  test('encode → JSON → decode preserves a populated manifest', () => {
+    const entry = { slug: 'custom:m', name: 'M', type: 'image' as const, url: 'http://x', preload: true, tags: ['face'] };
+    const env   = encodeSaveFile({ scene: [], thumbnail: null, manifest: [entry] });
+    const decoded = decodeSaveFile(JSON.stringify(env));
+    expect(decoded.manifest).toEqual([entry]);
   });
 
   test('decode tolerates a null script (older draft)', () => {
@@ -174,6 +190,37 @@ describe('SaveFile.decode validation', () => {
       script:  { source: '', initialised: 'yes' },
     });
     expect(() => decodeSaveFile(text)).toThrow(/initialised/i);
+  });
+
+  test('rejects malformed manifest (not an array)', () => {
+    const text = JSON.stringify({ format: SAVE_FORMAT, version: SAVE_VERSION, scene: [], manifest: 'oops' });
+    expect(() => decodeSaveFile(text)).toThrow(/manifest/i);
+  });
+
+  test('rejects manifest entry with bad slug', () => {
+    const text = JSON.stringify({
+      format:   SAVE_FORMAT,
+      version:  SAVE_VERSION,
+      scene:    [],
+      manifest: [{ slug: 'BadSlug', name: 'X', type: 'image', url: '', preload: false }],
+    });
+    expect(() => decodeSaveFile(text)).toThrow(/slug/i);
+  });
+
+  test('rejects manifest entry with unknown type', () => {
+    const text = JSON.stringify({
+      format:   SAVE_FORMAT,
+      version:  SAVE_VERSION,
+      scene:    [],
+      manifest: [{ slug: 'custom:x', name: 'X', type: 'sprite', url: '', preload: false }],
+    });
+    expect(() => decodeSaveFile(text)).toThrow(/type/i);
+  });
+
+  test('rejects manifest with duplicate slugs', () => {
+    const e = { slug: 'custom:x', name: 'X', type: 'image', url: '', preload: false };
+    const text = JSON.stringify({ format: SAVE_FORMAT, version: SAVE_VERSION, scene: [], manifest: [e, e] });
+    expect(() => decodeSaveFile(text)).toThrow(/duplicate/i);
   });
 });
 

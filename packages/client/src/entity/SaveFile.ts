@@ -17,9 +17,12 @@
 
 import { type EntitySerialized } from './Scene';
 import { componentRegistry } from './ComponentRegistry';
+import { type AssetEntry, type AssetType, validateSlug } from '../assets/Manifest';
 
 export const SAVE_FORMAT  = 'vtt-scene';
 export const SAVE_VERSION = 1;
+
+const ASSET_TYPES: ReadonlySet<AssetType> = new Set(['image', 'model', 'sound']);
 
 export interface SavedScript {
   source:      string;
@@ -35,6 +38,7 @@ export interface SaveEnvelope {
   thumbnail: string | null;
   scene:     EntitySerialized[];
   script:    SavedScript;
+  manifest:  AssetEntry[];
 }
 
 export interface EncodeOptions {
@@ -42,6 +46,7 @@ export interface EncodeOptions {
   thumbnail: string | null;
   savedAt?:  string;  // defaults to new Date().toISOString()
   script?:   SavedScript;
+  manifest?: readonly AssetEntry[];
 }
 
 export function encodeSaveFile(opts: EncodeOptions): SaveEnvelope {
@@ -52,6 +57,7 @@ export function encodeSaveFile(opts: EncodeOptions): SaveEnvelope {
     thumbnail: opts.thumbnail,
     scene:     [...opts.scene],
     script:    opts.script ?? { ...EMPTY_SCRIPT },
+    manifest:  opts.manifest ? opts.manifest.map(cloneAssetEntry) : [],
   };
 }
 
@@ -100,6 +106,67 @@ export function decodeSaveFile(text: string): SaveEnvelope {
     thumbnail,
     scene,
     script:    decodeScript(obj.script),
+    manifest:  decodeManifest(obj.manifest),
+  };
+}
+
+function decodeManifest(raw: unknown): AssetEntry[] {
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw)) {
+    throw new SaveFileError('Field "manifest" must be an array.');
+  }
+  const seen = new Set<string>();
+  return raw.map((entry, i) => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      throw new SaveFileError(`manifest[${i}] is not an object.`);
+    }
+    const e = entry as Record<string, unknown>;
+    const slugCheck = validateSlug(e.slug);
+    if (!slugCheck.ok) throw new SaveFileError(`manifest[${i}].slug invalid: ${slugCheck.error}`);
+    const slug = e.slug as string;
+    if (seen.has(slug)) throw new SaveFileError(`manifest[${i}] duplicate slug "${slug}".`);
+    seen.add(slug);
+    if (typeof e.name !== 'string' || e.name.length === 0) {
+      throw new SaveFileError(`manifest[${i}].name must be a non-empty string.`);
+    }
+    if (typeof e.type !== 'string' || !ASSET_TYPES.has(e.type as AssetType)) {
+      throw new SaveFileError(`manifest[${i}].type must be one of image|model|sound.`);
+    }
+    if (typeof e.url !== 'string') {
+      throw new SaveFileError(`manifest[${i}].url must be a string.`);
+    }
+    if (typeof e.preload !== 'boolean') {
+      throw new SaveFileError(`manifest[${i}].preload must be a boolean.`);
+    }
+    if (e.description !== undefined && typeof e.description !== 'string') {
+      throw new SaveFileError(`manifest[${i}].description must be a string.`);
+    }
+    if (e.tags !== undefined) {
+      if (!Array.isArray(e.tags) || e.tags.some(t => typeof t !== 'string')) {
+        throw new SaveFileError(`manifest[${i}].tags must be a string array.`);
+      }
+    }
+    return {
+      slug,
+      name:        e.name,
+      type:        e.type as AssetType,
+      url:         e.url,
+      preload:     e.preload,
+      description: e.description as string | undefined,
+      tags:        e.tags ? [...(e.tags as string[])] : undefined,
+    };
+  });
+}
+
+function cloneAssetEntry(e: AssetEntry): AssetEntry {
+  return {
+    slug:        e.slug,
+    name:        e.name,
+    type:        e.type,
+    url:         e.url,
+    preload:     e.preload,
+    description: e.description,
+    tags:        e.tags ? [...e.tags] : undefined,
   };
 }
 
