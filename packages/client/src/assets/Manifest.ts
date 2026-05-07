@@ -1,0 +1,170 @@
+// Pure, immutable asset manifest. Issue #2 of issues--asset-registry.md.
+//
+// `Manifest` is a value object — every mutation (`add`, `update`, `delete`)
+// returns a new instance. Slug is the primary key and is immutable on update;
+// `name`, `url`, `preload`, `description`, `tags` are mutable.
+//
+// Slug format: `<namespace>:<body>`, where namespace is one of `base`,
+// `custom`, `prim` and body is `[a-z0-9][a-z0-9_/-]*`. The slug character set
+// is intentionally narrow so save files and wire payloads stay terse and
+// case-folding can't introduce ambiguity.
+
+export type AssetType = 'image' | 'model' | 'sound';
+
+export interface AssetEntry {
+  slug:         string;
+  name:         string;
+  type:         AssetType;
+  url:          string;
+  preload:      boolean;
+  description?: string;
+  tags?:        string[];
+}
+
+export class ManifestError extends Error {}
+
+export const ALLOWED_NAMESPACES = ['base', 'custom', 'prim'] as const;
+export type Namespace = (typeof ALLOWED_NAMESPACES)[number];
+
+const NAMESPACE_SET = new Set<string>(ALLOWED_NAMESPACES);
+const SLUG_RE       = /^[a-z][a-z0-9]*:[a-z0-9][a-z0-9_/-]*$/;
+
+export type ValidateSlugResult = { ok: true } | { ok: false; error: string };
+
+export function validateSlug(slug: unknown, expectedNamespace?: Namespace): ValidateSlugResult {
+  if (typeof slug !== 'string')          return { ok: false, error: 'slug must be a string' };
+  if (slug.length === 0)                 return { ok: false, error: 'slug must not be empty' };
+  if (!SLUG_RE.test(slug))               return { ok: false, error: `invalid slug format: "${slug}"` };
+  const ns = slug.slice(0, slug.indexOf(':'));
+  if (!NAMESPACE_SET.has(ns))            return { ok: false, error: `unknown namespace: "${ns}"` };
+  if (expectedNamespace && ns !== expectedNamespace) {
+    return { ok: false, error: `expected namespace "${expectedNamespace}", got "${ns}"` };
+  }
+  return { ok: true };
+}
+
+export function namespaceOf(slug: string): Namespace | null {
+  const idx = slug.indexOf(':');
+  if (idx === -1) return null;
+  const ns = slug.slice(0, idx);
+  return NAMESPACE_SET.has(ns) ? (ns as Namespace) : null;
+}
+
+// Quick check used by AssetService to decide whether a ref is a slug or a URL.
+// Returns true only when the prefix is a known namespace — avoids matching
+// `http:` or `data:` etc.
+export function isSlug(ref: string): boolean {
+  return namespaceOf(ref) !== null;
+}
+
+const ASSET_TYPES = new Set<AssetType>(['image', 'model', 'sound']);
+
+function validateEntry(entry: AssetEntry): void {
+  const slugCheck = validateSlug(entry.slug);
+  if (!slugCheck.ok) throw new ManifestError(slugCheck.error);
+  if (typeof entry.name !== 'string' || entry.name.length === 0) {
+    throw new ManifestError(`entry "${entry.slug}": name must be a non-empty string`);
+  }
+  if (!ASSET_TYPES.has(entry.type)) {
+    throw new ManifestError(`entry "${entry.slug}": unknown type "${entry.type}"`);
+  }
+  if (typeof entry.url !== 'string') {
+    throw new ManifestError(`entry "${entry.slug}": url must be a string`);
+  }
+  if (typeof entry.preload !== 'boolean') {
+    throw new ManifestError(`entry "${entry.slug}": preload must be a boolean`);
+  }
+  if (entry.description !== undefined && typeof entry.description !== 'string') {
+    throw new ManifestError(`entry "${entry.slug}": description must be a string`);
+  }
+  if (entry.tags !== undefined && (!Array.isArray(entry.tags) || entry.tags.some(t => typeof t !== 'string'))) {
+    throw new ManifestError(`entry "${entry.slug}": tags must be a string array`);
+  }
+}
+
+export class Manifest {
+  private constructor(private readonly entries: ReadonlyMap<string, AssetEntry>) {}
+
+  static empty(): Manifest {
+    return new Manifest(new Map());
+  }
+
+  static from(entries: readonly AssetEntry[]): Manifest {
+    const map = new Map<string, AssetEntry>();
+    for (const e of entries) {
+      validateEntry(e);
+      if (map.has(e.slug)) {
+        throw new ManifestError(`duplicate slug: "${e.slug}"`);
+      }
+      map.set(e.slug, { ...e, tags: e.tags ? [...e.tags] : undefined });
+    }
+    return new Manifest(map);
+  }
+
+  add(entry: AssetEntry): Manifest {
+    validateEntry(entry);
+    if (this.entries.has(entry.slug)) {
+      throw new ManifestError(`slug already exists: "${entry.slug}"`);
+    }
+    const next = new Map(this.entries);
+    next.set(entry.slug, { ...entry, tags: entry.tags ? [...entry.tags] : undefined });
+    return new Manifest(next);
+  }
+
+  update(slug: string, partial: Partial<Omit<AssetEntry, 'slug' | 'type'>> & { slug?: string; type?: AssetType }): Manifest {
+    const existing = this.entries.get(slug);
+    if (!existing) throw new ManifestError(`unknown slug: "${slug}"`);
+    if (partial.slug !== undefined && partial.slug !== slug) {
+      throw new ManifestError(`slug is immutable: cannot rename "${slug}" → "${partial.slug}"`);
+    }
+    if (partial.type !== undefined && partial.type !== existing.type) {
+      throw new ManifestError(`type is immutable: cannot change "${slug}" type "${existing.type}" → "${partial.type}"`);
+    }
+    const merged: AssetEntry = {
+      ...existing,
+      ...partial,
+      slug: existing.slug,
+      type: existing.type,
+      tags: partial.tags !== undefined
+        ? [...partial.tags]
+        : existing.tags ? [...existing.tags] : undefined,
+    };
+    validateEntry(merged);
+    const next = new Map(this.entries);
+    next.set(slug, merged);
+    return new Manifest(next);
+  }
+
+  delete(slug: string): Manifest {
+    if (!this.entries.has(slug)) return this;
+    const next = new Map(this.entries);
+    next.delete(slug);
+    return new Manifest(next);
+  }
+
+  get(slug: string): AssetEntry | undefined {
+    const e = this.entries.get(slug);
+    return e ? { ...e, tags: e.tags ? [...e.tags] : undefined } : undefined;
+  }
+
+  hasSlug(slug: string): boolean {
+    return this.entries.has(slug);
+  }
+
+  list(opts: { type?: AssetType } = {}): AssetEntry[] {
+    const out: AssetEntry[] = [];
+    for (const e of this.entries.values()) {
+      if (opts.type && e.type !== opts.type) continue;
+      out.push({ ...e, tags: e.tags ? [...e.tags] : undefined });
+    }
+    return out;
+  }
+
+  size(): number {
+    return this.entries.size;
+  }
+
+  toArray(): AssetEntry[] {
+    return this.list();
+  }
+}

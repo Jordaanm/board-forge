@@ -1,16 +1,25 @@
 import * as THREE from 'three';
+import { type AssetEntry, type AssetType, isSlug, Manifest } from './Manifest';
+import { BASE_MANIFEST, PRIMITIVE_MANIFEST } from './baseManifest';
 
-// Single funnel for asset loads. Issue #1 of issues--asset-registry.md.
+// Single funnel for asset loads. Issues #1 and #2 of issues--asset-registry.md.
 //
 // `subscribe(ref, type, listener)` returns the current cached state to the
 // listener immediately (placeholder until the real asset arrives) and again on
 // every transition. Internal cache dedups concurrent + repeat fetches by ref.
 // Loader is injected via constructor so tests can drive it deterministically.
 //
-// Slice 1 covers `image` only — slug resolution, model + audio loaders, and
-// preload arrive in subsequent slices.
+// Refs may be either raw URLs or namespaced slugs (`base:`, `custom:`,
+// `prim:`). Slugs are resolved through the configured manifests; unknown
+// slugs and type mismatches fall back to `base:placeholder/<type>` and report
+// `broken` status so the manager UI can flag them.
+//
+// `placeholder://*` and `primitive://*` are synthetic URL markers — they
+// never hit the network; AssetService recognises them and short-circuits to
+// the in-code placeholder. Primitive meshes still render through
+// `MeshComponent.buildMesh` directly via `meshRef`.
 
-export type AssetType   = 'image' | 'model' | 'sound';
+export type { AssetType };
 export type AssetStatus = 'pending' | 'loaded' | 'broken';
 
 export type ImageLoader = (url: string) => Promise<THREE.Texture>;
@@ -51,14 +60,36 @@ interface ImageEntry {
 
 export interface AssetServiceOptions {
   imageLoader?: ImageLoader;
+  manifests?:   Manifest[];
 }
 
 export class AssetService {
   private images      = new Map<string, ImageEntry>();
   private imageLoader: ImageLoader;
+  private manifests:   Manifest[] = [];
 
   constructor(opts: AssetServiceOptions = {}) {
     this.imageLoader = opts.imageLoader ?? defaultImageLoader;
+    if (opts.manifests) this.manifests = [...opts.manifests];
+  }
+
+  // Replace the slug-resolution catalog. Used at app boot to wire base +
+  // primitive manifests, and again whenever the host's custom manifest
+  // updates (slice #5 onwards).
+  setManifests(manifests: Manifest[]): void {
+    this.manifests = [...manifests];
+    // Drop any cached slug entries — their resolved URL may have changed.
+    for (const ref of [...this.images.keys()]) {
+      if (isSlug(ref)) this.images.delete(ref);
+    }
+  }
+
+  lookupSlug(slug: string): AssetEntry | undefined {
+    for (const m of this.manifests) {
+      const e = m.get(slug);
+      if (e) return e;
+    }
+    return undefined;
   }
 
   // Promise-based accessor — resolves with the real asset on success or with
@@ -115,7 +146,30 @@ export class AssetService {
   }
 
   private startImageLoad(ref: string, entry: ImageEntry): void {
-    entry.loadPromise = this.imageLoader(ref).then(
+    let url:        string;
+    let slugBroken = false;
+
+    if (isSlug(ref)) {
+      const found = this.lookupSlug(ref);
+      if (found && found.type === 'image') {
+        url = found.url;
+      } else {
+        slugBroken = true;
+        url = 'placeholder://image';
+      }
+    } else {
+      url = ref;
+    }
+
+    if (url.startsWith('placeholder://') || url.startsWith('primitive://')) {
+      entry.status      = slugBroken ? 'broken' : 'loaded';
+      entry.texture     = getImagePlaceholder();
+      entry.loadPromise = Promise.resolve(entry.texture);
+      for (const l of entry.listeners) l(entry.texture, entry.status);
+      return;
+    }
+
+    entry.loadPromise = this.imageLoader(url).then(
       (tex) => {
         entry.status  = 'loaded';
         entry.texture = tex;
@@ -131,4 +185,4 @@ export class AssetService {
   }
 }
 
-export const assetService = new AssetService();
+export const assetService = new AssetService({ manifests: [BASE_MANIFEST, PRIMITIVE_MANIFEST] });
