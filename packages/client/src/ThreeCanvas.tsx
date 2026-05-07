@@ -3,7 +3,8 @@ import * as THREE from 'three';
 import { PhysicsWorld } from './physics/PhysicsWorld';
 import { type SkydomeProps } from './scene/Skydome';
 import { SkydomeComponent } from './entity/components/SkydomeComponent';
-import { createKeyLight, applyKeyLightProp, type KeyLightProps } from './scene/KeyLight';
+import { LightingComponent } from './entity/components/LightingComponent';
+import { type KeyLightProps } from './scene/KeyLight';
 import { createWorld } from './entity/world';
 import { type World, type WorldInboundMessage } from './entity/world';
 import { RtcTransport } from './entity/world';
@@ -133,9 +134,6 @@ export function ThreeCanvas({
 
     const hemiLight = new THREE.HemisphereLight(0xbfd9ff, 0x3a2e24, 0.55);
     scene.add(hemiLight);
-
-    const keyLight = createKeyLight();
-    scene.add(keyLight);
 
     const rimLight = new THREE.DirectionalLight(0x9cc9ff, 0.35);
     rimLight.position.set(-6, 6, -4);
@@ -406,7 +404,12 @@ export function ThreeCanvas({
       if (key !== 'textureUrl') return;
       world.getTable()?.entity.getComponent(SkydomeComponent)?.setState({ textureUrl: String(value ?? '') });
     };
-    updateKeyLightPropRef.current = (key, value) => applyKeyLightProp(keyLight, key, value);
+    updateKeyLightPropRef.current = (key, value) => {
+      const lighting = world.getTable()?.entity.getComponent(LightingComponent);
+      if (!lighting) return;
+      if (key === 'color')     lighting.setState({ keyColor:     String(value ?? '#ffffff') });
+      if (key === 'intensity') lighting.setState({ keyIntensity: Number(value) || 0 });
+    };
 
     // ── Inbound message router ──────────────────────────────────────────
     // Cursor traffic stays here (not a SceneMessage). Everything else is

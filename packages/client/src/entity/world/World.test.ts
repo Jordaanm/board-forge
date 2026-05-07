@@ -12,6 +12,7 @@ import { ValueComponent } from '../components/ValueComponent';
 import { PhysicsComponent } from '../components/PhysicsComponent';
 import { TableComponent } from '../components/TableComponent';
 import { SkydomeComponent } from '../components/SkydomeComponent';
+import { LightingComponent } from '../components/LightingComponent';
 import { TABLE_ENTITY_ID } from '../tableEntity';
 import { type World } from './types';
 import { type SeatIndex } from '../../seats/SeatLayout';
@@ -121,6 +122,21 @@ describe('World — Table boot path (table-as-entity slice 1)', () => {
 
     const guestSky = pair.guest.get(TABLE_ENTITY_ID)!.get(SkydomeComponent)!;
     expect(guestSky.state.textureUrl).toBe('custom:sky/some-slug');
+  });
+
+  test('LightingComponent state replicates host → guest (slice 3)', () => {
+    pair = setup();
+    pair.host.tick(0.016);  // replicate Table to guest
+    const hostLight = pair.host.get(TABLE_ENTITY_ID)!.get(LightingComponent)!;
+    hostLight.setState({ keyColor: '#80ff00', keyIntensity: 2.0 });
+    pair.host.tick(0.016);
+
+    const guestLight = pair.guest.get(TABLE_ENTITY_ID)!.get(LightingComponent)!;
+    expect(guestLight.state.keyColor).toBe('#80ff00');
+    expect(guestLight.state.keyIntensity).toBeCloseTo(2.0, 5);
+    // The underlying THREE light on the guest tracks the replicated state.
+    expect(guestLight.light.intensity).toBeCloseTo(2.0, 5);
+    expect('#' + guestLight.light.color.getHexString()).toBe('#80ff00');
   });
 });
 
