@@ -34,7 +34,8 @@
       "PowerShell(pnpm *)",
       "PowerShell(npm *)",
       "PowerShell(npx *)",
-      "Bash(npx *)"
+      "Bash(npx *)",
+      "Bash(echo \"tc=$?\")"
     ]
   }
 }
