@@ -27,6 +27,7 @@ import { type ScriptErrorLog } from '../scripting/ScriptErrorLog';
 import { ManifestStore } from '../assets/ManifestStore';
 import { assetService } from '../assets/AssetService';
 import { BASE_MANIFEST, PRIMITIVE_MANIFEST } from '../assets/baseManifest';
+import { AssetLoadingIndicator } from '../components/AssetLoadingIndicator';
 import './Room.css';
 
 type Status = 'connecting' | 'connected' | 'disconnected' | 'room-full';
@@ -280,6 +281,11 @@ export function Room({ roomId, isHost }: Props) {
     setManifestStore(store);
     const refresh = () => {
       assetService.setManifests([BASE_MANIFEST, PRIMITIVE_MANIFEST, store.getDraft()]);
+      // Issue #7 — kick off `preload: true` fetches whenever the catalog
+      // changes (initial mount, host edits, guest applies a published
+      // snapshot). The promise is intentionally fire-and-forget; gameplay
+      // does not await it and the HUD indicator reflects progress.
+      void assetService.preload([BASE_MANIFEST, PRIMITIVE_MANIFEST, store.getDraft()]);
     };
     refresh();
     const unsub = store.subscribe(refresh);
@@ -475,6 +481,10 @@ export function Room({ roomId, isHost }: Props) {
 
         <UIPanel anchor="bottom-left" order={10}>
           <Toolbar activeToolId={activeToolId} onSelectTool={handleSelectTool} />
+        </UIPanel>
+
+        <UIPanel anchor="bottom-right" order={20}>
+          <AssetLoadingIndicator />
         </UIPanel>
 
         {isHost && status === 'connecting' && (

@@ -175,6 +175,89 @@ describe('AssetService slug resolution', () => {
   });
 });
 
+describe('AssetService.preload', () => {
+  test('fetches every preload:true entry across the supplied manifests', async () => {
+    const fetched: string[] = [];
+    const real = new THREE.Texture();
+    const svc  = new AssetService({
+      imageLoader: (url) => { fetched.push(url); return Promise.resolve(real); },
+    });
+    const m = Manifest.from([
+      { slug: 'custom:a', name: 'A', type: 'image', url: 'http://x/a.png', preload: true  },
+      { slug: 'custom:b', name: 'B', type: 'image', url: 'http://x/b.png', preload: false },
+      { slug: 'custom:c', name: 'C', type: 'image', url: 'http://x/c.png', preload: true  },
+    ]);
+    svc.setManifests([m]);
+
+    await svc.preload(m);
+    expect(fetched.sort()).toEqual(['http://x/a.png', 'http://x/c.png']);
+  });
+
+  test('skips placeholder:// and primitive:// markers (no network)', async () => {
+    let calls = 0;
+    const svc = new AssetService({
+      imageLoader: () => { calls++; return Promise.resolve(new THREE.Texture()); },
+    });
+    await svc.preload([BASE_MANIFEST, PRIMITIVE_MANIFEST]);
+    expect(calls).toBe(0);
+  });
+
+  test('non-image entries are skipped (no model/sound loader yet)', async () => {
+    let calls = 0;
+    const svc = new AssetService({
+      imageLoader: () => { calls++; return Promise.resolve(new THREE.Texture()); },
+    });
+    const m = Manifest.from([
+      { slug: 'custom:m', name: 'M', type: 'model', url: 'http://x/m.glb', preload: true },
+      { slug: 'custom:s', name: 'S', type: 'sound', url: 'http://x/s.mp3', preload: true },
+    ]);
+    svc.setManifests([m]);
+    await svc.preload(m);
+    expect(calls).toBe(0);
+  });
+
+  test('settles even when individual loads reject', async () => {
+    const svc = new AssetService({
+      imageLoader: (url) => url.endsWith('ok.png')
+        ? Promise.resolve(new THREE.Texture())
+        : Promise.reject(new Error('boom')),
+    });
+    const m = Manifest.from([
+      { slug: 'custom:ok',  name: 'OK',  type: 'image', url: 'http://x/ok.png',  preload: true },
+      { slug: 'custom:bad', name: 'BAD', type: 'image', url: 'http://x/bad.png', preload: true },
+    ]);
+    svc.setManifests([m]);
+
+    await expect(svc.preload(m)).resolves.toBeUndefined();
+    expect(svc.status('custom:ok',  'image')).toBe('loaded');
+    expect(svc.status('custom:bad', 'image')).toBe('broken');
+  });
+
+  test('progress listener tracks pending count and returns to zero', async () => {
+    let resolveLoad!: (tex: THREE.Texture) => void;
+    const svc = new AssetService({
+      imageLoader: () => new Promise((r) => { resolveLoad = r; }),
+    });
+    const m = Manifest.from([
+      { slug: 'custom:p', name: 'P', type: 'image', url: 'http://x/p.png', preload: true },
+    ]);
+    svc.setManifests([m]);
+
+    const seen: number[] = [];
+    svc.subscribeProgress((n) => seen.push(n));
+    expect(seen).toEqual([0]);
+
+    const done = svc.preload(m);
+    expect(seen[seen.length - 1]).toBe(1);
+    expect(svc.pendingCount()).toBe(1);
+
+    resolveLoad(new THREE.Texture());
+    await done;
+    expect(seen[seen.length - 1]).toBe(0);
+    expect(svc.pendingCount()).toBe(0);
+  });
+});
+
 describe('AssetService.invalidate', () => {
   test('re-fetches and notifies existing subscribers', async () => {
     let calls = 0;

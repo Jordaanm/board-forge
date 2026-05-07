@@ -63,10 +63,14 @@ export interface AssetServiceOptions {
   manifests?:   Manifest[];
 }
 
+export type ProgressListener = (pending: number) => void;
+
 export class AssetService {
-  private images      = new Map<string, ImageEntry>();
-  private imageLoader: ImageLoader;
-  private manifests:   Manifest[] = [];
+  private images          = new Map<string, ImageEntry>();
+  private imageLoader:      ImageLoader;
+  private manifests:        Manifest[] = [];
+  private pending           = 0;
+  private progressListeners = new Set<ProgressListener>();
 
   constructor(opts: AssetServiceOptions = {}) {
     this.imageLoader = opts.imageLoader ?? defaultImageLoader;
@@ -129,6 +133,55 @@ export class AssetService {
   status(ref: string, type: AssetType): AssetStatus | null {
     if (type !== 'image') return null;
     return this.images.get(ref)?.status ?? null;
+  }
+
+  // Walks every entry across the supplied manifests with `preload: true` and
+  // kicks off a resolve. Skips synthetic placeholder/primitive markers (no
+  // network) and types we don't have loaders for yet (model/sound — slices
+  // #9/#10). Returns a promise that settles once every triggered fetch
+  // finishes, success or fallback. While in flight, the pending counter
+  // exposed via `subscribeProgress` reflects how many loads are outstanding.
+  preload(manifests: Manifest | readonly Manifest[]): Promise<void> {
+    const list = Array.isArray(manifests) ? manifests : [manifests as Manifest];
+    const slugs: string[] = [];
+    for (const m of list) {
+      for (const e of m.toArray()) {
+        if (!e.preload) continue;
+        if (e.type !== 'image') continue;
+        if (e.url.startsWith('placeholder://')) continue;
+        if (e.url.startsWith('primitive://'))   continue;
+        slugs.push(e.slug);
+      }
+    }
+    if (slugs.length === 0) return Promise.resolve();
+
+    this.pending += slugs.length;
+    this.notifyProgress();
+
+    const tasks = slugs.map((slug) =>
+      this.resolve(slug, 'image').finally(() => {
+        this.pending--;
+        this.notifyProgress();
+      }),
+    );
+    return Promise.all(tasks).then(() => undefined);
+  }
+
+  pendingCount(): number {
+    return this.pending;
+  }
+
+  // Subscribers receive the current pending count immediately and again on
+  // every change. Used by the HUD indicator so it can render "Loading N…"
+  // and dismiss when N drops back to zero.
+  subscribeProgress(listener: ProgressListener): () => void {
+    this.progressListeners.add(listener);
+    listener(this.pending);
+    return () => { this.progressListeners.delete(listener); };
+  }
+
+  private notifyProgress(): void {
+    for (const l of this.progressListeners) l(this.pending);
   }
 
   private ensureImage(ref: string): ImageEntry {
