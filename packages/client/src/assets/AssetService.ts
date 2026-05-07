@@ -30,6 +30,7 @@ export type AssetStatus = 'pending' | 'loaded' | 'broken';
 
 export type ImageLoader = (url: string) => Promise<THREE.Texture>;
 export type ModelLoader = (url: string) => Promise<THREE.Object3D>;
+export type SoundLoader = (url: string) => Promise<AudioBuffer>;
 
 const defaultImageLoader: ImageLoader = (url) => {
   if (typeof Image === 'undefined') {
@@ -59,6 +60,26 @@ const defaultModelLoader: ModelLoader = (url) => {
   });
 };
 
+let sharedAudioContext: AudioContext | null = null;
+function getAudioContext(): AudioContext | null {
+  if (sharedAudioContext) return sharedAudioContext;
+  const Ctor = typeof AudioContext !== 'undefined'
+    ? AudioContext
+    : (typeof window !== 'undefined' && (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext) || null;
+  if (!Ctor) return null;
+  sharedAudioContext = new Ctor();
+  return sharedAudioContext;
+}
+
+const defaultSoundLoader: SoundLoader = async (url) => {
+  const ctx = getAudioContext();
+  if (!ctx) throw new Error('no AudioContext available for sound load');
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`failed to fetch sound: ${url} — ${res.status}`);
+  const buf = await res.arrayBuffer();
+  return await ctx.decodeAudioData(buf);
+};
+
 let placeholderImage: THREE.Texture | null = null;
 
 export function getImagePlaceholder(): THREE.Texture {
@@ -86,6 +107,11 @@ export function getModelPlaceholder(): THREE.Object3D {
 
 type ImageListener = (texture: THREE.Texture, status: AssetStatus) => void;
 type ModelListener = (object: THREE.Object3D, status: AssetStatus) => void;
+// Sound listeners receive `null` while the buffer is pending or broken — no
+// silent-buffer placeholder exists because constructing one needs a live
+// AudioContext (unavailable in headless tests). Callers that want to play
+// must check `status === 'loaded'` and `buffer !== null`.
+type SoundListener = (buffer: AudioBuffer | null, status: AssetStatus) => void;
 
 interface ImageEntry {
   status:      AssetStatus;
@@ -101,9 +127,17 @@ interface ModelEntry {
   loadPromise: Promise<THREE.Object3D>;
 }
 
+interface SoundEntry {
+  status:      AssetStatus;
+  buffer:      AudioBuffer | null;
+  listeners:   Set<SoundListener>;
+  loadPromise: Promise<AudioBuffer | null>;
+}
+
 export interface AssetServiceOptions {
   imageLoader?: ImageLoader;
   modelLoader?: ModelLoader;
+  soundLoader?: SoundLoader;
   manifests?:   Manifest[];
 }
 
@@ -112,8 +146,10 @@ export type ProgressListener = (pending: number) => void;
 export class AssetService {
   private images            = new Map<string, ImageEntry>();
   private models            = new Map<string, ModelEntry>();
+  private sounds            = new Map<string, SoundEntry>();
   private imageLoader:        ImageLoader;
   private modelLoader:        ModelLoader;
+  private soundLoader:        SoundLoader;
   private manifests:          Manifest[] = [];
   private pending             = 0;
   private progressListeners   = new Set<ProgressListener>();
@@ -121,6 +157,7 @@ export class AssetService {
   constructor(opts: AssetServiceOptions = {}) {
     this.imageLoader = opts.imageLoader ?? defaultImageLoader;
     this.modelLoader = opts.modelLoader ?? defaultModelLoader;
+    this.soundLoader = opts.soundLoader ?? defaultSoundLoader;
     if (opts.manifests) this.manifests = [...opts.manifests];
   }
 
@@ -135,6 +172,7 @@ export class AssetService {
     this.manifests = [...manifests];
     for (const ref of [...this.images.keys()]) if (isSlug(ref)) this.invalidate(ref);
     for (const ref of [...this.models.keys()]) if (isSlug(ref)) this.invalidate(ref);
+    for (const ref of [...this.sounds.keys()]) if (isSlug(ref)) this.invalidate(ref);
   }
 
   lookupSlug(slug: string): AssetEntry | undefined {
@@ -150,9 +188,11 @@ export class AssetService {
   // need a try/catch around resolve.
   resolve(ref: string, type: 'image'): Promise<THREE.Texture>;
   resolve(ref: string, type: 'model'): Promise<THREE.Object3D>;
-  resolve(ref: string, type: AssetType): Promise<THREE.Texture | THREE.Object3D> {
+  resolve(ref: string, type: 'sound'): Promise<AudioBuffer | null>;
+  resolve(ref: string, type: AssetType): Promise<THREE.Texture | THREE.Object3D | AudioBuffer | null> {
     if (type === 'image') return this.ensureImage(ref).loadPromise;
     if (type === 'model') return this.ensureModel(ref).loadPromise;
+    if (type === 'sound') return this.ensureSound(ref).loadPromise;
     return Promise.reject(new Error(`AssetService: unsupported type "${type}"`));
   }
 
@@ -161,7 +201,8 @@ export class AssetService {
   // Same ref subscribed twice triggers exactly one fetch.
   subscribe(ref: string, type: 'image', listener: ImageListener): () => void;
   subscribe(ref: string, type: 'model', listener: ModelListener): () => void;
-  subscribe(ref: string, type: AssetType, listener: ImageListener | ModelListener): () => void {
+  subscribe(ref: string, type: 'sound', listener: SoundListener): () => void;
+  subscribe(ref: string, type: AssetType, listener: ImageListener | ModelListener | SoundListener): () => void {
     if (type === 'image') {
       const entry = this.ensureImage(ref);
       const fn    = listener as ImageListener;
@@ -174,6 +215,13 @@ export class AssetService {
       const fn    = listener as ModelListener;
       entry.listeners.add(fn);
       fn(entry.object3d, entry.status);
+      return () => { entry.listeners.delete(fn); };
+    }
+    if (type === 'sound') {
+      const entry = this.ensureSound(ref);
+      const fn    = listener as SoundListener;
+      entry.listeners.add(fn);
+      fn(entry.buffer, entry.status);
       return () => { entry.listeners.delete(fn); };
     }
     throw new Error(`AssetService: unsupported type "${type}"`);
@@ -196,20 +244,27 @@ export class AssetService {
       for (const l of mdl.listeners) l(mdl.object3d, 'pending');
       this.startModelLoad(ref, mdl);
     }
+    const snd = this.sounds.get(ref);
+    if (snd) {
+      snd.status = 'pending';
+      snd.buffer = null;
+      for (const l of snd.listeners) l(null, 'pending');
+      this.startSoundLoad(ref, snd);
+    }
   }
 
   status(ref: string, type: AssetType): AssetStatus | null {
     if (type === 'image') return this.images.get(ref)?.status ?? null;
     if (type === 'model') return this.models.get(ref)?.status ?? null;
+    if (type === 'sound') return this.sounds.get(ref)?.status ?? null;
     return null;
   }
 
   // Walks every entry across the supplied manifests with `preload: true` and
   // kicks off a resolve. Skips synthetic placeholder/primitive markers (no
-  // network) and types we don't have loaders for yet (sound — slice #10).
-  // Returns a promise that settles once every triggered fetch finishes,
-  // success or fallback. While in flight, the pending counter exposed via
-  // `subscribeProgress` reflects how many loads are outstanding.
+  // network). Returns a promise that settles once every triggered fetch
+  // finishes, success or fallback. While in flight, the pending counter
+  // exposed via `subscribeProgress` reflects how many loads are outstanding.
   preload(manifests: Manifest | readonly Manifest[]): Promise<void> {
     const list = Array.isArray(manifests) ? manifests : [manifests as Manifest];
     const tasks: Promise<unknown>[] = [];
@@ -218,8 +273,7 @@ export class AssetService {
         if (!e.preload) continue;
         if (e.url.startsWith('placeholder://')) continue;
         if (e.url.startsWith('primitive://'))   continue;
-        if (e.type === 'image') tasks.push(this.trackedResolve(e.slug, 'image'));
-        else if (e.type === 'model') tasks.push(this.trackedResolve(e.slug, 'model'));
+        tasks.push(this.trackedResolve(e.slug, e.type));
       }
     }
     if (tasks.length === 0) return Promise.resolve();
@@ -242,9 +296,10 @@ export class AssetService {
   private trackedResolve(ref: string, type: AssetType): Promise<unknown> {
     this.pending++;
     this.notifyProgress();
-    const p = type === 'image'
-      ? this.resolve(ref, 'image')
-      : this.resolve(ref, 'model');
+    const p: Promise<unknown> =
+      type === 'image' ? this.resolve(ref, 'image') :
+      type === 'model' ? this.resolve(ref, 'model') :
+                         this.resolve(ref, 'sound');
     return p.finally(() => {
       this.pending--;
       this.notifyProgress();
@@ -318,6 +373,60 @@ export class AssetService {
         entry.status = 'broken';
         for (const l of entry.listeners) l(entry.texture, 'broken');
         return entry.texture;
+      },
+    );
+  }
+
+  private ensureSound(ref: string): SoundEntry {
+    const existing = this.sounds.get(ref);
+    if (existing) return existing;
+    const entry: SoundEntry = {
+      status:      'pending',
+      buffer:      null,
+      listeners:   new Set(),
+      loadPromise: Promise.resolve(null),
+    };
+    this.sounds.set(ref, entry);
+    this.startSoundLoad(ref, entry);
+    return entry;
+  }
+
+  private startSoundLoad(ref: string, entry: SoundEntry): void {
+    let url:        string;
+    let slugBroken = false;
+
+    if (isSlug(ref)) {
+      const found = this.lookupSlug(ref);
+      if (found && found.type === 'sound') {
+        url = found.url;
+      } else {
+        slugBroken = true;
+        url = 'placeholder://sound';
+      }
+    } else {
+      url = ref;
+    }
+
+    if (url.startsWith('placeholder://') || url.startsWith('primitive://')) {
+      entry.status      = slugBroken ? 'broken' : 'loaded';
+      entry.buffer      = null;
+      entry.loadPromise = Promise.resolve(null);
+      for (const l of entry.listeners) l(null, entry.status);
+      return;
+    }
+
+    entry.loadPromise = this.soundLoader(url).then(
+      (buf) => {
+        entry.status = 'loaded';
+        entry.buffer = buf;
+        for (const l of entry.listeners) l(buf, 'loaded');
+        return buf as AudioBuffer | null;
+      },
+      () => {
+        entry.status = 'broken';
+        entry.buffer = null;
+        for (const l of entry.listeners) l(null, 'broken');
+        return null;
       },
     );
   }

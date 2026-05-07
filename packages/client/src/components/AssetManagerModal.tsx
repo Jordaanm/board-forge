@@ -354,17 +354,21 @@ function CustomRow({ entry, onEdit, onDelete }: { entry: AssetEntry; onEdit: () 
 }
 
 // Subscribes to AssetService for the entry's slug so the row badge re-renders
-// when load status changes. Only image entries — model/sound loaders land in
-// #9/#10 — but we still ensure the asset is at least probed by subscribing,
-// so the broken-flag transitions get observed.
+// when load status changes. Routes through the type-appropriate channel —
+// image, model, or sound — so a broken GLTF or sound flags the warning badge
+// the same way a broken image does.
 function useAssetStatus(entry: AssetEntry): AssetStatus | null {
   const [status, setStatus] = useState<AssetStatus | null>(
-    () => entry.type === 'image' ? assetService.status(entry.slug, 'image') : null,
+    () => assetService.status(entry.slug, entry.type),
   );
   useEffect(() => {
-    if (entry.type !== 'image') { setStatus(null); return; }
-    const unsub = assetService.subscribe(entry.slug, 'image', (_tex, s) => setStatus(s));
-    return unsub;
+    if (entry.type === 'image') {
+      return assetService.subscribe(entry.slug, 'image', (_tex, s) => setStatus(s));
+    }
+    if (entry.type === 'model') {
+      return assetService.subscribe(entry.slug, 'model', (_obj, s) => setStatus(s));
+    }
+    return assetService.subscribe(entry.slug, 'sound', (_buf, s) => setStatus(s));
   }, [entry.slug, entry.type, entry.url]);
   return status;
 }

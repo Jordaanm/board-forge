@@ -237,6 +237,67 @@ describe('AssetService model resolution', () => {
   });
 });
 
+describe('AssetService sound resolution', () => {
+  const fakeBuffer = (label: string) => ({ __label: label } as unknown as AudioBuffer);
+
+  test('subscribe(sound) fires null pending then real AudioBuffer loaded', async () => {
+    const buf = fakeBuffer('a');
+    const svc = new AssetService({ soundLoader: () => Promise.resolve(buf) });
+    const seen: { buf: AudioBuffer | null; status: AssetStatus }[] = [];
+    svc.subscribe('http://x/a.mp3', 'sound', (b, s) => seen.push({ buf: b, status: s }));
+
+    expect(seen[0].status).toBe('pending');
+    expect(seen[0].buf).toBeNull();
+
+    await flushMicrotasks();
+    expect(seen[seen.length - 1].status).toBe('loaded');
+    expect(seen[seen.length - 1].buf).toBe(buf);
+  });
+
+  test('rejected sound load → broken status, null buffer', async () => {
+    const svc = new AssetService({ soundLoader: () => Promise.reject(new Error('decode failed')) });
+    const seen: AssetStatus[] = [];
+    svc.subscribe('http://x/bad.mp3', 'sound', (_buf, s) => seen.push(s));
+    await flushMicrotasks();
+    expect(seen).toEqual(['pending', 'broken']);
+    expect(svc.status('http://x/bad.mp3', 'sound')).toBe('broken');
+  });
+
+  test('custom sound slug resolves through manifest', async () => {
+    const buf = fakeBuffer('roll');
+    let loaded = '';
+    const svc = new AssetService({
+      manifests: [Manifest.from([{
+        slug: 'custom:roll', name: 'Roll', type: 'sound', url: 'http://x/r.mp3', preload: false,
+      }])],
+      soundLoader: (url) => { loaded = url; return Promise.resolve(buf); },
+    });
+    expect(await svc.resolve('custom:roll', 'sound')).toBe(buf);
+    expect(loaded).toBe('http://x/r.mp3');
+  });
+
+  test('unknown sound slug falls back to placeholder + broken status', async () => {
+    const svc = new AssetService({ manifests: [BASE_MANIFEST] });
+    const seen: AssetStatus[] = [];
+    svc.subscribe('custom:nope', 'sound', (_buf, s) => seen.push(s));
+    await flushMicrotasks();
+    expect(seen[seen.length - 1]).toBe('broken');
+  });
+
+  test('preload triggers sound loader for sound entries', async () => {
+    const calls: string[] = [];
+    const svc = new AssetService({
+      soundLoader: (url) => { calls.push(url); return Promise.resolve(fakeBuffer('s')); },
+    });
+    const m = Manifest.from([
+      { slug: 'custom:s', name: 'S', type: 'sound', url: 'http://x/s.mp3', preload: true },
+    ]);
+    svc.setManifests([m]);
+    await svc.preload(m);
+    expect(calls).toEqual(['http://x/s.mp3']);
+  });
+});
+
 describe('AssetService.preload', () => {
   test('fetches every preload:true entry across the supplied manifests', async () => {
     const fetched: string[] = [];
@@ -264,21 +325,25 @@ describe('AssetService.preload', () => {
     expect(calls).toBe(0);
   });
 
-  test('preload triggers model loader for model entries; skips sound entries', async () => {
+  test('preload routes each entry to its type-appropriate loader', async () => {
     const imageCalls: string[] = [];
     const modelCalls: string[] = [];
+    const soundCalls: string[] = [];
     const svc = new AssetService({
       imageLoader: (url) => { imageCalls.push(url); return Promise.resolve(new THREE.Texture()); },
       modelLoader: (url) => { modelCalls.push(url); return Promise.resolve(new THREE.Object3D()); },
+      soundLoader: (url) => { soundCalls.push(url); return Promise.resolve({} as AudioBuffer); },
     });
     const m = Manifest.from([
+      { slug: 'custom:i', name: 'I', type: 'image', url: 'http://x/i.png', preload: true },
       { slug: 'custom:m', name: 'M', type: 'model', url: 'http://x/m.glb', preload: true },
       { slug: 'custom:s', name: 'S', type: 'sound', url: 'http://x/s.mp3', preload: true },
     ]);
     svc.setManifests([m]);
     await svc.preload(m);
-    expect(imageCalls).toEqual([]);
+    expect(imageCalls).toEqual(['http://x/i.png']);
     expect(modelCalls).toEqual(['http://x/m.glb']);
+    expect(soundCalls).toEqual(['http://x/s.mp3']);
   });
 
   test('settles even when individual loads reject', async () => {
