@@ -56,8 +56,9 @@ export const OBJECT_META: Record<string, ObjectMeta> = {
     type:  'token',
     label: 'Token',
     propertySchema: [
-      { key: 'name',  label: 'Name',  type: 'string' },
-      { key: 'color', label: 'Color', type: 'color' },
+      { key: 'name',    label: 'Name',  type: 'string'      },
+      { key: 'color',   label: 'Color', type: 'color'       },
+      { key: 'meshRef', label: 'Mesh',  type: 'asset:model' },
     ],
     actions: [],
   },

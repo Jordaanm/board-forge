@@ -1,13 +1,15 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { type AssetEntry, type AssetType, isSlug, Manifest } from './Manifest';
 import { BASE_MANIFEST, PRIMITIVE_MANIFEST } from './baseManifest';
 
-// Single funnel for asset loads. Issues #1 and #2 of issues--asset-registry.md.
+// Single funnel for asset loads. Issues #1, #2, and #9 of
+// issues--asset-registry.md.
 //
 // `subscribe(ref, type, listener)` returns the current cached state to the
 // listener immediately (placeholder until the real asset arrives) and again on
 // every transition. Internal cache dedups concurrent + repeat fetches by ref.
-// Loader is injected via constructor so tests can drive it deterministically.
+// Loaders are injected via constructor so tests can drive them deterministically.
 //
 // Refs may be either raw URLs or namespaced slugs (`base:`, `custom:`,
 // `prim:`). Slugs are resolved through the configured manifests; unknown
@@ -18,11 +20,16 @@ import { BASE_MANIFEST, PRIMITIVE_MANIFEST } from './baseManifest';
 // never hit the network; AssetService recognises them and short-circuits to
 // the in-code placeholder. Primitive meshes still render through
 // `MeshComponent.buildMesh` directly via `meshRef`.
+//
+// Model assets surface a canonical THREE.Object3D in the cache; consumers are
+// responsible for `obj.clone(true)` before adding it to a scene graph (Three's
+// parent-child relationship allows only one parent at a time).
 
 export type { AssetType };
 export type AssetStatus = 'pending' | 'loaded' | 'broken';
 
 export type ImageLoader = (url: string) => Promise<THREE.Texture>;
+export type ModelLoader = (url: string) => Promise<THREE.Object3D>;
 
 const defaultImageLoader: ImageLoader = (url) => {
   if (typeof Image === 'undefined') {
@@ -38,6 +45,20 @@ const defaultImageLoader: ImageLoader = (url) => {
   });
 };
 
+const defaultModelLoader: ModelLoader = (url) => {
+  if (typeof Image === 'undefined') {
+    return Promise.reject(new Error('no DOM available for model load'));
+  }
+  return new Promise((resolve, reject) => {
+    new GLTFLoader().load(
+      url,
+      (gltf) => resolve(gltf.scene),
+      undefined,
+      () => reject(new Error(`failed to load model: ${url}`)),
+    );
+  });
+};
+
 let placeholderImage: THREE.Texture | null = null;
 
 export function getImagePlaceholder(): THREE.Texture {
@@ -49,7 +70,22 @@ export function getImagePlaceholder(): THREE.Texture {
   return tex;
 }
 
+let placeholderModel: THREE.Object3D | null = null;
+
+// Canonical placeholder Object3D — a small magenta cube. Consumers MUST
+// `clone(true)` before adding to a scene graph, otherwise re-parenting will
+// silently move the placeholder away from previous consumers.
+export function getModelPlaceholder(): THREE.Object3D {
+  if (placeholderModel) return placeholderModel;
+  const geometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+  const material = new THREE.MeshBasicMaterial({ color: 0xff00ff, wireframe: true });
+  const mesh     = new THREE.Mesh(geometry, material);
+  placeholderModel = mesh;
+  return mesh;
+}
+
 type ImageListener = (texture: THREE.Texture, status: AssetStatus) => void;
+type ModelListener = (object: THREE.Object3D, status: AssetStatus) => void;
 
 interface ImageEntry {
   status:      AssetStatus;
@@ -58,22 +94,33 @@ interface ImageEntry {
   loadPromise: Promise<THREE.Texture>;
 }
 
+interface ModelEntry {
+  status:      AssetStatus;
+  object3d:    THREE.Object3D;
+  listeners:   Set<ModelListener>;
+  loadPromise: Promise<THREE.Object3D>;
+}
+
 export interface AssetServiceOptions {
   imageLoader?: ImageLoader;
+  modelLoader?: ModelLoader;
   manifests?:   Manifest[];
 }
 
 export type ProgressListener = (pending: number) => void;
 
 export class AssetService {
-  private images          = new Map<string, ImageEntry>();
-  private imageLoader:      ImageLoader;
-  private manifests:        Manifest[] = [];
-  private pending           = 0;
-  private progressListeners = new Set<ProgressListener>();
+  private images            = new Map<string, ImageEntry>();
+  private models            = new Map<string, ModelEntry>();
+  private imageLoader:        ImageLoader;
+  private modelLoader:        ModelLoader;
+  private manifests:          Manifest[] = [];
+  private pending             = 0;
+  private progressListeners   = new Set<ProgressListener>();
 
   constructor(opts: AssetServiceOptions = {}) {
     this.imageLoader = opts.imageLoader ?? defaultImageLoader;
+    this.modelLoader = opts.modelLoader ?? defaultModelLoader;
     if (opts.manifests) this.manifests = [...opts.manifests];
   }
 
@@ -86,9 +133,8 @@ export class AssetService {
   // resolved URL changes.
   setManifests(manifests: Manifest[]): void {
     this.manifests = [...manifests];
-    for (const ref of [...this.images.keys()]) {
-      if (isSlug(ref)) this.invalidate(ref);
-    }
+    for (const ref of [...this.images.keys()]) if (isSlug(ref)) this.invalidate(ref);
+    for (const ref of [...this.models.keys()]) if (isSlug(ref)) this.invalidate(ref);
   }
 
   lookupSlug(slug: string): AssetEntry | undefined {
@@ -100,73 +146,83 @@ export class AssetService {
   }
 
   // Promise-based accessor — resolves with the real asset on success or with
-  // the placeholder on failure. Never rejects, so callers don't need a
-  // try/catch around resolve.
-  resolve(ref: string, type: AssetType): Promise<THREE.Texture> {
-    if (type !== 'image') {
-      return Promise.reject(new Error(`AssetService: unsupported type "${type}"`));
-    }
-    return this.ensureImage(ref).loadPromise;
+  // the type-default placeholder on failure. Never rejects, so callers don't
+  // need a try/catch around resolve.
+  resolve(ref: string, type: 'image'): Promise<THREE.Texture>;
+  resolve(ref: string, type: 'model'): Promise<THREE.Object3D>;
+  resolve(ref: string, type: AssetType): Promise<THREE.Texture | THREE.Object3D> {
+    if (type === 'image') return this.ensureImage(ref).loadPromise;
+    if (type === 'model') return this.ensureModel(ref).loadPromise;
+    return Promise.reject(new Error(`AssetService: unsupported type "${type}"`));
   }
 
   // Fires `listener` immediately with the current state, then again on every
   // transition (`pending` → `loaded`, `pending` → `broken`, post-invalidate).
   // Same ref subscribed twice triggers exactly one fetch.
-  subscribe(ref: string, type: AssetType, listener: ImageListener): () => void {
-    if (type !== 'image') {
-      throw new Error(`AssetService: unsupported type "${type}"`);
+  subscribe(ref: string, type: 'image', listener: ImageListener): () => void;
+  subscribe(ref: string, type: 'model', listener: ModelListener): () => void;
+  subscribe(ref: string, type: AssetType, listener: ImageListener | ModelListener): () => void {
+    if (type === 'image') {
+      const entry = this.ensureImage(ref);
+      const fn    = listener as ImageListener;
+      entry.listeners.add(fn);
+      fn(entry.texture, entry.status);
+      return () => { entry.listeners.delete(fn); };
     }
-    const entry = this.ensureImage(ref);
-    entry.listeners.add(listener);
-    listener(entry.texture, entry.status);
-    return () => { entry.listeners.delete(listener); };
+    if (type === 'model') {
+      const entry = this.ensureModel(ref);
+      const fn    = listener as ModelListener;
+      entry.listeners.add(fn);
+      fn(entry.object3d, entry.status);
+      return () => { entry.listeners.delete(fn); };
+    }
+    throw new Error(`AssetService: unsupported type "${type}"`);
   }
 
   // Drops cached state for `ref` and re-fetches; existing listeners are
   // re-notified through the new entry. Used by manager UI on URL edit.
   invalidate(ref: string): void {
-    const entry = this.images.get(ref);
-    if (!entry) return;
-    entry.status  = 'pending';
-    entry.texture = getImagePlaceholder();
-    for (const l of entry.listeners) l(entry.texture, 'pending');
-    this.startImageLoad(ref, entry);
+    const img = this.images.get(ref);
+    if (img) {
+      img.status  = 'pending';
+      img.texture = getImagePlaceholder();
+      for (const l of img.listeners) l(img.texture, 'pending');
+      this.startImageLoad(ref, img);
+    }
+    const mdl = this.models.get(ref);
+    if (mdl) {
+      mdl.status   = 'pending';
+      mdl.object3d = getModelPlaceholder();
+      for (const l of mdl.listeners) l(mdl.object3d, 'pending');
+      this.startModelLoad(ref, mdl);
+    }
   }
 
   status(ref: string, type: AssetType): AssetStatus | null {
-    if (type !== 'image') return null;
-    return this.images.get(ref)?.status ?? null;
+    if (type === 'image') return this.images.get(ref)?.status ?? null;
+    if (type === 'model') return this.models.get(ref)?.status ?? null;
+    return null;
   }
 
   // Walks every entry across the supplied manifests with `preload: true` and
   // kicks off a resolve. Skips synthetic placeholder/primitive markers (no
-  // network) and types we don't have loaders for yet (model/sound — slices
-  // #9/#10). Returns a promise that settles once every triggered fetch
-  // finishes, success or fallback. While in flight, the pending counter
-  // exposed via `subscribeProgress` reflects how many loads are outstanding.
+  // network) and types we don't have loaders for yet (sound — slice #10).
+  // Returns a promise that settles once every triggered fetch finishes,
+  // success or fallback. While in flight, the pending counter exposed via
+  // `subscribeProgress` reflects how many loads are outstanding.
   preload(manifests: Manifest | readonly Manifest[]): Promise<void> {
     const list = Array.isArray(manifests) ? manifests : [manifests as Manifest];
-    const slugs: string[] = [];
+    const tasks: Promise<unknown>[] = [];
     for (const m of list) {
       for (const e of m.toArray()) {
         if (!e.preload) continue;
-        if (e.type !== 'image') continue;
         if (e.url.startsWith('placeholder://')) continue;
         if (e.url.startsWith('primitive://'))   continue;
-        slugs.push(e.slug);
+        if (e.type === 'image') tasks.push(this.trackedResolve(e.slug, 'image'));
+        else if (e.type === 'model') tasks.push(this.trackedResolve(e.slug, 'model'));
       }
     }
-    if (slugs.length === 0) return Promise.resolve();
-
-    this.pending += slugs.length;
-    this.notifyProgress();
-
-    const tasks = slugs.map((slug) =>
-      this.resolve(slug, 'image').finally(() => {
-        this.pending--;
-        this.notifyProgress();
-      }),
-    );
+    if (tasks.length === 0) return Promise.resolve();
     return Promise.all(tasks).then(() => undefined);
   }
 
@@ -181,6 +237,18 @@ export class AssetService {
     this.progressListeners.add(listener);
     listener(this.pending);
     return () => { this.progressListeners.delete(listener); };
+  }
+
+  private trackedResolve(ref: string, type: AssetType): Promise<unknown> {
+    this.pending++;
+    this.notifyProgress();
+    const p = type === 'image'
+      ? this.resolve(ref, 'image')
+      : this.resolve(ref, 'model');
+    return p.finally(() => {
+      this.pending--;
+      this.notifyProgress();
+    });
   }
 
   private notifyProgress(): void {
@@ -198,6 +266,20 @@ export class AssetService {
     };
     this.images.set(ref, entry);
     this.startImageLoad(ref, entry);
+    return entry;
+  }
+
+  private ensureModel(ref: string): ModelEntry {
+    const existing = this.models.get(ref);
+    if (existing) return existing;
+    const entry: ModelEntry = {
+      status:      'pending',
+      object3d:    getModelPlaceholder(),
+      listeners:   new Set(),
+      loadPromise: Promise.resolve(getModelPlaceholder()),
+    };
+    this.models.set(ref, entry);
+    this.startModelLoad(ref, entry);
     return entry;
   }
 
@@ -236,6 +318,48 @@ export class AssetService {
         entry.status = 'broken';
         for (const l of entry.listeners) l(entry.texture, 'broken');
         return entry.texture;
+      },
+    );
+  }
+
+  private startModelLoad(ref: string, entry: ModelEntry): void {
+    let url:        string;
+    let slugBroken = false;
+
+    if (isSlug(ref)) {
+      const found = this.lookupSlug(ref);
+      if (found && found.type === 'model') {
+        url = found.url;
+      } else {
+        slugBroken = true;
+        url = 'placeholder://model';
+      }
+    } else {
+      url = ref;
+    }
+
+    if (url.startsWith('placeholder://') || url.startsWith('primitive://')) {
+      // Primitives short-circuit — MeshComponent renders them via buildMesh
+      // and never actually subscribes for these refs, but we still surface
+      // a deterministic 'loaded' status so the picker thumbnail logic works.
+      entry.status      = slugBroken ? 'broken' : 'loaded';
+      entry.object3d    = getModelPlaceholder();
+      entry.loadPromise = Promise.resolve(entry.object3d);
+      for (const l of entry.listeners) l(entry.object3d, entry.status);
+      return;
+    }
+
+    entry.loadPromise = this.modelLoader(url).then(
+      (obj) => {
+        entry.status   = 'loaded';
+        entry.object3d = obj;
+        for (const l of entry.listeners) l(obj, 'loaded');
+        return obj;
+      },
+      () => {
+        entry.status = 'broken';
+        for (const l of entry.listeners) l(entry.object3d, 'broken');
+        return entry.object3d;
       },
     );
   }

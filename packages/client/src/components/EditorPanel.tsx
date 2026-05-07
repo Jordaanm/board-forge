@@ -10,6 +10,7 @@ import { type ManifestStore } from '../assets/ManifestStore';
 import { type AssetType } from '../assets/Manifest';
 import { AssetPicker } from './AssetPicker';
 import { assetService } from '../assets/AssetService';
+import { BASE_MANIFEST, PRIMITIVE_MANIFEST } from '../assets/baseManifest';
 
 export interface ObjectSummary {
   id: string;
@@ -609,7 +610,9 @@ function AssetField({
 function describeRef(ref: string, store: ManifestStore | null): string {
   if (!ref) return 'No asset';
   if (ref.includes(':') && !/^https?:|^data:|^blob:/i.test(ref)) {
-    const entry = store?.getDraft().get(ref);
+    const entry = store?.getDraft().get(ref)
+      ?? PRIMITIVE_MANIFEST.get(ref)
+      ?? BASE_MANIFEST.get(ref);
     if (entry) return entry.name;
     return ref;
   }

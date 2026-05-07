@@ -7,14 +7,17 @@
 //   - 'prim:card'   → thin box with three material slots: `face` on +Y, `back`
 //                     on -Y, `side` on the four edge faces (BoxGeometry material
 //                     groups remapped to a 3-material array).
-//   - any URL       → reserved for slice-4+ (no asset loader yet)
+//   - 'custom:*' or
+//     a raw URL    → loaded as a GLTF/GLB via AssetService's model loader.
+//                    Issue #9 of issues--asset-registry.md.
 //
 // `textureRefs` is a slot-name → URL map. Single-material primitives read from
 // the `default` slot. Multi-material primitives (e.g. `prim:card`) tag each
 // child mesh's `userData.materialSlot` to route per-slot URLs to per-side
 // materials. `tint` is a CSS colour applied to the material — pragmatic
 // extension for slice 3 so the token's blue colour can round-trip without
-// introducing a token-specific component.
+// introducing a token-specific component. Tint and textureRefs are NOT
+// applied to loaded GLTF models — those keep their authored materials.
 
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
@@ -37,6 +40,7 @@ export class MeshComponent extends EntityComponent<MeshState> {
 
   group!: THREE.Group;
   private textureUnsubs: (() => void)[] = [];
+  private modelUnsub: (() => void) | null = null;
 
   onSpawn(_ctx: SpawnContext): void {
     const transform = this.entity.getComponent(TransformComponent)!;
@@ -48,6 +52,7 @@ export class MeshComponent extends EntityComponent<MeshState> {
 
   onDespawn(_ctx: SpawnContext): void {
     this.unsubAllTextures();
+    this.unsubModel();
     if (this.group.parent) this.group.parent.remove(this.group);
     disposeGroup(this.group);
   }
@@ -55,6 +60,10 @@ export class MeshComponent extends EntityComponent<MeshState> {
   private unsubAllTextures(): void {
     for (const u of this.textureUnsubs) u();
     this.textureUnsubs = [];
+  }
+
+  private unsubModel(): void {
+    if (this.modelUnsub) { this.modelUnsub(); this.modelUnsub = null; }
   }
 
   onPropertiesChanged(changed: Partial<MeshState>): void {
@@ -98,11 +107,27 @@ export class MeshComponent extends EntityComponent<MeshState> {
 
   private rebuild(): void {
     this.unsubAllTextures();
+    this.unsubModel();
     disposeGroup(this.group);
     while (this.group.children.length) this.group.remove(this.group.children[0]);
-    const built = buildMesh(this.state.meshRef, this.state.size);
-    this.group.add(built);
-    this.applyMaterialAttributes();
+
+    const ref = this.state.meshRef;
+    if (isPrimRef(ref) || ref === '') {
+      const built = buildMesh(ref, this.state.size);
+      this.group.add(built);
+      this.applyMaterialAttributes();
+      return;
+    }
+
+    // Non-primitive ref: subscribe through AssetService for an Object3D.
+    // The listener fires immediately with a placeholder cube (pending) and
+    // again once the GLTF resolves. Each transition swaps the group's child.
+    this.modelUnsub = assetService.subscribe(ref, 'model', (obj, _status) => {
+      disposeGroup(this.group);
+      while (this.group.children.length) this.group.remove(this.group.children[0]);
+      const clone = obj.clone(true);
+      this.group.add(clone);
+    });
   }
 
   private applyMaterialAttributes(): void {
@@ -143,6 +168,10 @@ export class MeshComponent extends EntityComponent<MeshState> {
       }
     });
   }
+}
+
+function isPrimRef(ref: string): boolean {
+  return ref.startsWith('prim:');
 }
 
 function buildMesh(meshRef: string, size: MeshSize): THREE.Object3D {

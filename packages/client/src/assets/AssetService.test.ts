@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import * as THREE from 'three';
-import { AssetService, type AssetStatus, getImagePlaceholder } from './AssetService';
+import { AssetService, type AssetStatus, getImagePlaceholder, getModelPlaceholder } from './AssetService';
 import { Manifest, type AssetEntry } from './Manifest';
 import { BASE_MANIFEST, PRIMITIVE_MANIFEST } from './baseManifest';
 
@@ -175,6 +175,68 @@ describe('AssetService slug resolution', () => {
   });
 });
 
+describe('AssetService model resolution', () => {
+  test('subscribe(model) fires placeholder pending then real Object3D loaded', async () => {
+    const real = new THREE.Object3D();
+    const svc  = new AssetService({ modelLoader: () => Promise.resolve(real) });
+    const calls: { obj: THREE.Object3D; status: AssetStatus }[] = [];
+
+    svc.subscribe('http://x/m.glb', 'model', (obj, status) => calls.push({ obj, status }));
+
+    expect(calls[0].status).toBe('pending');
+    expect(calls[0].obj).toBe(getModelPlaceholder());
+
+    await flushMicrotasks();
+    expect(calls[calls.length - 1].status).toBe('loaded');
+    expect(calls[calls.length - 1].obj).toBe(real);
+  });
+
+  test('rejected model load → broken status, placeholder retained', async () => {
+    const svc = new AssetService({ modelLoader: () => Promise.reject(new Error('boom')) });
+    const seen: AssetStatus[] = [];
+    svc.subscribe('http://x/bad.glb', 'model', (_obj, s) => seen.push(s));
+    await flushMicrotasks();
+    expect(seen).toEqual(['pending', 'broken']);
+    expect(svc.status('http://x/bad.glb', 'model')).toBe('broken');
+  });
+
+  test('custom model slug resolves through manifest', async () => {
+    const real = new THREE.Object3D();
+    let loaded = '';
+    const svc = new AssetService({
+      manifests: [Manifest.from([{
+        slug: 'custom:knight', name: 'Knight', type: 'model', url: 'http://x/k.glb', preload: false,
+      }])],
+      modelLoader: (url) => { loaded = url; return Promise.resolve(real); },
+    });
+
+    const obj = await svc.resolve('custom:knight', 'model');
+    expect(loaded).toBe('http://x/k.glb');
+    expect(obj).toBe(real);
+  });
+
+  test('unknown model slug falls back to placeholder + broken status', async () => {
+    const svc = new AssetService({ manifests: [BASE_MANIFEST] });
+    const seen: AssetStatus[] = [];
+    svc.subscribe('custom:nope', 'model', (_obj, s) => seen.push(s));
+    await flushMicrotasks();
+    expect(seen[seen.length - 1]).toBe('broken');
+    expect(svc.status('custom:nope', 'model')).toBe('broken');
+  });
+
+  test('image-typed slug subscribed as a model is broken', async () => {
+    const svc = new AssetService({
+      manifests: [Manifest.from([{
+        slug: 'custom:img', name: 'I', type: 'image', url: 'http://x/i.png', preload: false,
+      }])],
+    });
+    const seen: AssetStatus[] = [];
+    svc.subscribe('custom:img', 'model', (_obj, s) => seen.push(s));
+    await flushMicrotasks();
+    expect(seen[seen.length - 1]).toBe('broken');
+  });
+});
+
 describe('AssetService.preload', () => {
   test('fetches every preload:true entry across the supplied manifests', async () => {
     const fetched: string[] = [];
@@ -202,10 +264,12 @@ describe('AssetService.preload', () => {
     expect(calls).toBe(0);
   });
 
-  test('non-image entries are skipped (no model/sound loader yet)', async () => {
-    let calls = 0;
+  test('preload triggers model loader for model entries; skips sound entries', async () => {
+    const imageCalls: string[] = [];
+    const modelCalls: string[] = [];
     const svc = new AssetService({
-      imageLoader: () => { calls++; return Promise.resolve(new THREE.Texture()); },
+      imageLoader: (url) => { imageCalls.push(url); return Promise.resolve(new THREE.Texture()); },
+      modelLoader: (url) => { modelCalls.push(url); return Promise.resolve(new THREE.Object3D()); },
     });
     const m = Manifest.from([
       { slug: 'custom:m', name: 'M', type: 'model', url: 'http://x/m.glb', preload: true },
@@ -213,7 +277,8 @@ describe('AssetService.preload', () => {
     ]);
     svc.setManifests([m]);
     await svc.preload(m);
-    expect(calls).toBe(0);
+    expect(imageCalls).toEqual([]);
+    expect(modelCalls).toEqual(['http://x/m.glb']);
   });
 
   test('settles even when individual loads reject', async () => {
