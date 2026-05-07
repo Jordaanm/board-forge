@@ -4,7 +4,7 @@
 // shapes in `entity/wire.ts`.
 
 import type { RoomStateMessage } from '../seats/RoomState';
-import type { SceneMessage } from '../entity/wire';
+import type { SceneMessage, ManifestPublishMessage } from '../entity/wire';
 import type { SeatIndex } from '../seats/SeatLayout';
 import type { TableProps } from '../scene/Table';
 
@@ -39,4 +39,4 @@ export interface CursorPosition {
   tool?:  string;
 }
 
-export type ChannelMessage = SceneMessage | GuestInputMessage | RoomStateMessage | CursorPosition | TableUpdate;
+export type ChannelMessage = SceneMessage | GuestInputMessage | RoomStateMessage | CursorPosition | TableUpdate | ManifestPublishMessage;

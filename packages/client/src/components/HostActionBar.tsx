@@ -32,6 +32,7 @@ interface Props {
   getSavedScriptSource: () => string;
   scriptErrorLog:       ScriptErrorLog | null;
   manifestStore:        ManifestStore | null;
+  onPushManifest:       () => void;
 }
 
 const BAR: React.CSSProperties = {
@@ -112,6 +113,7 @@ export function HostActionBar({
   getSavedScriptSource,
   scriptErrorLog,
   manifestStore,
+  onPushManifest,
 }: Props) {
   const [revertOpen, setRevertOpen] = useState(false);
   const canRevert = lastLoaded !== null;
@@ -138,7 +140,7 @@ export function HostActionBar({
         getSavedSource={getSavedScriptSource}
         errorLog={scriptErrorLog}
       />
-      <AssetManagerModal store={manifestStore} />
+      <AssetManagerModal store={manifestStore} onPush={onPushManifest} />
       {lastLoaded && (
         <span style={FILE_LABEL}>
           <span style={FILE_NAME}>{lastLoaded.filename}</span>

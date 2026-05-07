@@ -8,6 +8,7 @@
 import { type SeatIndex } from '../seats/SeatLayout';
 import { type ReplicationChannel } from './EntityComponent';
 import { type EntitySerialized } from './Scene';
+import { type AssetEntry } from '../assets/Manifest';
 
 export type { EntitySerialized };
 
@@ -188,6 +189,18 @@ export interface ToolBroadcast {
   peerId:  string;
   seat:    SeatIndex | null;
   payload: unknown;
+}
+
+// Custom asset manifest snapshot. Issue #5 of issues--asset-registry.md. Host
+// broadcasts on manager Push and on peer-join (when the snapshot is
+// non-empty). Guests apply via `ManifestStore.applyPublishedSnapshot`, which
+// updates both draft and published. Routed at the room layer (alongside
+// room-state etc.) rather than through the World's per-entity replicator —
+// asset metadata is global, not per-entity, and the room channel already has
+// the host/guest fanout it needs.
+export interface ManifestPublishMessage {
+  type:     'manifest-publish';
+  snapshot: AssetEntry[];
 }
 
 // Discriminated union of every wire message that flows over a scene channel.

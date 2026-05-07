@@ -156,6 +156,10 @@ export function Room({ roomId, isHost }: Props) {
           setStatus('disconnected');
           return;
         }
+        if (m.type === 'manifest-publish') {
+          manifestStoreRef.current?.applyPublishedSnapshot(m.snapshot);
+          return;
+        }
         onMsgRef.current(peerId, m);
       },
       (s) => setStatus(s as Status),
@@ -173,6 +177,10 @@ export function Room({ roomId, isHost }: Props) {
         manager.assignOnJoin(peerId);
         const snapshotMsg: RoomStateMessage = { type: 'room-state', snapshot: manager.snapshot() };
         mgr.sendTo(peerId, snapshotMsg);
+        const manifestSnap = manifestStoreRef.current?.getPublished().toArray() ?? [];
+        if (manifestSnap.length > 0) {
+          mgr.sendTo(peerId, { type: 'manifest-publish', snapshot: manifestSnap });
+        }
         onPeerJoinedRef.current(peerId);
       },
       (peerId) => {
@@ -261,15 +269,12 @@ export function Room({ roomId, isHost }: Props) {
     setHighlightRef.current(selectedId);
   }, [selectedId]);
 
-  // Manifest store — host-only. Refreshes AssetService's slug catalog with the
-  // host's draft on every edit so locally added assets resolve immediately.
+  // Manifest store — both roles. Host edits draft locally and pushes to peers
+  // via the manager modal; guests receive published snapshots through
+  // `applyPublishedSnapshot`. AssetService follows the draft so the host
+  // sees locally staged additions immediately and guests resolve the latest
+  // pushed catalog (where draft == published).
   useEffect(() => {
-    if (!isHost) {
-      manifestStoreRef.current = null;
-      setManifestStore(null);
-      assetService.setManifests([BASE_MANIFEST, PRIMITIVE_MANIFEST]);
-      return;
-    }
     const store = new ManifestStore();
     manifestStoreRef.current = store;
     setManifestStore(store);
@@ -284,7 +289,7 @@ export function Room({ roomId, isHost }: Props) {
       setManifestStore(null);
       assetService.setManifests([BASE_MANIFEST, PRIMITIVE_MANIFEST]);
     };
-  }, [isHost]);
+  }, []);
 
   const handleContextAction = (
     item: MenuItem & { kind: 'action' | 'colorpicker' },
@@ -426,6 +431,12 @@ export function Room({ roomId, isHost }: Props) {
               getSavedScriptSource={() => getSavedScriptSourceRef.current()}
               scriptErrorLog={scriptErrorLog}
               manifestStore={manifestStore}
+              onPushManifest={() => {
+                const store = manifestStoreRef.current;
+                if (!store) return;
+                const snapshot = store.push();
+                sendRef.current({ type: 'manifest-publish', snapshot });
+              }}
             />
           </UIPanel>
         )}

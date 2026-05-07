@@ -21,7 +21,8 @@ import { type AssetEntry, type AssetType, validateSlug } from '../assets/Manifes
 import { BASE_MANIFEST, PRIMITIVE_MANIFEST } from '../assets/baseManifest';
 
 interface Props {
-  store: ManifestStore | null;
+  store:  ManifestStore | null;
+  onPush: () => void;
 }
 
 type TabId = 'primitives' | 'base' | 'custom';
@@ -202,7 +203,7 @@ const ERROR_LINE: React.CSSProperties = {
   margin:   '4px 0',
 };
 
-export function AssetManagerModal({ store }: Props) {
+export function AssetManagerModal({ store, onPush }: Props) {
   const centerAnchor    = useAnchorTarget('center');
   const [open, setOpen] = useState(false);
   const [tab, setTab]   = useState<TabId>('custom');
@@ -232,7 +233,7 @@ export function AssetManagerModal({ store }: Props) {
               {tab === 'base'       && <ReadOnlyList entries={BASE_MANIFEST.toArray()} />}
               {tab === 'custom'     && store && <CustomTab store={store} />}
             </div>
-            <Footer store={store} />
+            <Footer store={store} onPush={onPush} />
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
@@ -451,17 +452,23 @@ function AddRow({ store }: { store: ManifestStore }) {
   );
 }
 
-function Footer({ store }: { store: ManifestStore | null }) {
+function Footer({ store, onPush }: { store: ManifestStore | null; onPush: () => void }) {
   const count = useSyncExternalStore(
     (cb) => store?.subscribe(cb) ?? (() => {}),
     () => store?.unpushedCount() ?? 0,
   );
+  const disabled = count === 0;
   return (
     <div style={FOOTER}>
       <span style={{ color: count > 0 ? '#ffd07a' : '#888' }}>
         {count === 0 ? 'No unpushed changes.' : `${count} unpushed change${count === 1 ? '' : 's'}.`}
       </span>
-      <button type="button" style={count === 0 ? PUSH_BTN_DISABLED : PUSH_BTN} disabled>
+      <button
+        type="button"
+        style={disabled ? PUSH_BTN_DISABLED : PUSH_BTN}
+        disabled={disabled}
+        onClick={onPush}
+      >
         Push to peers
       </button>
     </div>

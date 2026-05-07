@@ -14,6 +14,7 @@ import {
   type ApplyImpulse,
   type ToolBroadcast,
   type SceneMessage,
+  type ManifestPublishMessage,
 } from './wire';
 
 // Each wire message must JSON round-trip without loss.
@@ -160,6 +161,17 @@ describe('wire encode/decode round-trip', () => {
           owner: null, privateToSeat: null, parentId: null, children: [],
           components: { value: { v: 1, isNumeric: true } },
         },
+      ],
+    };
+    expect(roundTrip(m)).toEqual(m);
+  });
+
+  test('ManifestPublishMessage', () => {
+    const m: ManifestPublishMessage = {
+      type: 'manifest-publish',
+      snapshot: [
+        { slug: 'custom:a', name: 'A', type: 'image', url: 'http://x/a.png', preload: true, tags: ['face'] },
+        { slug: 'custom:b', name: 'B', type: 'sound', url: 'http://x/b.mp3', preload: false },
       ],
     };
     expect(roundTrip(m)).toEqual(m);
