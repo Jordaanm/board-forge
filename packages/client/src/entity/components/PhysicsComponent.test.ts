@@ -13,6 +13,8 @@ import { dispatchMenuAction } from '../../input/ContextMenuController';
 import { registerCorePrimitives } from '../spawnables';
 import { PhysicsWorld } from '../../physics/PhysicsWorld';
 import { type SeatIndex } from '../../seats/SeatLayout';
+import { TABLE_ENTITY_ID } from '../tableEntity';
+import { MeshComponent } from './MeshComponent';
 
 const POLICY: ReplicatorPolicy = {
   channelFor:  () => 'reliable',
@@ -259,6 +261,37 @@ describe('PhysicsComponent — lock toggle authority (via HostInputDispatcher)',
     PEERS.set('p3', 3);
     expect(invokeToggle('p3', e.id)).toBe(true);
     expect(e.getComponent(PhysicsComponent)!.state.isLocked).toBe(true);
+  });
+});
+
+// The Table primitives are authored with their top surface at local y=0
+// (mesh shifted down by h/2). The collision shape needs the same offset so
+// objects rest on the visible top instead of floating h/2 above it.
+describe('PhysicsComponent — Table hitbox aligns with the visible top surface', () => {
+  test('prim:table-rect body shape is offset down by h/2', () => {
+    const e = scene.spawn('table', ctx, { id: TABLE_ENTITY_ID });
+    const phys = e.getComponent(PhysicsComponent)!;
+    const mesh = e.getComponent(MeshComponent)!;
+    const [, halfH] = mesh.halfExtents();
+    expect(phys.body.shapes).toHaveLength(1);
+    expect(phys.body.shapeOffsets[0].y).toBeCloseTo(-halfH, 6);
+    // Top of the hitbox in entity-local space sits at y=0, matching the mesh.
+    expect(phys.body.shapeOffsets[0].y + halfH).toBeCloseTo(0, 6);
+  });
+
+  test('prim:table-circle body shape is offset down by h/2', () => {
+    const e = scene.spawn('table', ctx, { id: TABLE_ENTITY_ID });
+    e.getComponent(MeshComponent)!.setState({ meshRef: 'prim:table-circle' });
+    const phys = e.getComponent(PhysicsComponent)!;
+    phys.rebuildShape();
+    const [, halfH] = e.getComponent(MeshComponent)!.halfExtents();
+    expect(phys.body.shapeOffsets[0].y).toBeCloseTo(-halfH, 6);
+  });
+
+  test('non-table primitives keep a zero shape offset', () => {
+    const e = scene.spawn('die', ctx);
+    const phys = e.getComponent(PhysicsComponent)!;
+    expect(phys.body.shapeOffsets[0].y).toBe(0);
   });
 });
 

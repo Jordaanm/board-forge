@@ -85,6 +85,18 @@ export class MeshComponent extends EntityComponent<MeshState> {
     return halfExtentsFor(this.state.meshRef, this.state.size);
   }
 
+  // Local-space offset of the visible mesh from the entity origin. Most
+  // primitives are centred (returns [0, 0, 0]); the Table primitives are
+  // authored with their top surface at local y=0, so the body needs the same
+  // downward shift to keep the hitbox flush with the visible top.
+  meshOffset(): [number, number, number] {
+    if (this.state.meshRef === 'prim:table-rect' || this.state.meshRef === 'prim:table-circle') {
+      const [, h] = sizeToBox(this.state.size);
+      return [0, -h / 2, 0];
+    }
+    return [0, 0, 0];
+  }
+
   meshKind(): 'cube' | 'meeple' | 'cylinder' | 'unknown' {
     if (this.state.meshRef === 'prim:cube') return 'cube';
     if (this.state.meshRef === 'prim:d6')   return 'cube';

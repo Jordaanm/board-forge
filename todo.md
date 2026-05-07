@@ -7,6 +7,7 @@
   * Since it is an entity, it has customData, which is typically where Game-level state is stored, such as the current round, etc.
 
 ### Major Features
+* Turn order management / current turn
 * Multiselect
 * Magnets (sticking points on the surface of an entity)
 * PDF Viewer
@@ -25,8 +26,6 @@
 * Bag container entity
 
 ### Bugs
-* Tint menu closes immediately when you click on it, making it difficult to properly pick a colour.
-
 
 ### Cleanup
 * Remove the transitional `__delete` host-local built-in from `ContextMenuController.ts`.

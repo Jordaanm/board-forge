@@ -161,7 +161,8 @@ export class PhysicsComponent extends EntityComponent<PhysicsState> {
     const mesh = this.entity.getComponent(MeshComponent);
     if (!mesh) return;
     while (this.body.shapes.length > 0) this.body.removeShape(this.body.shapes[0]);
-    this.body.addShape(buildShape(mesh));
+    const [ox, oy, oz] = mesh.meshOffset();
+    this.body.addShape(buildShape(mesh), new CANNON.Vec3(ox, oy, oz));
     this.body.updateBoundingRadius();
     this.body.aabbNeedsUpdate = true;
     this.body.updateMassProperties();
@@ -233,13 +234,15 @@ export class PhysicsComponent extends EntityComponent<PhysicsState> {
 function buildBody(state: PhysicsState, mesh: MeshComponent): CANNON.Body {
   const material = new CANNON.Material({ friction: state.friction, restitution: state.restitution });
   const shape    = buildShape(mesh);
-  return new CANNON.Body({
+  const body = new CANNON.Body({
     mass:           state.mass,
-    shape,
     material,
     linearDamping:  0.3,
     angularDamping: 0.5,
   });
+  const [ox, oy, oz] = mesh.meshOffset();
+  body.addShape(shape, new CANNON.Vec3(ox, oy, oz));
+  return body;
 }
 
 function buildShape(mesh: MeshComponent): CANNON.Shape {
