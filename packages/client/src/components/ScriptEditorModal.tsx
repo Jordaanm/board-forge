@@ -1,8 +1,25 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { type RunResult } from '../scripting/ScriptHost';
 import { type ScriptErrorLog, type ScriptErrorEntry } from '../scripting/ScriptErrorLog';
 import { useAnchorTarget } from './AnchorLayout';
+import { ScriptEditorErrorBoundary } from './ScriptEditorErrorBoundary';
+
+// Lazy so Monaco's ~3MB worker bundles stay out of the initial Room render.
+// Hover preload on the trigger button hides the load wait for most clicks;
+// cold clicks see the Suspense placeholder for ~1–2s.
+const ScriptEditor = lazy(() => import('./ScriptEditor'));
+
+// Kicks off the Monaco chunk fetch on mouseenter. Wrapped in a once-flag
+// so repeated hovers don't fire the import repeatedly. Browsers cache the
+// chunk after the first load anyway, but the flag avoids any redundant
+// promise allocation.
+let editorPreloadStarted = false;
+function preloadScriptEditor(): void {
+  if (editorPreloadStarted) return;
+  editorPreloadStarted = true;
+  void import('./ScriptEditor');
+}
 
 interface Props {
   source:         string;
@@ -87,18 +104,18 @@ const BODY: React.CSSProperties = {
   minHeight:     0,
 };
 
-const TEXTAREA: React.CSSProperties = {
+const EDITOR_LOADING: React.CSSProperties = {
   flex:          '1 1 auto',
-  minHeight:     0,
+  minHeight:     220,
+  display:       'flex',
+  alignItems:    'center',
+  justifyContent: 'center',
   background:    'rgba(0,0,0,0.4)',
   border:        '1px solid rgba(255,255,255,0.2)',
-  color:         '#e8e8e8',
-  padding:       '8px 10px',
+  color:         '#888',
   borderRadius:  3,
-  fontSize:      13,
-  fontFamily:    'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-  boxSizing:     'border-box',
-  resize:        'vertical',
+  fontSize:      12,
+  fontFamily:    'sans-serif',
 };
 
 const BUTTON_ROW: React.CSSProperties = {
@@ -383,7 +400,13 @@ export function ScriptEditorModal({ source, onChange, onSave, onRun, getSavedSou
 
   return (
     <>
-      <button type="button" style={TRIGGER_BTN} onClick={handleOpenClick}>
+      <button
+        type="button"
+        style={TRIGGER_BTN}
+        onClick={handleOpenClick}
+        onMouseEnter={preloadScriptEditor}
+        onFocus={preloadScriptEditor}
+      >
         Edit Script
       </button>
       <Dialog.Root open={open} onOpenChange={handleOpenChange}>
@@ -397,13 +420,16 @@ export function ScriptEditorModal({ source, onChange, onSave, onRun, getSavedSou
               </Dialog.Close>
             </div>
             <div style={BODY}>
-              <textarea
-                style={TEXTAREA}
-                value={source}
-                spellCheck={false}
-                onChange={e => handleChange(e.target.value)}
-                placeholder="export default class extends Game { onScriptLoaded() { console.log('hi') } }"
-              />
+              <ScriptEditorErrorBoundary source={source} onChange={handleChange}>
+                <Suspense fallback={<div style={EDITOR_LOADING}>Loading editor…</div>}>
+                  <ScriptEditor
+                    source={source}
+                    onChange={handleChange}
+                    onSave={onSave}
+                    onRun={() => void handleRun()}
+                  />
+                </Suspense>
+              </ScriptEditorErrorBoundary>
               <div style={BUTTON_ROW}>
                 <button type="button" style={BUTTON} onClick={onSave}>Save Script</button>
                 <button type="button" style={BUTTON} onClick={handleRun} disabled={running}>

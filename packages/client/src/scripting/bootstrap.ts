@@ -20,6 +20,16 @@
 // trusted-host model, retaining full error messages is more useful than the
 // confidentiality guarantee, especially because errors funnel into the
 // script panel's runtime error log.
+//
+// Why `evalTaming: 'unsafeEval'` and `overrideTaming: 'severe'`: Monaco's
+// editor + TS language-service worker mutate frozen prototypes during init
+// (e.g. constructor reassignment) and use indirect-eval-like patterns
+// internally. Without these tamings, prod-mode lockdown causes Monaco to
+// throw "Cannot assign to read only property 'constructor'" on first mount.
+// Compartment-scoped *user-script* execution is unaffected — those still
+// run inside isolated Compartments where the host's globals are stripped.
+// (Validated 2026-05-06 in the spike/monaco-ses branch; see
+// planning/scripting-upgrade.md "Spike Outcome".)
 
 import 'ses';
 
@@ -38,6 +48,8 @@ const isProd = (() => {
 
 if (isProd && typeof lockdown === 'function') {
   lockdown({
-    errorTaming: 'unsafe',
+    errorTaming:    'unsafe',
+    evalTaming:     'unsafeEval',
+    overrideTaming: 'severe',
   });
 }
