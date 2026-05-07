@@ -277,4 +277,47 @@ describe('AssetService.invalidate', () => {
     expect(seen).toEqual(['pending', 'loaded', 'pending', 'loaded']);
     expect(calls).toBe(2);
   });
+
+  test('broken → loaded transition after invalidate (e.g. host fixes URL)', async () => {
+    let attempt = 0;
+    const real = new THREE.Texture();
+    const svc = new AssetService({
+      imageLoader: () =>
+        attempt++ === 0 ? Promise.reject(new Error('404')) : Promise.resolve(real),
+    });
+    const seen: AssetStatus[] = [];
+    svc.subscribe('http://x/heal.png', 'image', (_tex, s) => seen.push(s));
+    await flushMicrotasks();
+    expect(seen).toEqual(['pending', 'broken']);
+
+    svc.invalidate('http://x/heal.png');
+    await flushMicrotasks();
+    expect(seen).toEqual(['pending', 'broken', 'pending', 'loaded']);
+    expect(svc.status('http://x/heal.png', 'image')).toBe('loaded');
+  });
+
+  test('setManifests re-fetches cached slugs through invalidate, preserving listeners', async () => {
+    const t1 = new THREE.Texture();
+    const t2 = new THREE.Texture();
+    let attempt = 0;
+    const svc = new AssetService({
+      imageLoader: () => Promise.resolve(attempt++ === 0 ? t1 : t2),
+    });
+    svc.setManifests([Manifest.from([{
+      slug: 'custom:x', name: 'X', type: 'image', url: 'http://x/old.png', preload: false,
+    }])]);
+
+    const seen: { tex: THREE.Texture; status: AssetStatus }[] = [];
+    svc.subscribe('custom:x', 'image', (tex, status) => seen.push({ tex, status }));
+    await flushMicrotasks();
+    expect(seen[seen.length - 1].tex).toBe(t1);
+
+    svc.setManifests([Manifest.from([{
+      slug: 'custom:x', name: 'X', type: 'image', url: 'http://x/new.png', preload: false,
+    }])]);
+    await flushMicrotasks();
+    // Listener survives — observes pending then the new texture.
+    expect(seen[seen.length - 1].tex).toBe(t2);
+    expect(seen[seen.length - 1].status).toBe('loaded');
+  });
 });

@@ -19,6 +19,8 @@ import { useAnchorTarget } from './AnchorLayout';
 import { type ManifestStore } from '../assets/ManifestStore';
 import { type AssetEntry, type AssetType, validateSlug } from '../assets/Manifest';
 import { BASE_MANIFEST, PRIMITIVE_MANIFEST } from '../assets/baseManifest';
+import { assetService, type AssetStatus } from '../assets/AssetService';
+import { probe, type ProbeResult } from '../assets/corsPreflight';
 
 interface Props {
   store:  ManifestStore | null;
@@ -203,6 +205,45 @@ const ERROR_LINE: React.CSSProperties = {
   margin:   '4px 0',
 };
 
+const PREFLIGHT_LINE: React.CSSProperties = {
+  fontSize:  11,
+  margin:    '4px 0',
+  display:   'flex',
+  alignItems: 'center',
+  gap:        6,
+};
+
+const PREFLIGHT_OK: React.CSSProperties = {
+  ...PREFLIGHT_LINE,
+  color: '#9ee29e',
+};
+
+const PREFLIGHT_WARN: React.CSSProperties = {
+  ...PREFLIGHT_LINE,
+  color: '#ffb87a',
+};
+
+const PREFLIGHT_PENDING: React.CSSProperties = {
+  ...PREFLIGHT_LINE,
+  color: '#bdbdc0',
+};
+
+const WARNING_BADGE: React.CSSProperties = {
+  display:        'inline-flex',
+  alignItems:     'center',
+  justifyContent: 'center',
+  width:          16,
+  height:         16,
+  borderRadius:   '50%',
+  background:     'rgba(255,160,80,0.25)',
+  color:          '#ffb87a',
+  fontSize:       11,
+  fontWeight:     700,
+  border:         '1px solid rgba(255,160,80,0.5)',
+  marginLeft:     6,
+  flexShrink:     0,
+};
+
 export function AssetManagerModal({ store, onPush }: Props) {
   const centerAnchor    = useAnchorTarget('center');
   const [open, setOpen] = useState(false);
@@ -291,10 +332,16 @@ function CustomTab({ store }: { store: ManifestStore }) {
 }
 
 function CustomRow({ entry, onEdit, onDelete }: { entry: AssetEntry; onEdit: () => void; onDelete: () => void }) {
+  const status = useAssetStatus(entry);
   return (
     <div style={ROW}>
       <div style={ROW_LABEL}>
-        <div style={ROW_NAME}>{entry.name}</div>
+        <div style={ROW_NAME}>
+          {entry.name}
+          {status === 'broken' && (
+            <span style={WARNING_BADGE} title="Asset failed to load — check the URL">!</span>
+          )}
+        </div>
         <div style={ROW_SLUG}>{entry.slug}{entry.preload ? ' · preload' : ''}</div>
       </div>
       <div style={ROW_TYPE}>{entry.type}</div>
@@ -306,6 +353,22 @@ function CustomRow({ entry, onEdit, onDelete }: { entry: AssetEntry; onEdit: () 
   );
 }
 
+// Subscribes to AssetService for the entry's slug so the row badge re-renders
+// when load status changes. Only image entries — model/sound loaders land in
+// #9/#10 — but we still ensure the asset is at least probed by subscribing,
+// so the broken-flag transitions get observed.
+function useAssetStatus(entry: AssetEntry): AssetStatus | null {
+  const [status, setStatus] = useState<AssetStatus | null>(
+    () => entry.type === 'image' ? assetService.status(entry.slug, 'image') : null,
+  );
+  useEffect(() => {
+    if (entry.type !== 'image') { setStatus(null); return; }
+    const unsub = assetService.subscribe(entry.slug, 'image', (_tex, s) => setStatus(s));
+    return unsub;
+  }, [entry.slug, entry.type, entry.url]);
+  return status;
+}
+
 function EditRow({ entry, store, onClose }: { entry: AssetEntry; store: ManifestStore; onClose: () => void }) {
   const [name,        setName]        = useState(entry.name);
   const [url,         setUrl]         = useState(entry.url);
@@ -313,6 +376,7 @@ function EditRow({ entry, store, onClose }: { entry: AssetEntry; store: Manifest
   const [description, setDescription] = useState(entry.description ?? '');
   const [tags,        setTags]        = useState((entry.tags ?? []).join(', '));
   const [error,       setError]       = useState<string | null>(null);
+  const preflight = useUrlPreflight(url, entry.url);
 
   const commit = () => {
     if (name.trim().length === 0) { setError('Name is required.'); return; }
@@ -324,6 +388,9 @@ function EditRow({ entry, store, onClose }: { entry: AssetEntry; store: Manifest
         description: description.trim() || undefined,
         tags:        tags.split(',').map((t) => t.trim()).filter(Boolean),
       }));
+      // URL changed → drop the cached fetch so subscribed consumers
+      // observe the new asset on next resolve.
+      if (url !== entry.url) assetService.invalidate(entry.slug);
       onClose();
     } catch (e) {
       setError((e as Error).message);
@@ -349,6 +416,7 @@ function EditRow({ entry, store, onClose }: { entry: AssetEntry; store: Manifest
           <span style={{ fontSize: 11, color: '#bdbdc0' }}>Fetch at session start</span>
         </label>
       </div>
+      <PreflightLine state={preflight} />
       {error && <div style={ERROR_LINE}>{error}</div>}
       <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
         <button type="button" style={SMALL_BTN} onClick={onClose}>Cancel</button>
@@ -366,6 +434,7 @@ function AddRow({ store }: { store: ManifestStore }) {
   const [preload, setPreload] = useState(true);
   const [error,   setError]   = useState<string | null>(null);
   const [staging, setStaging] = useState(false);
+  const preflight = useUrlPreflight(url, '');
 
   // Auto-suggest slug from URL filename when the user hasn't manually typed
   // one. Once the user edits the slug field, stop syncing.
@@ -442,14 +511,77 @@ function AddRow({ store }: { store: ManifestStore }) {
             <span style={{ fontSize: 11, color: '#bdbdc0' }}>Fetch at session start</span>
           </label>
         </div>
+        <PreflightLine state={preflight} />
         {error && <div style={ERROR_LINE}>{error}</div>}
         <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
           <button type="button" style={SMALL_BTN} onClick={reset}>Cancel</button>
-          <button type="button" style={SMALL_BTN} onClick={commit}>Add</button>
+          <button
+            type="button"
+            style={SMALL_BTN}
+            onClick={commit}
+            title={preflight.kind === 'fail' ? 'Preflight failed — committing anyway. The asset may not load.' : ''}
+          >
+            {preflight.kind === 'fail' ? 'Add anyway' : 'Add'}
+          </button>
         </div>
       </div>
     </div>
   );
+}
+
+type PreflightState =
+  | { kind: 'idle' }
+  | { kind: 'pending' }
+  | { kind: 'ok' }
+  | { kind: 'fail'; message: string };
+
+// Debounced HEAD/GET probe for the URL field. Skips slugs and synthetic
+// markers; cancels in-flight checks when the URL changes again.
+function useUrlPreflight(url: string, lastConfirmedUrl: string): PreflightState {
+  const [state, setState] = useState<PreflightState>({ kind: 'idle' });
+  useEffect(() => {
+    const trimmed = url.trim();
+    if (!trimmed)                        { setState({ kind: 'idle' }); return; }
+    if (trimmed === lastConfirmedUrl)    { setState({ kind: 'idle' }); return; }
+    if (trimmed.startsWith('placeholder://') || trimmed.startsWith('primitive://')) {
+      setState({ kind: 'idle' });
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      setState({ kind: 'pending' });
+      let res: ProbeResult;
+      try {
+        res = await probe(trimmed);
+      } catch {
+        if (cancelled) return;
+        setState({ kind: 'fail', message: 'Probe threw unexpectedly.' });
+        return;
+      }
+      if (cancelled) return;
+      if (res.ok) setState({ kind: 'ok' });
+      else        setState({ kind: 'fail', message: describeError(res.error) });
+    }, 350);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [url, lastConfirmedUrl]);
+  return state;
+}
+
+function describeError(error: { kind: string; message: string; status?: number }): string {
+  switch (error.kind) {
+    case 'http':    return `HTTP ${error.status ?? '?'} — ${error.message}`;
+    case 'cors':    return `CORS blocked — ${error.message}`;
+    case 'network': return `Network error or CORS blocked — ${error.message}`;
+    case 'invalid': return error.message;
+    default:        return error.message;
+  }
+}
+
+function PreflightLine({ state }: { state: PreflightState }) {
+  if (state.kind === 'idle')    return null;
+  if (state.kind === 'pending') return <div style={PREFLIGHT_PENDING}>Checking URL…</div>;
+  if (state.kind === 'ok')      return <div style={PREFLIGHT_OK}>✓ URL reachable.</div>;
+  return <div style={PREFLIGHT_WARN}>⚠ {state.message}</div>;
 }
 
 function Footer({ store, onPush }: { store: ManifestStore | null; onPush: () => void }) {

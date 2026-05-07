@@ -79,12 +79,15 @@ export class AssetService {
 
   // Replace the slug-resolution catalog. Used at app boot to wire base +
   // primitive manifests, and again whenever the host's custom manifest
-  // updates (slice #5 onwards).
+  // updates (slice #5 onwards). Cached slug entries are invalidated rather
+  // than dropped so existing subscribers — components that called
+  // `subscribe(slug, ...)` before the catalog changed — keep their
+  // listeners and observe the pending → loaded/broken transition when the
+  // resolved URL changes.
   setManifests(manifests: Manifest[]): void {
     this.manifests = [...manifests];
-    // Drop any cached slug entries — their resolved URL may have changed.
     for (const ref of [...this.images.keys()]) {
-      if (isSlug(ref)) this.images.delete(ref);
+      if (isSlug(ref)) this.invalidate(ref);
     }
   }
 
