@@ -13,6 +13,7 @@
 import { type EntityScene } from '../entity/EntityComponent';
 import { EntityFacade, type ScriptRunContext } from './EntityFacade';
 import { type AssetEntry, type AssetType } from '../assets/Manifest';
+import { TABLE_ENTITY_ID } from '../entity/tableEntity';
 
 export interface SceneFacadeOptions {
   // Optional asset-slug lookup used to validate `playSound` slugs against
@@ -84,6 +85,14 @@ export class SceneFacade {
     const entity = this.scene.getEntity(id);
     if (!entity) return undefined;
     return this.facadeFor(entity.id);
+  }
+
+  // One-line wrapper over `getObjectById(TABLE_ENTITY_ID)` so scripts can
+  // reach the singleton Table without knowing the magic GUID. Returns
+  // undefined only on a guest script context that runs before the Table has
+  // replicated, or on an empty scene during legacy-snapshot load.
+  getTable(): EntityFacade | undefined {
+    return this.getObjectById(TABLE_ENTITY_ID);
   }
 
   // Returns every entity whose `tags` includes `tag`. Empty array on no match.

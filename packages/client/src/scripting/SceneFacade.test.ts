@@ -5,6 +5,7 @@ import { EntityComponent } from '../entity/EntityComponent';
 import { SceneFacade } from './SceneFacade';
 import { EntityFacade } from './EntityFacade';
 import { Manifest } from '../assets/Manifest';
+import { TABLE_ENTITY_ID } from '../entity/tableEntity';
 
 class StubScene implements EntityScene {
   private byId = new Map<string, Entity>();
@@ -56,6 +57,41 @@ describe('SceneFacade.getObjectById', () => {
     scene.add(makeEntity('d-1'));
     const facade = new SceneFacade(scene, { registrations: [] });
     expect(facade.getObjectById('d-1')).toBe(facade.getObjectById('d-1'));
+  });
+});
+
+describe('SceneFacade.getTable', () => {
+  test('returns a facade for the singleton Table when present', () => {
+    const scene = new StubScene();
+    scene.add(makeEntity(TABLE_ENTITY_ID, { type: 'table', tags: ['table', 'fixture'] }));
+    const facade = new SceneFacade(scene, { registrations: [] });
+    const table = facade.getTable();
+    expect(table).toBeDefined();
+    expect(table!.id).toBe(TABLE_ENTITY_ID);
+    expect(table!.type).toBe('table');
+  });
+
+  test('returns undefined when the Table has not been spawned', () => {
+    const scene = new StubScene();
+    const facade = new SceneFacade(scene, { registrations: [] });
+    expect(facade.getTable()).toBeUndefined();
+  });
+
+  test('returns the same facade as getObjectById(TABLE_ENTITY_ID) (per-Run identity)', () => {
+    const scene = new StubScene();
+    scene.add(makeEntity(TABLE_ENTITY_ID, { type: 'table' }));
+    const facade = new SceneFacade(scene, { registrations: [] });
+    expect(facade.getTable()).toBe(facade.getObjectById(TABLE_ENTITY_ID));
+  });
+
+  test('Table is reachable via getObjectsByTag("table")', () => {
+    const scene = new StubScene();
+    scene.add(makeEntity(TABLE_ENTITY_ID, { type: 'table', tags: ['table', 'fixture'] }));
+    const facade = new SceneFacade(scene, { registrations: [] });
+    const byTag = facade.getObjectsByTag('table').map(e => e.id);
+    expect(byTag).toEqual([TABLE_ENTITY_ID]);
+    // Tag-query and getTable share identity through the per-Run cache.
+    expect(facade.getObjectsByTag('table')[0]).toBe(facade.getTable());
   });
 });
 
@@ -424,5 +460,48 @@ describe('SceneFacade — script integration', () => {
     `);
     expect(result.ok).toBe(true);
     expect(logs).toEqual(['die-d-1,die-d-2']);
+  });
+
+  test('script can call getTable() and read SkydomeComponent state', async () => {
+    const scene = new StubScene();
+    const table = new Entity({
+      id:   TABLE_ENTITY_ID,
+      type: 'table',
+      name: 'Table',
+      tags: ['table', 'fixture'],
+    });
+    class Skydome extends EntityComponent<{ textureUrl: string }> {
+      static typeId = 'skydome';
+      onSpawn(): void {}
+      onPropertiesChanged(): void {}
+    }
+    const sky = new Skydome();
+    sky.fromJSON({ textureUrl: 'custom:sky/blue' });
+    table.attachComponent(sky);
+    scene.add(table);
+
+    const { ScriptHost } = await import('./ScriptHost');
+    const logs: string[] = [];
+    const c = {
+      log:   (...a: unknown[]) => logs.push(a.map(String).join(' ')),
+      error: () => {},
+      warn:  () => {},
+      info:  () => {},
+      debug: () => {},
+    };
+    const host = new ScriptHost({ scene, console: c });
+
+    const result = await host.runScript(`
+      export default class extends Game {
+        onScriptLoaded(s) {
+          const t = s.getTable();
+          console.log(t ? t.id : 'missing');
+          const sky = t.getComponent('skydome');
+          console.log(sky.state.textureUrl);
+        }
+      }
+    `);
+    expect(result.ok).toBe(true);
+    expect(logs).toEqual([TABLE_ENTITY_ID, 'custom:sky/blue']);
   });
 });

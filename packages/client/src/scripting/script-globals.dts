@@ -44,6 +44,7 @@ declare class EntityFacade {
 declare class SceneFacade {
   readonly assets: AssetsApi;
   getObjectById(id: string): EntityFacade | undefined;
+  getTable(): EntityFacade | undefined;
   getObjectsByTag(tag: string): EntityFacade[];
   playSound(slug: string): void;
 }

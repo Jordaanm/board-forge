@@ -66,6 +66,7 @@ export class EditorEntityFacade {
 export class EditorSceneFacade {
   declare readonly assets: EditorAssetsApi;
   getObjectById(id: string): EditorEntityFacade | undefined { void id; return undefined; }
+  getTable(): EditorEntityFacade | undefined { return undefined; }
   getObjectsByTag(tag: string): EditorEntityFacade[] { void tag; return []; }
   playSound(slug: string): void { void slug; }
 }
