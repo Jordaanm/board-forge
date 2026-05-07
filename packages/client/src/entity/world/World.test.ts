@@ -193,6 +193,81 @@ describe('World — Table boot path (table-as-entity slice 1)', () => {
     expect(pair.host.get(TABLE_ENTITY_ID)).toBeDefined();
   });
 
+  test('save → reload round-trip preserves all five Table props (slice 7)', () => {
+    pair = setup();
+    // Mutate every editable Table prop, then snapshot.
+    pair.host.updateProp(TABLE_ENTITY_ID, 'mesh.meshRef',    'prim:table-circle');
+    pair.host.updateProp(TABLE_ENTITY_ID, 'mesh.scale',      1.5);
+    pair.host.updateProp(TABLE_ENTITY_ID, 'sky.textureUrl',  'custom:sky/abc');
+    pair.host.updateProp(TABLE_ENTITY_ID, 'light.color',     '#abcdef');
+    pair.host.updateProp(TABLE_ENTITY_ID, 'light.intensity', 0.42);
+    const snap = pair.host.snapshot();
+
+    // Mutate further then revert via replaceScene.
+    pair.host.updateProp(TABLE_ENTITY_ID, 'mesh.scale', 9);
+    pair.host.replaceScene(snap);
+
+    const table = pair.host.get(TABLE_ENTITY_ID)!;
+    expect(table.get(MeshComponent)!.state.meshRef).toBe('prim:table-circle');
+    expect(table.get(TransformComponent)!.state.scale).toEqual([1.5, 1.5, 1.5]);
+    expect(table.get(SkydomeComponent)!.state.textureUrl).toBe('custom:sky/abc');
+    expect(table.get(LightingComponent)!.state.keyColor).toBe('#abcdef');
+    expect(table.get(LightingComponent)!.state.keyIntensity).toBeCloseTo(0.42, 5);
+  });
+
+  test('legacy snapshot without a Table re-bootstraps Table from defaults (slice 7)', () => {
+    pair = setup();
+    pair.host.replaceScene([]);  // legacy = empty snap
+
+    const table = pair.host.get(TABLE_ENTITY_ID);
+    expect(table).toBeDefined();
+    expect(table!.entity.type).toBe('table');
+    expect(table!.entity.tags.sort()).toEqual(['fixture', 'table']);
+    // Defaults from the spawnable definition.
+    expect(table!.get(MeshComponent)!.state.meshRef).toBe('prim:table-rect');
+    expect(table!.get(LightingComponent)!.state.keyColor).toBe('#fff1dc');
+  });
+
+  test('post-load host/guest convergence: guest mirrors the rebuilt Table (slice 7)', () => {
+    pair = setup();
+    pair.host.tick(0.016);  // initial Table replicates to guest
+
+    pair.host.updateProp(TABLE_ENTITY_ID, 'sky.textureUrl', 'custom:sky/saved');
+    const snap = pair.host.snapshot();
+
+    // Drift the host's state, then reload from the saved snap.
+    pair.host.updateProp(TABLE_ENTITY_ID, 'sky.textureUrl', 'custom:sky/drift');
+    pair.host.replaceScene(snap);
+    pair.host.tick(0.016);
+
+    const guestSky = pair.guest.get(TABLE_ENTITY_ID)!.get(SkydomeComponent)!;
+    expect(guestSky.state.textureUrl).toBe('custom:sky/saved');
+  });
+
+  test('legacy load on host pushes a Table to the guest too (slice 7)', () => {
+    pair = setup();
+    pair.host.tick(0.016);
+
+    // Empty snapshot — host re-bootstraps Table; guest receives the same
+    // effective scene-replace envelope and lands on the rebooted Table.
+    pair.host.replaceScene([]);
+    pair.host.tick(0.016);
+
+    const guestTable = pair.guest.get(TABLE_ENTITY_ID);
+    expect(guestTable).toBeDefined();
+    expect(guestTable!.get(MeshComponent)!.state.meshRef).toBe('prim:table-rect');
+  });
+
+  test('no double-Table observable during the despawn → load transition (slice 7)', () => {
+    pair = setup();
+    const snap = pair.host.snapshot();
+    pair.host.replaceScene(snap);
+    // Exactly one entity carries TableComponent after the round-trip.
+    const tables = pair.host.all().filter(h => h.entity.hasComponent(TableComponent));
+    expect(tables).toHaveLength(1);
+    expect(tables[0].id).toBe(TABLE_ENTITY_ID);
+  });
+
   test('LightingComponent state replicates host → guest (slice 3)', () => {
     pair = setup();
     pair.host.tick(0.016);  // replicate Table to guest
@@ -865,7 +940,9 @@ describe('World — replaceScene (PRD save/load issue #1)', () => {
     const oldObj = pair.host.get('d-1')!.get(TransformComponent)!.object3d;
 
     pair.host.replaceScene([]);
-    expect(pair.host.all()).toEqual([]);
+    // Slice 7 re-bootstraps the Table on legacy (empty) snap loads, so the
+    // post-replace scene contains exactly one entity: the Table.
+    expect(pair.host.all().map(h => h.id).filter(id => id !== TABLE_ENTITY_ID)).toEqual([]);
 
     // Object3D from the prior entity must be detached from its parent.
     expect(oldObj.parent).toBeNull();
@@ -903,7 +980,7 @@ describe('World — replaceScene (PRD save/load issue #1)', () => {
     expect(pair.guest.get('d-2')).toBeUndefined();
   });
 
-  test('replaceScene to an empty array clears host and guest', () => {
+  test('replaceScene to an empty array clears host and guest (Table re-bootstraps)', () => {
     pair = setup();
     pair.host.spawn('die', { id: 'd-1' });
     pair.host.spawn('token', { id: 't-1' });
@@ -911,8 +988,12 @@ describe('World — replaceScene (PRD save/load issue #1)', () => {
 
     pair.host.replaceScene([]);
 
-    expect(pair.host.all()).toEqual([]);
-    expect(pair.guest.all()).toEqual([]);
+    // Empty snapshot is treated as "legacy" — Table re-bootstraps. User
+    // entities (die / token) are gone.
+    const hostUserIds  = pair.host.all().map(h => h.id).filter(id => id !== TABLE_ENTITY_ID);
+    const guestUserIds = pair.guest.all().map(h => h.id).filter(id => id !== TABLE_ENTITY_ID);
+    expect(hostUserIds).toEqual([]);
+    expect(guestUserIds).toEqual([]);
   });
 
   test('camera, selection, and current tool are not affected by replace', () => {

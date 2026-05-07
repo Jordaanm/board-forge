@@ -35,6 +35,8 @@ import { SkydomeComponent } from '../components/SkydomeComponent';
 import { LightingComponent } from '../components/LightingComponent';
 import { TableComponent } from '../components/TableComponent';
 import { registerCorePrimitives } from '../spawnables';
+import { getSpawnable } from '../SpawnableRegistry';
+import { defaultEntityName } from '../Entity';
 import { PhysicsWorld } from '../../physics/PhysicsWorld';
 import { TABLE_SURFACE_Y } from '../../scene/Table';
 import { TABLE_ENTITY_ID } from '../tableEntity';
@@ -580,11 +582,15 @@ class WorldImpl implements World, HandleRouter {
   // atomically. UI state (camera, selection, current tool) is not touched.
   replaceScene(snaps: readonly EntitySerialized[]): void {
     if (this.disposed) return;
-    this.applyReplace(snaps);
+    // Re-bootstrap the Table from the spawnable's defaults when loading a
+    // pre-Table-as-entity legacy save. The synthesised entry is prepended
+    // so the host and every guest see an identical effective snapshot.
+    const effective = this.role === 'host' ? ensureTableInSnaps(snaps) : snaps;
+    this.applyReplace(effective);
     if (this.role === 'host') {
       this.replicator?.clearPending();
       this.transport.send(
-        { type: 'scene-replace', entities: [...snaps] },
+        { type: 'scene-replace', entities: [...effective] },
         { reliable: true },
       );
     }
@@ -1103,5 +1109,29 @@ function normaliseTags(value: unknown): string[] {
     out.push(s);
   }
   return out;
+}
+
+// If the snapshot lacks the singleton Table entry, synthesise one from the
+// spawnable definition's defaults and prepend it. Lets a legacy pre-Table-
+// as-entity save round-trip cleanly through replaceScene without leaving
+// the room without a play surface.
+function ensureTableInSnaps(snaps: readonly EntitySerialized[]): EntitySerialized[] {
+  if (snaps.some(s => s.id === TABLE_ENTITY_ID || s.type === 'table')) return [...snaps];
+  const def = getSpawnable('table');
+  if (!def) return [...snaps];
+  const components: Record<string, object> = {};
+  for (const init of def.components) components[init.typeId] = { ...init.state };
+  const tableSnap: EntitySerialized = {
+    id:            TABLE_ENTITY_ID,
+    type:          def.type,
+    name:          defaultEntityName(def.label, TABLE_ENTITY_ID),
+    tags:          [...def.defaultTags],
+    owner:         null,
+    privateToSeat: null,
+    parentId:      null,
+    children:      [],
+    components,
+  };
+  return [tableSnap, ...snaps];
 }
 
