@@ -12,7 +12,7 @@
 
 import { type EntityScene } from '../entity/EntityComponent';
 import { EntityFacade, type ScriptRunContext } from './EntityFacade';
-import { type AssetType } from '../assets/Manifest';
+import { type AssetEntry, type AssetType } from '../assets/Manifest';
 
 export interface SceneFacadeOptions {
   // Optional asset-slug lookup used to validate `playSound` slugs against
@@ -20,19 +20,64 @@ export interface SceneFacadeOptions {
   // no validation — slugs are accepted and pushed through to AssetService,
   // which will resolve to a `broken` status for unknown slugs and the
   // SoundPlayer skips. Wiring the lookup adds an actionable sandbox warning.
-  lookupSlug?: (slug: string) => { type: AssetType } | undefined;
+  // Also backs `scene.assets.get(slug)` (issue #12).
+  lookupSlug?: (slug: string) => AssetEntry | undefined;
+  // Backs `scene.assets.list({ type })`. Defaults to `() => []` so scripts
+  // running without a wired AssetService see an empty catalog rather than
+  // crashing.
+  listAssets?: (opts?: { type?: AssetType }) => AssetEntry[];
+}
+
+// Read-only catalog surface exposed as `scene.assets`. Returns deeply frozen
+// AssetEntry copies so a buggy script can't mutate the host's manifest by
+// holding references.
+export class AssetsApi {
+  private readonly opts: SceneFacadeOptions;
+
+  constructor(opts: SceneFacadeOptions) {
+    this.opts = opts;
+  }
+
+  get(slug: string): Readonly<AssetEntry> | null {
+    if (typeof slug !== 'string' || slug.length === 0) return null;
+    const lookup = this.opts.lookupSlug;
+    if (!lookup) return null;
+    const entry = lookup(slug);
+    return entry ? freezeEntry(entry) : null;
+  }
+
+  list(opts: { type?: AssetType } = {}): ReadonlyArray<Readonly<AssetEntry>> {
+    const list = this.opts.listAssets;
+    const raw  = list ? list(opts) : [];
+    return Object.freeze(raw.map(freezeEntry));
+  }
+}
+
+function freezeEntry(entry: AssetEntry): Readonly<AssetEntry> {
+  const copy: AssetEntry = {
+    slug:    entry.slug,
+    name:    entry.name,
+    type:    entry.type,
+    url:     entry.url,
+    preload: entry.preload,
+  };
+  if (entry.description !== undefined) copy.description = entry.description;
+  if (entry.tags !== undefined)        copy.tags = Object.freeze([...entry.tags]) as string[];
+  return Object.freeze(copy);
 }
 
 export class SceneFacade {
+  public readonly assets: AssetsApi;
   private readonly scene: EntityScene;
   private readonly ctx:   ScriptRunContext;
   private readonly opts:  SceneFacadeOptions;
   private readonly cache = new Map<string, EntityFacade>();
 
   constructor(scene: EntityScene, ctx: ScriptRunContext, opts: SceneFacadeOptions = {}) {
-    this.scene = scene;
-    this.ctx   = ctx;
-    this.opts  = opts;
+    this.scene  = scene;
+    this.ctx    = ctx;
+    this.opts   = opts;
+    this.assets = new AssetsApi(opts);
   }
 
   getObjectById(id: string): EntityFacade | undefined {

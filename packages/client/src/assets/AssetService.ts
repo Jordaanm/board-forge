@@ -183,6 +183,22 @@ export class AssetService {
     return undefined;
   }
 
+  // Flat list of every entry across every wired manifest (base + primitives +
+  // host's published custom). Later manifests don't override earlier ones —
+  // duplicate slugs (shouldn't happen in practice) keep the first hit.
+  listAssets(opts: { type?: AssetType } = {}): AssetEntry[] {
+    const seen = new Set<string>();
+    const out: AssetEntry[] = [];
+    for (const m of this.manifests) {
+      for (const e of m.list(opts)) {
+        if (seen.has(e.slug)) continue;
+        seen.add(e.slug);
+        out.push(e);
+      }
+    }
+    return out;
+  }
+
   // Promise-based accessor — resolves with the real asset on success or with
   // the type-default placeholder on failure. Never rejects, so callers don't
   // need a try/catch around resolve.

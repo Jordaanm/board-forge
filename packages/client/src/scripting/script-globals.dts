@@ -9,6 +9,23 @@ type Listener = (payload: unknown) => void;
 
 type SeatIndex = number;
 
+type AssetType = 'image' | 'model' | 'sound';
+
+interface AssetEntry {
+    readonly slug: string;
+    readonly name: string;
+    readonly type: AssetType;
+    readonly url: string;
+    readonly preload: boolean;
+    readonly description?: string;
+    readonly tags?: readonly string[];
+}
+
+declare class AssetsApi {
+  get(slug: string): AssetEntry | null;
+  list(opts?: { type?: AssetType }): ReadonlyArray<AssetEntry>;
+}
+
 declare class EntityFacade {
   readonly id: string;
   readonly type: string;
@@ -25,6 +42,7 @@ declare class EntityFacade {
 }
 
 declare class SceneFacade {
+  readonly assets: AssetsApi;
   getObjectById(id: string): EntityFacade | undefined;
   getObjectsByTag(tag: string): EntityFacade[];
   playSound(slug: string): void;

@@ -153,6 +153,7 @@ class WorldImpl implements World, HandleRouter {
         scene:      this.scene,
         playSound:  (slug) => this.broadcastPlaySound(slug),
         lookupSlug: (slug) => assetService.lookupSlug(slug),
+        listAssets: (opts) => assetService.listAssets(opts),
       });
       this.installBeginContactHandler();
     } else {

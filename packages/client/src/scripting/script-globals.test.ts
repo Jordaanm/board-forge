@@ -11,12 +11,13 @@
 
 import { describe, test, expect } from 'vitest';
 import { Game } from './Game';
-import { SceneFacade } from './SceneFacade';
+import { SceneFacade, AssetsApi } from './SceneFacade';
 import { EntityFacade } from './EntityFacade';
 import {
   EditorGame,
   EditorSceneFacade,
   EditorEntityFacade,
+  EditorAssetsApi,
 } from './script-globals-types';
 
 // `Expect<true>` resolves to `true`; anything else is a TS error at the
@@ -33,6 +34,7 @@ type RuntimeKeys<T> = keyof T;
 type _GameCompat   = Expect<RuntimeKeys<InstanceType<typeof Game>>          extends keyof EditorGame          ? true : false>;
 type _SceneCompat  = Expect<RuntimeKeys<InstanceType<typeof SceneFacade>>   extends keyof EditorSceneFacade   ? true : false>;
 type _EntityCompat = Expect<RuntimeKeys<InstanceType<typeof EntityFacade>>  extends keyof EditorEntityFacade  ? true : false>;
+type _AssetsCompat = Expect<RuntimeKeys<InstanceType<typeof AssetsApi>>     extends keyof EditorAssetsApi     ? true : false>;
 
 // The type aliases above only need to be evaluated by the compiler — the
 // runtime test below exists so Vitest reports something positive when
@@ -45,6 +47,7 @@ describe('script-globals drift', () => {
     void ({} as _GameCompat);
     void ({} as _SceneCompat);
     void ({} as _EntityCompat);
+    void ({} as _AssetsCompat);
     expect(true).toBe(true);
   });
 });

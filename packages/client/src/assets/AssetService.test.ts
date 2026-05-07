@@ -157,6 +157,34 @@ describe('AssetService slug resolution', () => {
     expect(loaded).toBe(0);
   });
 
+  test('listAssets returns the union of every wired manifest, deduplicating by slug', () => {
+    const m1 = Manifest.from([
+      { slug: 'custom:a', name: 'A', type: 'image', url: 'http://x/a.png', preload: false },
+      { slug: 'custom:b', name: 'B', type: 'sound', url: 'http://x/b.mp3', preload: true },
+    ]);
+    const m2 = Manifest.from([
+      { slug: 'custom:b', name: 'B-shadowed', type: 'sound', url: 'http://other/b.mp3', preload: false },
+      { slug: 'custom:c', name: 'C', type: 'model', url: 'http://x/c.glb', preload: false },
+    ]);
+    const svc = new AssetService({ manifests: [m1, m2] });
+
+    const all = svc.listAssets();
+    expect(all.map(e => e.slug).sort()).toEqual(['custom:a', 'custom:b', 'custom:c']);
+    // First manifest wins on duplicate slug.
+    expect(all.find(e => e.slug === 'custom:b')!.name).toBe('B');
+  });
+
+  test('listAssets filters by type', () => {
+    const m = Manifest.from([
+      { slug: 'custom:a', name: 'A', type: 'image', url: 'http://x/a.png', preload: false },
+      { slug: 'custom:b', name: 'B', type: 'sound', url: 'http://x/b.mp3', preload: true },
+    ]);
+    const svc = new AssetService({ manifests: [BASE_MANIFEST, m] });
+    const sounds = svc.listAssets({ type: 'sound' });
+    expect(sounds.some(e => e.slug === 'custom:b')).toBe(true);
+    expect(sounds.every(e => e.type === 'sound')).toBe(true);
+  });
+
   test('setManifests evicts cached slug entries so re-resolve picks up the new URL', async () => {
     const t1 = new THREE.Texture();
     const t2 = new THREE.Texture();

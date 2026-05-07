@@ -30,6 +30,23 @@ export type EditorListener = (payload: unknown) => void;
 // Mirrors the runtime SeatIndex shape (number, narrowed by host code).
 export type EditorSeatIndex = number;
 
+export type EditorAssetType = 'image' | 'model' | 'sound';
+
+export interface EditorAssetEntry {
+  readonly slug:         string;
+  readonly name:         string;
+  readonly type:         EditorAssetType;
+  readonly url:          string;
+  readonly preload:      boolean;
+  readonly description?: string;
+  readonly tags?:        readonly string[];
+}
+
+export class EditorAssetsApi {
+  get(slug: string): EditorAssetEntry | null { void slug; return null; }
+  list(opts?: { type?: EditorAssetType }): ReadonlyArray<EditorAssetEntry> { void opts; return []; }
+}
+
 export class EditorEntityFacade {
   declare readonly id:    string;
   declare readonly type:  string;
@@ -47,6 +64,7 @@ export class EditorEntityFacade {
 }
 
 export class EditorSceneFacade {
+  declare readonly assets: EditorAssetsApi;
   getObjectById(id: string): EditorEntityFacade | undefined { void id; return undefined; }
   getObjectsByTag(tag: string): EditorEntityFacade[] { void tag; return []; }
   playSound(slug: string): void { void slug; }

@@ -239,6 +239,164 @@ describe('SceneFacade.playSound', () => {
   });
 });
 
+describe('SceneFacade.assets', () => {
+  test('get returns the entry from lookupSlug', () => {
+    const scene = new StubScene();
+    const m = Manifest.from([
+      { slug: 'custom:card', name: 'C', type: 'image', url: 'http://x/c.png', preload: false },
+    ]);
+    const facade = new SceneFacade(
+      scene,
+      { registrations: [] },
+      { lookupSlug: (s) => m.get(s) },
+    );
+    const entry = facade.assets.get('custom:card');
+    expect(entry).not.toBeNull();
+    expect(entry!.slug).toBe('custom:card');
+    expect(entry!.type).toBe('image');
+  });
+
+  test('get returns null on unknown slug', () => {
+    const scene = new StubScene();
+    const facade = new SceneFacade(
+      scene,
+      { registrations: [] },
+      { lookupSlug: () => undefined },
+    );
+    expect(facade.assets.get('custom:absent')).toBeNull();
+  });
+
+  test('get returns null when lookupSlug is not wired', () => {
+    const scene  = new StubScene();
+    const facade = new SceneFacade(scene, { registrations: [] });
+    expect(facade.assets.get('custom:foo')).toBeNull();
+  });
+
+  test('get rejects non-string and empty slugs', () => {
+    const scene = new StubScene();
+    const facade = new SceneFacade(
+      scene,
+      { registrations: [] },
+      { lookupSlug: () => undefined },
+    );
+    expect(facade.assets.get('')).toBeNull();
+    expect(facade.assets.get(123 as unknown as string)).toBeNull();
+  });
+
+  test('list returns the catalog from listAssets', () => {
+    const scene = new StubScene();
+    const m = Manifest.from([
+      { slug: 'custom:a', name: 'A', type: 'image', url: 'http://x/a.png', preload: false },
+      { slug: 'custom:b', name: 'B', type: 'sound', url: 'http://x/b.mp3', preload: true },
+    ]);
+    const facade = new SceneFacade(
+      scene,
+      { registrations: [] },
+      { listAssets: (opts) => m.list(opts) },
+    );
+    const all = facade.assets.list();
+    expect(all.map(e => e.slug).sort()).toEqual(['custom:a', 'custom:b']);
+  });
+
+  test('list filters by type', () => {
+    const scene = new StubScene();
+    const m = Manifest.from([
+      { slug: 'custom:a', name: 'A', type: 'image', url: 'http://x/a.png', preload: false },
+      { slug: 'custom:b', name: 'B', type: 'sound', url: 'http://x/b.mp3', preload: true },
+    ]);
+    const facade = new SceneFacade(
+      scene,
+      { registrations: [] },
+      { listAssets: (opts) => m.list(opts) },
+    );
+    const sounds = facade.assets.list({ type: 'sound' });
+    expect(sounds.map(e => e.slug)).toEqual(['custom:b']);
+  });
+
+  test('list returns empty array when listAssets is not wired', () => {
+    const scene = new StubScene();
+    const facade = new SceneFacade(scene, { registrations: [] });
+    expect(facade.assets.list()).toEqual([]);
+  });
+
+  test('returned entries are frozen and mutation does not affect the manifest', () => {
+    const scene = new StubScene();
+    const m = Manifest.from([
+      { slug: 'custom:card', name: 'C', type: 'image', url: 'http://x/c.png', preload: false, tags: ['fancy'] },
+    ]);
+    const facade = new SceneFacade(
+      scene,
+      { registrations: [] },
+      { lookupSlug: (s) => m.get(s), listAssets: (o) => m.list(o) },
+    );
+
+    const entry = facade.assets.get('custom:card')!;
+    expect(Object.isFrozen(entry)).toBe(true);
+    expect(Object.isFrozen(entry.tags)).toBe(true);
+    expect(() => { (entry as unknown as { slug: string }).slug = 'x'; }).toThrow();
+    expect(() => { (entry.tags as unknown as string[]).push('mutated'); }).toThrow();
+
+    // Mutation attempt didn't reach the manifest.
+    const fresh = m.get('custom:card')!;
+    expect(fresh.slug).toBe('custom:card');
+    expect(fresh.tags).toEqual(['fancy']);
+  });
+
+  test('list result array and elements are frozen', () => {
+    const scene = new StubScene();
+    const m = Manifest.from([
+      { slug: 'custom:a', name: 'A', type: 'image', url: 'http://x/a.png', preload: false },
+    ]);
+    const facade = new SceneFacade(
+      scene,
+      { registrations: [] },
+      { listAssets: (o) => m.list(o) },
+    );
+    const arr = facade.assets.list();
+    expect(Object.isFrozen(arr)).toBe(true);
+    expect(Object.isFrozen(arr[0])).toBe(true);
+    expect(() => { (arr as unknown as unknown[]).push({} as never); }).toThrow();
+  });
+
+  test('script can call scene.assets.list and assign a slug to a property', async () => {
+    const scene = new StubScene();
+    scene.add(makeEntity('c-1', { type: 'card' }));
+    const m = Manifest.from([
+      { slug: 'custom:face-a', name: 'A', type: 'image', url: 'http://x/a.png', preload: false },
+      { slug: 'custom:face-b', name: 'B', type: 'image', url: 'http://x/b.png', preload: false },
+    ]);
+
+    const { ScriptHost } = await import('./ScriptHost');
+    const logs: string[] = [];
+    const c = {
+      log:   (...a: unknown[]) => logs.push(a.map(String).join(' ')),
+      error: () => {},
+      warn:  () => {},
+      info:  () => {},
+      debug: () => {},
+    };
+    const host = new ScriptHost({
+      scene,
+      console: c,
+      lookupSlug: (s) => m.get(s),
+      listAssets: (o) => m.list(o),
+    });
+
+    const result = await host.runScript(`
+      export default class extends Game {
+        onScriptLoaded(s) {
+          const images = s.assets.list({ type: 'image' });
+          console.log(images.length + ':' + images.map(e => e.slug).join(','));
+          const one = s.assets.get('custom:face-a');
+          console.log(one ? one.name : 'missing');
+        }
+      }
+    `);
+    expect(result.ok).toBe(true);
+    expect(logs).toEqual(['2:custom:face-a,custom:face-b', 'A']);
+  });
+});
+
 describe('SceneFacade — script integration', () => {
   test('script can call getObjectsByTag and read names', async () => {
     const scene = new StubScene();

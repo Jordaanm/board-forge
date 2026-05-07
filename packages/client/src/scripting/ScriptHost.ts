@@ -28,7 +28,7 @@ import { SceneFacade } from './SceneFacade';
 import { type ScriptRunContext } from './EntityFacade';
 import { ScriptErrorLog } from './ScriptErrorLog';
 import { type EntityScene } from '../entity/EntityComponent';
-import { type AssetType } from '../assets/Manifest';
+import { type AssetEntry, type AssetType } from '../assets/Manifest';
 
 export interface ScriptHostOptions {
   // The scene this host queries. Optional so unit tests that don't exercise
@@ -40,10 +40,14 @@ export interface ScriptHostOptions {
   // Host-only sound playback hook routed by World.broadcastPlaySound. When
   // absent, SceneFacade.playSound no-ops with a sandbox warning.
   playSound?: (slug: string) => void;
-  // Optional asset-slug lookup for scene.playSound validation. Defaults to
-  // no validation; wiring the lookup adds an actionable sandbox warning when
-  // a script calls playSound with an unknown or wrong-typed slug.
-  lookupSlug?: (slug: string) => { type: AssetType } | undefined;
+  // Optional asset-slug lookup for scene.playSound validation and
+  // scene.assets.get(slug). Defaults to no validation; wiring the lookup
+  // adds an actionable sandbox warning when a script calls playSound with
+  // an unknown or wrong-typed slug, and lets `scene.assets.get` resolve
+  // entries from the live catalog.
+  lookupSlug?: (slug: string) => AssetEntry | undefined;
+  // Optional manifest lister backing `scene.assets.list({ type })`.
+  listAssets?: (opts?: { type?: AssetType }) => AssetEntry[];
 }
 
 export type RunResult =
@@ -63,6 +67,7 @@ export class ScriptHost {
   private readonly scene_:      EntityScene | null;
   private readonly playSound_:  ScriptHostOptions['playSound'];
   private readonly lookupSlug_: ScriptHostOptions['lookupSlug'];
+  private readonly listAssets_: ScriptHostOptions['listAssets'];
   // Bounded ring buffer of script errors surfaced to the script panel
   // (issue #7). Hook errors, listener errors, AND startup-failure errors
   // (compile, module-load, structural, constructor) all funnel here so the
@@ -84,6 +89,7 @@ export class ScriptHost {
     this.scene_      = opts.scene   ?? null;
     this.playSound_  = opts.playSound;
     this.lookupSlug_ = opts.lookupSlug;
+    this.listAssets_ = opts.listAssets;
   }
 
   // Bounded ring of runtime errors (hook + listener). Subscribe via
@@ -140,7 +146,10 @@ export class ScriptHost {
       playSound:     this.playSound_,
     };
     const scene = this.scene_
-      ? new SceneFacade(this.scene_, ctx, { lookupSlug: this.lookupSlug_ })
+      ? new SceneFacade(this.scene_, ctx, {
+          lookupSlug: this.lookupSlug_,
+          listAssets: this.listAssets_,
+        })
       : {};
 
     let ns;
