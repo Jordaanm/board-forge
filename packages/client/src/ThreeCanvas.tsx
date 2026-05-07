@@ -22,6 +22,7 @@ import { type SceneHistoryService, type LastLoaded } from './entity/SceneHistory
 import { type RunResult, type ScriptState } from './scripting/ScriptHost';
 import { type ScriptErrorLog } from './scripting/ScriptErrorLog';
 import { type CardTile } from './components/HandPanel';
+import { type AssetEntry } from './assets/Manifest';
 import { DEFAULT_PRIVATE_FIELDS } from './seats/PrivacyScrubber';
 import { MoveGizmo } from './scene/MoveGizmo';
 import { CameraController } from './camera/CameraController';
@@ -86,6 +87,7 @@ interface Props {
   getSavedScriptSourceRef: MutableRefObject<() => string>;
   loadScriptStateRef:  MutableRefObject<(state: ScriptState) => void>;
   onErrorLogChangeRef: MutableRefObject<(log: ScriptErrorLog | null) => void>;
+  getManifestRef:      MutableRefObject<() => AssetEntry[]>;
 }
 
 export interface HandView {
@@ -104,7 +106,7 @@ export function ThreeCanvas({
   setHandViewRef, requestHandTileMenuRef, playCardToTableRef, reorderHandRef,
   saveSceneRef, replaceSceneRef, sceneHistoryRef, onLastLoadedChangeRef,
   onHistoryServiceChangeRef, runScriptRef, saveScriptSourceRef, getSavedScriptSourceRef, loadScriptStateRef,
-  onErrorLogChangeRef,
+  onErrorLogChangeRef, getManifestRef,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -350,6 +352,7 @@ export function ThreeCanvas({
           scene:     world.snapshot(),
           thumbnail,
           script:    world.scripting?.getScriptState(),
+          manifest:  getManifestRef.current(),
         });
         downloadSaveFile(envelope);
       };

@@ -24,6 +24,9 @@ import type { RoomStateMessage, RoomStateSnapshot } from '../seats/RoomState';
 import { type SceneHistoryService, type LastLoaded } from '../entity/SceneHistoryService';
 import { type RunResult, type ScriptState } from '../scripting/ScriptHost';
 import { type ScriptErrorLog } from '../scripting/ScriptErrorLog';
+import { ManifestStore } from '../assets/ManifestStore';
+import { assetService } from '../assets/AssetService';
+import { BASE_MANIFEST, PRIMITIVE_MANIFEST } from '../assets/baseManifest';
 import './Room.css';
 
 type Status = 'connecting' | 'connected' | 'disconnected' | 'room-full';
@@ -62,6 +65,7 @@ export function Room({ roomId, isHost }: Props) {
   const [historyService, setHistoryService] = useState<SceneHistoryService | null>(null);
   const [scriptSource, setScriptSource]     = useState<string>('');
   const [scriptErrorLog, setScriptErrorLog] = useState<ScriptErrorLog | null>(null);
+  const [manifestStore, setManifestStore]   = useState<ManifestStore | null>(null);
 
   const sendRef            = useRef<(msg: ChannelMessage, opts?: { reliable?: boolean }) => void>(noop);
   const sendToRef          = useRef<(peerId: string, msg: ChannelMessage, opts?: { reliable?: boolean }) => void>(noop);
@@ -108,7 +112,10 @@ export function Room({ roomId, isHost }: Props) {
   const getSavedScriptSourceRef = useRef<() => string>(() => '');
   const loadScriptStateRef     = useRef<(state: ScriptState) => void>(noop);
   const onErrorLogChangeRef = useRef<(log: ScriptErrorLog | null) => void>(noop);
+  const manifestStoreRef    = useRef<ManifestStore | null>(null);
+  const getManifestRef      = useRef<() => import('../assets/Manifest').AssetEntry[]>(() => []);
   onErrorLogChangeRef.current = (log) => setScriptErrorLog(log);
+  getManifestRef.current      = () => manifestStoreRef.current?.getDraft().toArray() ?? [];
   onLastLoadedChangeRef.current     = (loaded) => setLastLoaded(loaded);
   onHistoryServiceChangeRef.current = (svc)    => setHistoryService(svc);
 
@@ -254,6 +261,31 @@ export function Room({ roomId, isHost }: Props) {
     setHighlightRef.current(selectedId);
   }, [selectedId]);
 
+  // Manifest store — host-only. Refreshes AssetService's slug catalog with the
+  // host's draft on every edit so locally added assets resolve immediately.
+  useEffect(() => {
+    if (!isHost) {
+      manifestStoreRef.current = null;
+      setManifestStore(null);
+      assetService.setManifests([BASE_MANIFEST, PRIMITIVE_MANIFEST]);
+      return;
+    }
+    const store = new ManifestStore();
+    manifestStoreRef.current = store;
+    setManifestStore(store);
+    const refresh = () => {
+      assetService.setManifests([BASE_MANIFEST, PRIMITIVE_MANIFEST, store.getDraft()]);
+    };
+    refresh();
+    const unsub = store.subscribe(refresh);
+    return () => {
+      unsub();
+      manifestStoreRef.current = null;
+      setManifestStore(null);
+      assetService.setManifests([BASE_MANIFEST, PRIMITIVE_MANIFEST]);
+    };
+  }, [isHost]);
+
   const handleContextAction = (
     item: MenuItem & { kind: 'action' | 'colorpicker' },
     args: object | undefined,
@@ -355,6 +387,7 @@ export function Room({ roomId, isHost }: Props) {
         getSavedScriptSourceRef={getSavedScriptSourceRef}
         loadScriptStateRef={loadScriptStateRef}
         onErrorLogChangeRef={onErrorLogChangeRef}
+        getManifestRef={getManifestRef}
       />
 
       <AnchorLayout>
@@ -380,6 +413,7 @@ export function Room({ roomId, isHost }: Props) {
                 replaceSceneRef.current(envelope.scene);
                 loadScriptStateRef.current(envelope.script);
                 setScriptSource(envelope.script.source);
+                manifestStoreRef.current?.loadFromSave(envelope.manifest);
               }}
               onRevert={() => sceneHistoryRef.current?.revert()}
               lastLoaded={lastLoaded}
@@ -391,6 +425,7 @@ export function Room({ roomId, isHost }: Props) {
               onScriptRun={(src) => runScriptRef.current(src)}
               getSavedScriptSource={() => getSavedScriptSourceRef.current()}
               scriptErrorLog={scriptErrorLog}
+              manifestStore={manifestStore}
             />
           </UIPanel>
         )}

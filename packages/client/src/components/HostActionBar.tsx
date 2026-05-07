@@ -8,10 +8,12 @@ import { LoadSceneModal } from './LoadSceneModal';
 import { RevertConfirmModal } from './RevertConfirmModal';
 import { HistoryModal } from './HistoryModal';
 import { ScriptEditorModal } from './ScriptEditorModal';
+import { AssetManagerModal } from './AssetManagerModal';
 import { type SaveEnvelope } from '../entity/SaveFile';
 import { type LastLoaded, type SceneHistoryService } from '../entity/SceneHistoryService';
 import { type RunResult } from '../scripting/ScriptHost';
 import { type ScriptErrorLog } from '../scripting/ScriptErrorLog';
+import { type ManifestStore } from '../assets/ManifestStore';
 
 interface Props {
   onSpawn:              (type: string) => void;
@@ -29,6 +31,7 @@ interface Props {
   onScriptRun:          (source: string) => Promise<RunResult>;
   getSavedScriptSource: () => string;
   scriptErrorLog:       ScriptErrorLog | null;
+  manifestStore:        ManifestStore | null;
 }
 
 const BAR: React.CSSProperties = {
@@ -108,6 +111,7 @@ export function HostActionBar({
   onScriptRun,
   getSavedScriptSource,
   scriptErrorLog,
+  manifestStore,
 }: Props) {
   const [revertOpen, setRevertOpen] = useState(false);
   const canRevert = lastLoaded !== null;
@@ -134,6 +138,7 @@ export function HostActionBar({
         getSavedSource={getSavedScriptSource}
         errorLog={scriptErrorLog}
       />
+      <AssetManagerModal store={manifestStore} />
       {lastLoaded && (
         <span style={FILE_LABEL}>
           <span style={FILE_NAME}>{lastLoaded.filename}</span>
