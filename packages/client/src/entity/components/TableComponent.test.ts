@@ -1,6 +1,6 @@
 // Component-level tests for the Table singleton's bounds derivation,
-// presence detection, and primitive switching. Locking enforcement (despawn
-// guard, spawn-duplicate guard) is slice 5 of issues--table-refactor.md.
+// presence detection, primitive switching, and locking enforcement
+// (despawn / spawn-duplicate gates). Slices 1 + 5 of issues--table-refactor.md.
 
 import { describe, test, expect, beforeEach } from 'vitest';
 import * as THREE from 'three';
@@ -78,5 +78,33 @@ describe('Scene.getTable / getTableBounds', () => {
     const b = scene.getTableBounds();
     expect(b.halfWidth).toBeCloseTo(18, 5);
     expect(b.halfDepth).toBeCloseTo(12, 5);
+  });
+});
+
+describe('SceneImpl — Table locking gates (slice 5)', () => {
+  test('despawn(TABLE_ENTITY_ID) throws with a descriptive error', () => {
+    scene.spawn('table', ctx, { id: TABLE_ENTITY_ID });
+    expect(() => scene.despawn(TABLE_ENTITY_ID, ctx))
+      .toThrowError(/Cannot despawn the Table/);
+    expect(scene.getTable()).toBeDefined();  // still present
+  });
+
+  test('despawn with { force: true } bypasses the gate (replaceScene path)', () => {
+    scene.spawn('table', ctx, { id: TABLE_ENTITY_ID });
+    expect(() => scene.despawn(TABLE_ENTITY_ID, ctx, { force: true })).not.toThrow();
+    expect(scene.getTable()).toBeUndefined();
+  });
+
+  test('spawn("table", ...) throws when a Table already exists', () => {
+    scene.spawn('table', ctx, { id: TABLE_ENTITY_ID });
+    expect(() => scene.spawn('table', ctx))
+      .toThrowError(/singleton Table entity already exists/);
+  });
+
+  test('non-table despawns are unaffected', () => {
+    scene.spawn('table', ctx, { id: TABLE_ENTITY_ID });
+    const die = scene.spawn('die', ctx, { id: 'die-1' });
+    expect(() => scene.despawn(die.id, ctx)).not.toThrow();
+    expect(scene.has('die-1')).toBe(false);
   });
 });

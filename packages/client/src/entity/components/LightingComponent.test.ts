@@ -46,7 +46,9 @@ describe('LightingComponent — lifecycle', () => {
     const e = scene.spawn('table', ctx, { id: TABLE_ENTITY_ID });
     const lighting = e.getComponent(LightingComponent)!;
     const lightRef = lighting.light;
-    scene.despawn(TABLE_ENTITY_ID, ctx);
+    // Slice 5 gates Table despawn behind `{ force: true }`; that's the
+    // contract for internal lifecycle paths like replaceScene.
+    scene.despawn(TABLE_ENTITY_ID, ctx, { force: true });
     expect(threeRoot.children.includes(lightRef)).toBe(false);
   });
 });

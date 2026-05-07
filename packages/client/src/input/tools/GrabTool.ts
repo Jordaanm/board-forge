@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import { type EntityHandle } from '../../entity/world';
 import { TransformComponent } from '../../entity/components/TransformComponent';
 import { PhysicsComponent } from '../../entity/components/PhysicsComponent';
+import { TableComponent } from '../../entity/components/TableComponent';
 import { CARRY_LIFT_HEIGHT, THROW_VELOCITY_WINDOW_MS } from '../../config/dragConfig';
 import { type MoveGizmo, type GizmoAxis } from '../../scene/MoveGizmo';
 import { projectRayOntoAxis } from '../axisDrag';
@@ -140,6 +141,15 @@ export class GrabTool implements Tool {
 
     const handle = ctx.world.pickByObject3D(hits[0].object);
     if (!handle) return;
+    // Hit on the singleton Table is treated as a click on empty space — the
+    // Table is locked, never carried, never selected via 3D click. Falling
+    // through to pendingEmpty (instead of returning a no-op) means a
+    // short-press release still clears any prior selection.
+    if (handle.entity.hasComponent(TableComponent)) {
+      this.pendingEmpty = { pointerId: e.pointerId };
+      ctx.element.setPointerCapture(e.pointerId);
+      return;
+    }
     if (!handle.canStartDrag()) return;
 
     this.pending = {

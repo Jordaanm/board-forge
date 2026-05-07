@@ -33,6 +33,7 @@ import { TweenComponent } from '../components/TweenComponent';
 import { HandComponent } from '../components/HandComponent';
 import { SkydomeComponent } from '../components/SkydomeComponent';
 import { LightingComponent } from '../components/LightingComponent';
+import { TableComponent } from '../components/TableComponent';
 import { registerCorePrimitives } from '../spawnables';
 import { PhysicsWorld } from '../../physics/PhysicsWorld';
 import { TABLE_SURFACE_Y } from '../../scene/Table';
@@ -182,6 +183,11 @@ class WorldImpl implements World, HandleRouter {
   // ── Lifecycle ────────────────────────────────────────────────────────────
   spawn(type: string, opts: SpawnOptions = {}): EntityHandle {
     if (this.role !== 'host') throw new Error('World.spawn is host-only');
+    // Singleton-Table guard. Mirrors the Scene-level check so the history
+    // push is skipped on a refused spawn.
+    if (type === 'table' && this.scene.getTable() !== undefined) {
+      throw new Error('Cannot spawn a second Table: the singleton Table entity already exists');
+    }
     this.history_?.push(`spawn ${type}`);
     const entity = this.spawnEntity(type, opts);
     return this.handleFor(entity);
@@ -263,6 +269,11 @@ class WorldImpl implements World, HandleRouter {
   despawn(id: string): void {
     if (this.role !== 'host') throw new Error('World.despawn is host-only');
     const target = this.scene.getEntity(id);
+    // Singleton-Table guard runs before the history push so a refused
+    // despawn doesn't leave a phantom undo entry.
+    if (target?.hasComponent(TableComponent)) {
+      throw new Error(`Cannot despawn the Table entity (${id}): it is a locked singleton`);
+    }
     if (target) this.history_?.push(`despawn ${target.name}`);
     const ctx: SpawnContext = { scene: this.threeScene, physics: this.physics, entityScene: this.scene };
     const removed = this.scene.despawn(id, ctx);
@@ -593,8 +604,10 @@ class WorldImpl implements World, HandleRouter {
     const topLevelIds = this.scene.all()
       .filter(e => e.parentId === null)
       .map(e => e.id);
+    // `force: true` bypasses the Table singleton-despawn gate — replaceScene
+    // is an atomic internal lifecycle operation, not a user-initiated delete.
     for (const id of topLevelIds) {
-      const removed = this.scene.despawn(id, ctx);
+      const removed = this.scene.despawn(id, ctx, { force: true });
       for (const r of removed) {
         this.handles.delete(r);
         this.restPoses.delete(r);
@@ -602,7 +615,7 @@ class WorldImpl implements World, HandleRouter {
     }
     // Defensive sweep for any stragglers.
     for (const entity of [...this.scene.all()]) {
-      const removed = this.scene.despawn(entity.id, ctx);
+      const removed = this.scene.despawn(entity.id, ctx, { force: true });
       for (const r of removed) {
         this.handles.delete(r);
         this.restPoses.delete(r);
@@ -942,8 +955,11 @@ class WorldImpl implements World, HandleRouter {
       case 'despawn-batch': {
         const ctx: SpawnContext = { scene: this.threeScene, physics: this.physics, entityScene: this.scene };
         let any = false;
+        // Guests mirror the host's authoritative despawn — the host's gate
+        // already vetted the request, so guests `force` to avoid a divergent
+        // state if the host ever does despawn the Table internally.
         for (const id of msg.entityIds) {
-          const removed = this.scene.despawn(id, ctx);
+          const removed = this.scene.despawn(id, ctx, { force: true });
           for (const r of removed) {
             this.handles.delete(r);
             this.restPoses.delete(r);
@@ -1031,7 +1047,7 @@ class WorldImpl implements World, HandleRouter {
 
     const ctx: SpawnContext = { scene: this.threeScene, physics: this.physics, entityScene: this.scene };
     for (const id of this.scene.all().map(e => e.id)) {
-      this.scene.despawn(id, ctx);
+      this.scene.despawn(id, ctx, { force: true });
     }
 
     this.handles.clear();

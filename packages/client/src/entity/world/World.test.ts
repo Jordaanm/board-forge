@@ -164,6 +164,35 @@ describe('World — Table boot path (table-as-entity slice 1)', () => {
     expect(pair.host.get(TABLE_ENTITY_ID)!.get(LightingComponent)!.state.keyIntensity).toBe(0);
   });
 
+  test('World.despawn(TABLE_ENTITY_ID) throws and leaves the Table intact (slice 5)', () => {
+    pair = setup();
+    expect(() => pair!.host.despawn(TABLE_ENTITY_ID))
+      .toThrowError(/Cannot despawn the Table/);
+    expect(pair.host.get(TABLE_ENTITY_ID)).toBeDefined();
+  });
+
+  test('World.spawn("table") throws when Table already exists (slice 5)', () => {
+    pair = setup();
+    expect(() => pair!.host.spawn('table'))
+      .toThrowError(/singleton Table entity already exists/);
+  });
+
+  test('refused despawn does not push a history entry (slice 5)', () => {
+    pair = setup();
+    const before = pair.host.history!.entries().length;
+    expect(() => pair!.host.despawn(TABLE_ENTITY_ID)).toThrow();
+    expect(pair.host.history!.entries().length).toBe(before);
+  });
+
+  test('replaceScene cascades through the Table despite the gate (slice 5)', () => {
+    pair = setup();
+    // Snapshot includes the Table; replaceScene must despawn the live Table
+    // (force: true) before reloading without throwing.
+    const snap = pair.host.snapshot();
+    expect(() => pair!.host.replaceScene(snap)).not.toThrow();
+    expect(pair.host.get(TABLE_ENTITY_ID)).toBeDefined();
+  });
+
   test('LightingComponent state replicates host → guest (slice 3)', () => {
     pair = setup();
     pair.host.tick(0.016);  // replicate Table to guest

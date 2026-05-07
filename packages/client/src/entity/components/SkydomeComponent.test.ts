@@ -45,7 +45,9 @@ describe('SkydomeComponent — lifecycle', () => {
     const e = scene.spawn('table', ctx, { id: TABLE_ENTITY_ID });
     const sky = e.getComponent(SkydomeComponent)!;
     const meshRef = sky.mesh;
-    scene.despawn(TABLE_ENTITY_ID, ctx);
+    // Slice 5 gates Table despawn behind `{ force: true }`; that's the
+    // contract for internal lifecycle paths like replaceScene.
+    scene.despawn(TABLE_ENTITY_ID, ctx, { force: true });
     expect(threeRoot.children.includes(meshRef)).toBe(false);
   });
 });

@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { type EntityHandle } from '../../entity/world';
 import { TransformComponent } from '../../entity/components/TransformComponent';
+import { TableComponent } from '../../entity/components/TableComponent';
 import { type MoveGizmo } from '../../scene/MoveGizmo';
 import { type ToolAttachment, type ToolContext } from './types';
 
@@ -17,6 +18,10 @@ export class AxisGizmoAttachment implements ToolAttachment {
   ) {}
 
   attach(handle: EntityHandle, _ctx: ToolContext): void {
+    // Singleton Table is locked at world origin and uneditable through the
+    // gizmo — selecting it from the editor row should not present a falsely-
+    // draggable axis triad in the 3D scene.
+    if (handle.entity.hasComponent(TableComponent)) return;
     const obj = handle.get(TransformComponent)?.object3d;
     if (!obj) return;
     this.gizmo.attach(obj);

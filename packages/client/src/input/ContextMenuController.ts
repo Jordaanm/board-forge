@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { type World } from '../entity/world';
 import { TransformComponent } from '../entity/components/TransformComponent';
+import { TableComponent } from '../entity/components/TableComponent';
 import { aggregateContextMenu } from '../entity/contextMenu';
 import { type Entity } from '../entity/Entity';
 import { type MenuContext, type MenuItem, type ActionContext } from '../entity/EntityComponent';
@@ -94,7 +95,12 @@ export class ContextMenuController {
   };
 }
 
-function builtinHostActions(_entity: Entity): MenuItem[] {
+// Exported for unit-testing the Table-suppression rule. Production callers
+// stay inside `onContextMenu` above; the export adds no surface area.
+export function builtinHostActions(entity: Entity): MenuItem[] {
+  // Singleton Table is undeletable (PRD § Locking enforcement). Suppress
+  // the Delete entry rather than relying on the runtime guard to throw.
+  if (entity.hasComponent(TableComponent)) return [];
   return [BUILTIN_DELETE];
 }
 

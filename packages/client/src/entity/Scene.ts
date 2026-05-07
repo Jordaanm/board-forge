@@ -15,6 +15,7 @@ import {
 } from './tableEntity';
 import { TransformComponent } from './components/TransformComponent';
 import { MeshComponent } from './components/MeshComponent';
+import { TableComponent } from './components/TableComponent';
 
 export interface TableBounds {
   halfWidth: number;
@@ -157,9 +158,15 @@ export class SceneImpl {
   //   2. Construct Entity with new UUID, type, default tags.
   //   3. Instantiate each component class via registry; call fromJSON(state).
   //   4. Call onSpawn(ctx) per component in topological order.
+  // The Table is a singleton: spawning a second Table throws (PRD §
+  // Locking enforcement). Internal lifecycle (e.g. snapshot load via
+  // `load()`) bypasses this gate because it never goes through `spawn`.
   spawn(type: string, ctx: SpawnContext, opts: { id?: string } = {}): Entity {
     const def = getSpawnable(type);
     if (!def) throw new Error(`Unknown spawnable type: ${type}`);
+    if (type === 'table' && this.getTable() !== undefined) {
+      throw new Error('Cannot spawn a second Table: the singleton Table entity already exists');
+    }
 
     const id = opts.id ?? newGuid();
     const entity = new Entity({
@@ -189,7 +196,18 @@ export class SceneImpl {
 
   // PRD § Despawn — recursive depth-first descent; reverse-topological
   // onDespawn per entity; remove from scene + parent.children.
-  despawn(id: string, ctx: SpawnContext): string[] {
+  //
+  // The Table singleton is undeletable (PRD § Locking enforcement); calling
+  // despawn on an entity carrying TableComponent throws. Internal lifecycle
+  // operations that legitimately need to tear the Table down (replaceScene,
+  // World.dispose) pass `{ force: true }` to bypass the gate.
+  despawn(id: string, ctx: SpawnContext, opts: { force?: boolean } = {}): string[] {
+    if (!opts.force) {
+      const target = this.entities.get(id);
+      if (target?.hasComponent(TableComponent)) {
+        throw new Error(`Cannot despawn the Table entity (${id}): it is a locked singleton`);
+      }
+    }
     const removed: string[] = [];
     this.cascadeDespawn(id, ctx, removed);
     return removed;
