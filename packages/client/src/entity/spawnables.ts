@@ -48,7 +48,7 @@ export function registerCorePrimitives(): void {
       { typeId: 'mesh',      state: { meshRef: 'prim:table-rect', textureRefs: { default: '' }, tint: '#4a3728', size: [12, 0.3, 8] } },
       { typeId: 'physics',   state: { mass: 0, friction: 0.5, restitution: 0.3, isLocked: true } },
       { typeId: 'table',     state: {} },
-      { typeId: 'skydome',   state: { textureUrl: '' } },
+      { typeId: 'skydome',   state: { textureUrl: 'base:sky/default' } },
       { typeId: 'lighting',  state: { keyColor: '#fff1dc', keyIntensity: 1.1 } },
     ],
   });

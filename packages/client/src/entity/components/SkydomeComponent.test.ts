@@ -21,11 +21,11 @@ beforeEach(() => {
 });
 
 describe('SkydomeComponent — lifecycle', () => {
-  test('Table spawnable carries a SkydomeComponent', () => {
+  test('Table spawnable carries a SkydomeComponent with the default sky slug', () => {
     const e = scene.spawn('table', ctx, { id: TABLE_ENTITY_ID });
     const sky = e.getComponent(SkydomeComponent);
     expect(sky).toBeDefined();
-    expect(sky!.state.textureUrl).toBe('');
+    expect(sky!.state.textureUrl).toBe('base:sky/default');
   });
 
   test('onSpawn attaches the skydome mesh to the THREE scene root', () => {
@@ -37,6 +37,7 @@ describe('SkydomeComponent — lifecycle', () => {
   test('empty textureUrl renders the fallback colour (no texture map)', () => {
     const e = scene.spawn('table', ctx, { id: TABLE_ENTITY_ID });
     const sky = e.getComponent(SkydomeComponent)!;
+    sky.setState({ textureUrl: '' });
     const mat = sky.mesh.material as THREE.MeshBasicMaterial;
     expect(mat.map).toBeNull();
   });

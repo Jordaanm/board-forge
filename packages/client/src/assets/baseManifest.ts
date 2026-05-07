@@ -11,11 +11,15 @@
 // fed to a network loader.
 
 import { Manifest, type AssetEntry } from './Manifest';
+import skydomeDefaultUrl from './skydome.png';
+
+export const DEFAULT_SKY_SLUG = 'base:sky/default';
 
 export const BASE_MANIFEST_ENTRIES: AssetEntry[] = [
   { slug: 'base:placeholder/image', name: 'Image placeholder', type: 'image', url: 'placeholder://image', preload: false },
   { slug: 'base:placeholder/model', name: 'Model placeholder', type: 'model', url: 'placeholder://model', preload: false },
   { slug: 'base:placeholder/sound', name: 'Sound placeholder', type: 'sound', url: 'placeholder://sound', preload: false },
+  { slug: DEFAULT_SKY_SLUG,         name: 'Default sky',       type: 'image', url: skydomeDefaultUrl,     preload: true  },
 ];
 
 export const PRIMITIVE_MANIFEST_ENTRIES: AssetEntry[] = [
