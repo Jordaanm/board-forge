@@ -1,11 +1,23 @@
 ## TODO
 
+### Refactors
+* Write out an explicit vocabulary for the various concepts in the app. This will help us to understand the code better and make it easier to maintain.
+* The root entity in a Scene is special, and it should be treated differently from other entities.
+  * It should still be an entity in the scene graph, but it should not be rendered.
+  * It instead carries all of the properties for the game/room, such as the Table, Lighting, Skydome, etc. Its also the root object that the script interacts with.
+  * Since it is an entity, it has customData, which is typically where Game-level state is stored, such as the current round, etc.
+
 ### Major Features
-* Scripting
+* Asset Registry
 * Multiselect
 * Magnets (sticking points on the surface of an entity)
 * PDF Viewer
 * Scriptable UI
+* New Spawnable Entities:
+  * PDF Viewer
+  * Note (renders text to a rect)
+  * D4, D8, D10, D12, D20
+
 
 ### Minor Features
 * Drag to resize Zone/Hand
