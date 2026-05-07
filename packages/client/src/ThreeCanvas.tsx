@@ -24,6 +24,8 @@ import { type RunResult, type ScriptState } from './scripting/ScriptHost';
 import { type ScriptErrorLog } from './scripting/ScriptErrorLog';
 import { type CardTile } from './components/HandPanel';
 import { type AssetEntry } from './assets/Manifest';
+import { assetService } from './assets/AssetService';
+import { SoundPlayer } from './assets/SoundPlayer';
 import { DEFAULT_PRIVATE_FIELDS } from './seats/PrivacyScrubber';
 import { MoveGizmo } from './scene/MoveGizmo';
 import { CameraController } from './camera/CameraController';
@@ -216,6 +218,13 @@ export function ThreeCanvas({
 
     pingOverlay = new PingOverlay(scene, world);
     const unsubscribePing = world.onToolBroadcast((msg) => pingOverlay?.ingest(msg));
+
+    // Issue #11 — every peer (host and guests) plays inbound sound
+    // broadcasts locally. Resolves through the same AssetService cache the
+    // manager modal and consumers use, so a `preload: true` sound is already
+    // warm by the time playSound fires.
+    const soundPlayer    = new SoundPlayer(assetService);
+    const unsubscribeSnd = world.onPlaySound((msg) => soundPlayer.playSlug(msg.slug));
 
     // ── Selection highlight ─────────────────────────────────────────────
     // BoxHelper is tool-independent and renders directly from selection state.
@@ -515,6 +524,7 @@ export function ThreeCanvas({
       window.removeEventListener('resize', onResize);
       renderer.domElement.removeEventListener('pointermove', onCursorMove);
       unsubscribePing();
+      unsubscribeSnd();
       unsubscribeHistory();
       pingOverlay?.dispose();
       pingOverlay = null;

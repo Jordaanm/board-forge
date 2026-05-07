@@ -49,6 +49,7 @@ export class EditorEntityFacade {
 export class EditorSceneFacade {
   getObjectById(id: string): EditorEntityFacade | undefined { void id; return undefined; }
   getObjectsByTag(tag: string): EditorEntityFacade[] { void tag; return []; }
+  playSound(slug: string): void { void slug; }
 }
 
 export class EditorGame {

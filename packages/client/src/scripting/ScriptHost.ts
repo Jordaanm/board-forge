@@ -28,6 +28,7 @@ import { SceneFacade } from './SceneFacade';
 import { type ScriptRunContext } from './EntityFacade';
 import { ScriptErrorLog } from './ScriptErrorLog';
 import { type EntityScene } from '../entity/EntityComponent';
+import { type AssetType } from '../assets/Manifest';
 
 export interface ScriptHostOptions {
   // The scene this host queries. Optional so unit tests that don't exercise
@@ -36,6 +37,13 @@ export interface ScriptHostOptions {
   scene?: EntityScene;
   // Injected so tests can substitute a recording console.
   console?: Pick<Console, 'log' | 'error' | 'warn' | 'info' | 'debug'>;
+  // Host-only sound playback hook routed by World.broadcastPlaySound. When
+  // absent, SceneFacade.playSound no-ops with a sandbox warning.
+  playSound?: (slug: string) => void;
+  // Optional asset-slug lookup for scene.playSound validation. Defaults to
+  // no validation; wiring the lookup adds an actionable sandbox warning when
+  // a script calls playSound with an unknown or wrong-typed slug.
+  lookupSlug?: (slug: string) => { type: AssetType } | undefined;
 }
 
 export type RunResult =
@@ -51,8 +59,10 @@ export interface ScriptState {
 }
 
 export class ScriptHost {
-  private readonly console_: ScriptHostOptions['console'];
-  private readonly scene_:   EntityScene | null;
+  private readonly console_:    ScriptHostOptions['console'];
+  private readonly scene_:      EntityScene | null;
+  private readonly playSound_:  ScriptHostOptions['playSound'];
+  private readonly lookupSlug_: ScriptHostOptions['lookupSlug'];
   // Bounded ring buffer of script errors surfaced to the script panel
   // (issue #7). Hook errors, listener errors, AND startup-failure errors
   // (compile, module-load, structural, constructor) all funnel here so the
@@ -70,8 +80,10 @@ export class ScriptHost {
   private currentRunCtx: ScriptRunContext = { registrations: [] };
 
   constructor(opts: ScriptHostOptions = {}) {
-    this.console_ = opts.console ?? console;
-    this.scene_   = opts.scene   ?? null;
+    this.console_    = opts.console ?? console;
+    this.scene_      = opts.scene   ?? null;
+    this.playSound_  = opts.playSound;
+    this.lookupSlug_ = opts.lookupSlug;
   }
 
   // Bounded ring of runtime errors (hook + listener). Subscribe via
@@ -125,8 +137,11 @@ export class ScriptHost {
       registrations: [],
       errorLog:      this.errorLog_,
       console:       this.console_,
+      playSound:     this.playSound_,
     };
-    const scene = this.scene_ ? new SceneFacade(this.scene_, ctx) : {};
+    const scene = this.scene_
+      ? new SceneFacade(this.scene_, ctx, { lookupSlug: this.lookupSlug_ })
+      : {};
 
     let ns;
     try {

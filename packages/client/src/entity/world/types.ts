@@ -11,7 +11,7 @@ import * as THREE from 'three';
 import { type Entity } from '../Entity';
 import { type EntityComponent, type ComponentClass } from '../EntityComponent';
 import { type EntitySerialized } from '../Scene';
-import { type SceneMessage, type ToolBroadcast } from '../wire';
+import { type SceneMessage, type ToolBroadcast, type PlaySoundMessage } from '../wire';
 import { type SeatIndex } from '../../seats/SeatLayout';
 import { type PhysicsWorld } from '../../physics/PhysicsWorld';
 import { type GuestInputMessage } from '../../net/SceneState';
@@ -122,6 +122,14 @@ export interface World {
   // sees their own ping. On host inbound, relays to other peers.
   broadcastToolMessage(toolId: string, payload: unknown): void;
   onToolBroadcast(handler: (msg: ToolBroadcast) => void): () => void;
+
+  // Cosmetic sound broadcast from a host script (`scene.playSound`) — issue
+  // #11 of issues--asset-registry.md. Host fires local listeners and relays
+  // on the unreliable channel; guests receive `play-sound` and route into
+  // their local listeners so SoundPlayer plays in sync. Subscribers play
+  // through their own AssetService cache.
+  broadcastPlaySound(slug: string): void;
+  onPlaySound(handler: (msg: PlaySoundMessage) => void): () => void;
 
   // Drag-from-hand-panel-onto-canvas (issue #5 of issues--hand.md). Host runs
   // the tween directly; guest dispatches `play-card-to-table` and the host

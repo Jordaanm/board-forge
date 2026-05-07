@@ -145,6 +145,27 @@ describe('World — host→guest round-trip', () => {
 
     expect(calls).toBeGreaterThan(0);
   });
+
+  test('broadcastPlaySound fires local subscribers and replicates to guest (issue #11)', () => {
+    pair = setup();
+    const hostSeen:  string[] = [];
+    const guestSeen: string[] = [];
+    pair.host.onPlaySound((m)  => hostSeen.push(m.slug));
+    pair.guest.onPlaySound((m) => guestSeen.push(m.slug));
+
+    pair.host.broadcastPlaySound('custom:dice-roll');
+    expect(hostSeen).toEqual(['custom:dice-roll']);
+    expect(guestSeen).toEqual(['custom:dice-roll']);
+  });
+
+  test('guest broadcastPlaySound is a no-op (host-only API)', () => {
+    pair = setup();
+    const hostSeen:  string[] = [];
+    pair.host.onPlaySound((m) => hostSeen.push(m.slug));
+
+    pair.guest.broadcastPlaySound('custom:roll');
+    expect(hostSeen).toEqual([]);
+  });
 });
 
 describe('World — locked entity gates tryHold / setPosition', () => {

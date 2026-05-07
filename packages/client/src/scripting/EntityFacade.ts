@@ -36,6 +36,14 @@ export interface ScriptRunContext {
   // Optional console hook for listener exceptions; defaults to the global
   // console. Letting tests inject this keeps assertions deterministic.
   console?:      Pick<Console, 'error'>;
+  // Host-only sound playback hook routed by World.broadcastPlaySound. When
+  // absent (e.g. guest-side scripting if it ever exists, or unit tests),
+  // SceneFacade.playSound no-ops with a sandbox warning.
+  playSound?:    (slug: string) => void;
+  // Optional sandbox-warning sink — defaults to console.warn. Tests inject
+  // a recording function so guest-side / unknown-slug warnings are
+  // deterministically observable.
+  warn?:         (message: string) => void;
 }
 
 export class EntityFacade {

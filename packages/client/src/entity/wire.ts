@@ -178,6 +178,17 @@ export interface DealFromDeck {
   count:  number;
 }
 
+// Cosmetic sound effect broadcast initiated from a host script via
+// `scene.playSound(slug)`. Issue #11 of issues--asset-registry.md. Rides the
+// unreliable channel — missed messages are not retried (audio cues are
+// stale-fast). Every peer (including the host) resolves the slug through its
+// own AssetService and plays the buffer locally; the host echoes through its
+// `onPlaySound` subscribers so its local SoundPlayer sees the same event.
+export interface PlaySoundMessage {
+  type: 'play-sound';
+  slug: string;
+}
+
 // Cosmetic broadcast originated by a Tool (issue #3 of issues--tools.md).
 // Rides the unreliable channel — missed messages are not retried. Payload
 // schema is per-tool (e.g. ping carries `{ entityId }` or `{ point: [x,z] }`).
@@ -222,4 +233,5 @@ export type SceneMessage =
   | DrawFromDeck
   | ShuffleDeck
   | DealFromDeck
-  | ToolBroadcast;
+  | ToolBroadcast
+  | PlaySoundMessage;

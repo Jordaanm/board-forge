@@ -4,6 +4,7 @@ import { type EntityScene } from '../entity/EntityComponent';
 import { EntityComponent } from '../entity/EntityComponent';
 import { SceneFacade } from './SceneFacade';
 import { EntityFacade } from './EntityFacade';
+import { Manifest } from '../assets/Manifest';
 
 class StubScene implements EntityScene {
   private byId = new Map<string, Entity>();
@@ -150,6 +151,91 @@ describe('EntityFacade — read-only invariants', () => {
     const e = new SceneFacade(scene, { registrations: [] }).getObjectById('d-1')!;
     const view = e.getComponent('value')!;
     expect((view as unknown as Record<string, unknown>).setState).toBeUndefined();
+  });
+});
+
+describe('SceneFacade.playSound', () => {
+  test('routes the slug through ctx.playSound', () => {
+    const scene = new StubScene();
+    const calls: string[] = [];
+    const facade = new SceneFacade(scene, {
+      registrations: [],
+      playSound: (slug) => calls.push(slug),
+    });
+    facade.playSound('custom:dice-roll');
+    expect(calls).toEqual(['custom:dice-roll']);
+  });
+
+  test('no-ops + warns when ctx.playSound is missing (e.g. guest-side)', () => {
+    const scene = new StubScene();
+    const warns: string[] = [];
+    const facade = new SceneFacade(scene, {
+      registrations: [],
+      warn: (m) => warns.push(m),
+    });
+    facade.playSound('custom:roll');
+    expect(warns).toHaveLength(1);
+    expect(warns[0]).toMatch(/host-only/);
+  });
+
+  test('no-ops + warns on unknown slug when lookupSlug is wired', () => {
+    const scene = new StubScene();
+    const warns: string[] = [];
+    let played = '';
+    const facade = new SceneFacade(
+      scene,
+      {
+        registrations: [],
+        playSound: (s) => { played = s; },
+        warn:      (m) => warns.push(m),
+      },
+      { lookupSlug: () => undefined },
+    );
+    facade.playSound('custom:absent');
+    expect(played).toBe('');
+    expect(warns[0]).toMatch(/unknown asset slug/);
+  });
+
+  test('no-ops + warns when slug resolves to a non-sound asset', () => {
+    const scene = new StubScene();
+    const warns: string[] = [];
+    let played = '';
+    const m = Manifest.from([
+      { slug: 'custom:icon', name: 'I', type: 'image', url: 'http://x/i.png', preload: false },
+    ]);
+    const facade = new SceneFacade(
+      scene,
+      {
+        registrations: [],
+        playSound: (s) => { played = s; },
+        warn:      (m2) => warns.push(m2),
+      },
+      { lookupSlug: (slug) => m.get(slug) },
+    );
+    facade.playSound('custom:icon');
+    expect(played).toBe('');
+    expect(warns[0]).toMatch(/not "sound"/);
+  });
+
+  test('passes through when validation finds a sound entry', () => {
+    const scene = new StubScene();
+    const warns: string[] = [];
+    let played = '';
+    const m = Manifest.from([
+      { slug: 'custom:roll', name: 'R', type: 'sound', url: 'http://x/r.mp3', preload: false },
+    ]);
+    const facade = new SceneFacade(
+      scene,
+      {
+        registrations: [],
+        playSound: (s) => { played = s; },
+        warn:      (m2) => warns.push(m2),
+      },
+      { lookupSlug: (slug) => m.get(slug) },
+    );
+    facade.playSound('custom:roll');
+    expect(played).toBe('custom:roll');
+    expect(warns).toEqual([]);
   });
 });
 

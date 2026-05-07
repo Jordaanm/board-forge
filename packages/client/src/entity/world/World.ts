@@ -38,6 +38,7 @@ import { type SeatIndex } from '../../seats/SeatLayout';
 import { canManipulate } from '../../seats/OwnershipPolicy';
 import { EntityHandleImpl, type HandleRouter } from './EntityHandle';
 import { ScriptHost } from '../../scripting/ScriptHost';
+import { assetService } from '../../assets/AssetService';
 import {
   type World,
   type WorldOptions,
@@ -48,7 +49,7 @@ import {
   type SpawnOptions,
   type ReplicationPolicy,
 } from './types';
-import { type HoldRelease, type ToolBroadcast, type PlayCardToTable, type ReorderHand, type TweenIntoHand } from '../wire';
+import { type HoldRelease, type ToolBroadcast, type PlayCardToTable, type ReorderHand, type TweenIntoHand, type PlaySoundMessage } from '../wire';
 
 // Bounds-enforcement constants — mirror SceneSystemV2 so behaviour is identical
 // during the parity slice. Issue #5 deletes the duplicate.
@@ -105,6 +106,7 @@ class WorldImpl implements World, HandleRouter {
   private readonly restPoses = new Map<string, RestPose>();
   private listeners: Array<() => void> = [];
   private toolBroadcastHandlers: Array<(msg: ToolBroadcast) => void> = [];
+  private playSoundHandlers:     Array<(msg: PlaySoundMessage) => void> = [];
 
   private readonly unsubscribeMessage:  () => void;
   private readonly unsubscribePeerJoin: () => void;
@@ -147,7 +149,11 @@ class WorldImpl implements World, HandleRouter {
         { cap: opts.historyCap, captureThumb: opts.captureThumb },
       );
       this.hostInput.setHistoryService(this.history_);
-      this.scripting_ = new ScriptHost({ scene: this.scene });
+      this.scripting_ = new ScriptHost({
+        scene:      this.scene,
+        playSound:  (slug) => this.broadcastPlaySound(slug),
+        lookupSlug: (slug) => assetService.lookupSlug(slug),
+      });
       this.installBeginContactHandler();
     } else {
       this.physics    = null;
@@ -730,6 +736,31 @@ class WorldImpl implements World, HandleRouter {
     for (const h of this.toolBroadcastHandlers) h(msg);
   }
 
+  // ── Cosmetic sound broadcasts (issue #11 of issues--asset-registry.md) ──
+  // Host script calls `scene.playSound(slug)` → SceneFacade routes here.
+  // We fire local subscribers immediately (so the host hears its own sound)
+  // and put the envelope on the unreliable channel for guests to play.
+  // Guests calling this no-op (host-only — matches the existing host-only
+  // write semantics enforced by SceneFacade).
+  broadcastPlaySound(slug: string): void {
+    if (this.disposed) return;
+    if (this.role !== 'host') return;
+    const msg: PlaySoundMessage = { type: 'play-sound', slug };
+    this.firePlaySound(msg);
+    this.transport.send(msg, { reliable: false });
+  }
+
+  onPlaySound(handler: (msg: PlaySoundMessage) => void): () => void {
+    this.playSoundHandlers.push(handler);
+    return () => {
+      this.playSoundHandlers = this.playSoundHandlers.filter(h => h !== handler);
+    };
+  }
+
+  private firePlaySound(msg: PlaySoundMessage): void {
+    for (const h of this.playSoundHandlers) h(msg);
+  }
+
   // Peer-left hook — drops every hold owned by the leaving peer's seat.
   releasePeer(peerId: string): void {
     if (this.role !== 'host') return;
@@ -772,6 +803,10 @@ class WorldImpl implements World, HandleRouter {
         // double-render bouncing back through the relay.
         this.fireToolBroadcast(msg);
         this.transport.send(msg, { reliable: false });
+        return;
+      case 'play-sound':
+        // Host doesn't expect inbound play-sound — the script API is host-only.
+        // Drop silently rather than relaying a guest spoof.
         return;
       default:
         // entity-spawn / entity-patch / component-patches / despawn-batch are
@@ -866,6 +901,11 @@ class WorldImpl implements World, HandleRouter {
         // Filter own echo bouncing back through the host relay.
         if (msg.peerId === this.identity.selfPeerId()) return;
         this.fireToolBroadcast(msg);
+        return;
+      }
+
+      case 'play-sound': {
+        this.firePlaySound(msg);
         return;
       }
 

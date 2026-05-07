@@ -15,6 +15,7 @@ import {
   type ToolBroadcast,
   type SceneMessage,
   type ManifestPublishMessage,
+  type PlaySoundMessage,
 } from './wire';
 
 // Each wire message must JSON round-trip without loss.
@@ -166,6 +167,11 @@ describe('wire encode/decode round-trip', () => {
     expect(roundTrip(m)).toEqual(m);
   });
 
+  test('PlaySoundMessage', () => {
+    const m: PlaySoundMessage = { type: 'play-sound', slug: 'custom:dice-roll' };
+    expect(roundTrip(m)).toEqual(m);
+  });
+
   test('ManifestPublishMessage', () => {
     const m: ManifestPublishMessage = {
       type: 'manifest-publish',
@@ -195,7 +201,8 @@ describe('wire encode/decode round-trip', () => {
       { type: 'request-update', entityId: 'e', typeId: 't', partial: {} },
       { type: 'apply-impulse',  entityId: 'e', vx: 0, vy: 0, vz: 0 },
       { type: 'tool-broadcast', toolId: 'ping', peerId: 'p', seat: null, payload: {} },
+      { type: 'play-sound', slug: 'custom:s' },
     ];
-    expect(messages).toHaveLength(12);
+    expect(messages).toHaveLength(13);
   });
 });

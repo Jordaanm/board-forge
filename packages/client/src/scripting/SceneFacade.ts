@@ -5,18 +5,34 @@
 // `getObjectById` and `getObjectsByTag` lazily wrap raw Entities, caching
 // by entity id so a single Run sees a stable identity for any given
 // entity (script code can rely on `===` between two lookups).
+//
+// `playSound(slug)` (issue #11 of issues--asset-registry.md) bounces the
+// slug through ScriptRunContext.playSound, which the host wires to
+// World.broadcastPlaySound. Unknown / wrong-typed slugs no-op + warn.
 
 import { type EntityScene } from '../entity/EntityComponent';
 import { EntityFacade, type ScriptRunContext } from './EntityFacade';
+import { type AssetType } from '../assets/Manifest';
+
+export interface SceneFacadeOptions {
+  // Optional asset-slug lookup used to validate `playSound` slugs against
+  // the live catalog (base + primitives + host's custom draft). Defaults to
+  // no validation — slugs are accepted and pushed through to AssetService,
+  // which will resolve to a `broken` status for unknown slugs and the
+  // SoundPlayer skips. Wiring the lookup adds an actionable sandbox warning.
+  lookupSlug?: (slug: string) => { type: AssetType } | undefined;
+}
 
 export class SceneFacade {
   private readonly scene: EntityScene;
   private readonly ctx:   ScriptRunContext;
+  private readonly opts:  SceneFacadeOptions;
   private readonly cache = new Map<string, EntityFacade>();
 
-  constructor(scene: EntityScene, ctx: ScriptRunContext) {
+  constructor(scene: EntityScene, ctx: ScriptRunContext, opts: SceneFacadeOptions = {}) {
     this.scene = scene;
     this.ctx   = ctx;
+    this.opts  = opts;
   }
 
   getObjectById(id: string): EntityFacade | undefined {
@@ -32,6 +48,40 @@ export class SceneFacade {
       if (entity.tags.includes(tag)) out.push(this.facadeFor(entity.id));
     }
     return out;
+  }
+
+  // Trigger a sound effect on every peer (including the host). Host-only —
+  // when no `playSound` callback is wired (guest, or unit tests), the call
+  // no-ops with a sandbox warning. Unknown slugs and wrong-type slugs also
+  // warn and no-op.
+  playSound(slug: string): void {
+    if (typeof slug !== 'string' || slug.length === 0) {
+      this.warn(`scene.playSound: ignoring invalid slug ${JSON.stringify(slug)}`);
+      return;
+    }
+    if (!this.ctx.playSound) {
+      this.warn(`scene.playSound("${slug}"): no-op (host-only API; not running on host)`);
+      return;
+    }
+    const lookup = this.opts.lookupSlug;
+    if (lookup) {
+      const found = lookup(slug);
+      if (!found) {
+        this.warn(`scene.playSound("${slug}"): unknown asset slug — no-op`);
+        return;
+      }
+      if (found.type !== 'sound') {
+        this.warn(`scene.playSound("${slug}"): asset is type "${found.type}", not "sound" — no-op`);
+        return;
+      }
+    }
+    this.ctx.playSound(slug);
+  }
+
+  private warn(message: string): void {
+    if (this.ctx.warn) { this.ctx.warn(message); return; }
+    // Fallback to console.warn so a missing test sink doesn't swallow.
+    if (typeof console !== 'undefined') console.warn('[script]', message);
   }
 
   private facadeFor(id: string): EntityFacade {

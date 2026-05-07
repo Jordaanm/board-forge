@@ -27,6 +27,7 @@ declare class EntityFacade {
 declare class SceneFacade {
   getObjectById(id: string): EntityFacade | undefined;
   getObjectsByTag(tag: string): EntityFacade[];
+  playSound(slug: string): void;
 }
 
 declare class Game {
