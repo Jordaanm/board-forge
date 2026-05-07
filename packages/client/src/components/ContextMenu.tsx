@@ -72,7 +72,12 @@ export function ContextMenu({ menu, onAction, onDismiss }: Props) {
         </div>
         <MenuList
           items={menu.items}
-          onAction={(item, args) => { onAction(item, args); onDismiss(); }}
+          onAction={(item, args) => {
+            onAction(item, args);
+            // Colorpicker stays open so the user can iterate shades; backdrop
+            // click dismisses. Other actions auto-close on selection.
+            if (item.kind !== 'colorpicker') onDismiss();
+          }}
         />
       </div>
     </>
