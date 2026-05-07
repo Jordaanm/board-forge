@@ -245,10 +245,11 @@ function buildBody(state: PhysicsState, mesh: MeshComponent): CANNON.Body {
 function buildShape(mesh: MeshComponent): CANNON.Shape {
   const [hx, hy, hz] = mesh.halfExtents();
   switch (mesh.meshKind()) {
-    case 'meeple': return new CANNON.Cylinder(hx, hx, hy * 2, 12);
+    case 'meeple':   return new CANNON.Cylinder(hx, hx, hy * 2, 12);
+    case 'cylinder': return new CANNON.Cylinder(hx, hx, hy * 2, 64);
     case 'cube':
     case 'unknown':
-    default:       return new CANNON.Box(new CANNON.Vec3(hx, hy, hz));
+    default:         return new CANNON.Box(new CANNON.Vec3(hx, hy, hz));
   }
 }
 

@@ -33,7 +33,9 @@ import { TweenComponent } from '../components/TweenComponent';
 import { HandComponent } from '../components/HandComponent';
 import { registerCorePrimitives } from '../spawnables';
 import { PhysicsWorld } from '../../physics/PhysicsWorld';
-import { TABLE_SURFACE_Y, TABLE_WIDTH, TABLE_DEPTH } from '../../scene/Table';
+import { TABLE_SURFACE_Y } from '../../scene/Table';
+import { TABLE_ENTITY_ID } from '../tableEntity';
+import { type TableBounds } from '../Scene';
 import { type SeatIndex } from '../../seats/SeatLayout';
 import { canManipulate } from '../../seats/OwnershipPolicy';
 import { EntityHandleImpl, type HandleRouter } from './EntityHandle';
@@ -156,6 +158,9 @@ class WorldImpl implements World, HandleRouter {
         listAssets: (opts) => assetService.listAssets(opts),
       });
       this.installBeginContactHandler();
+      // Boot the singleton Table entity. Guests receive it through the
+      // standard scene-snapshot replication on join.
+      this.spawnEntity('table', { id: TABLE_ENTITY_ID, position: [0, 0, 0] });
     } else {
       this.physics    = null;
       this.replicator = null;
@@ -366,15 +371,19 @@ class WorldImpl implements World, HandleRouter {
   }
 
   private enforceTableBounds(): void {
+    const { halfWidth, halfDepth } = this.scene.getTableBounds();
     for (const entity of this.scene.all()) {
+      // Skip the Table itself — it's locked at origin and doesn't need
+      // rest-pose tracking or fall-off recovery.
+      if (entity.id === TABLE_ENTITY_ID) continue;
       const phys = entity.getComponent(PhysicsComponent);
       if (!phys?.body) continue;
       const body = phys.body;
       const px = body.position.x, py = body.position.y, pz = body.position.z;
 
       const onTable = py >= REST_Y_MIN && py <= REST_Y_MAX
-                   && Math.abs(px) <= TABLE_WIDTH  / 2
-                   && Math.abs(pz) <= TABLE_DEPTH / 2;
+                   && Math.abs(px) <= halfWidth
+                   && Math.abs(pz) <= halfDepth;
       const settled = body.velocity.length() + body.angularVelocity.length() < REST_VEL_THRESHOLD;
       if (onTable && settled) {
         this.restPoses.set(entity.id, {
@@ -447,6 +456,15 @@ class WorldImpl implements World, HandleRouter {
 
   forEach(fn: (h: EntityHandle) => void): void {
     for (const entity of this.scene.all()) fn(this.handleFor(entity));
+  }
+
+  getTable(): EntityHandle | undefined {
+    const entity = this.scene.getTable();
+    return entity ? this.handleFor(entity) : undefined;
+  }
+
+  getTableBounds(): TableBounds {
+    return this.scene.getTableBounds();
   }
 
   // ── Subscriptions ────────────────────────────────────────────────────────

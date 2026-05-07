@@ -1,5 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import {
+  computeSeatLayout,
   getSeatLayout,
   SEAT_COLOURS,
   type SeatIndex,
@@ -10,6 +11,8 @@ import {
 const ALL_INDICES: SeatIndex[] = [0, 1, 2, 3, 4, 5, 6, 7];
 const SHAPES: TableShape[]     = ['rectangle', 'circle'];
 
+const DEFAULT_BOUNDS = { halfWidth: 6, halfDepth: 4 };
+
 describe('SEAT_COLOURS', () => {
   test('has 8 entries in fixed order', () => {
     expect(SEAT_COLOURS).toEqual(
@@ -18,21 +21,44 @@ describe('SEAT_COLOURS', () => {
   });
 });
 
-describe('getSeatLayout — rectangle', () => {
-  // Table 12 × 8. CCW from front-right: 3 front (+Z), 1 left (-X), 3 back (-Z), 1 right (+X).
-  const cases: Array<[SeatIndex, SeatPose]> = [
-    [0, { position: { x:  3, y: 0, z:  4 }, facing: { x:  0, y: 0, z: -1 } }],
-    [1, { position: { x:  0, y: 0, z:  4 }, facing: { x:  0, y: 0, z: -1 } }],
-    [2, { position: { x: -3, y: 0, z:  4 }, facing: { x:  0, y: 0, z: -1 } }],
-    [3, { position: { x: -6, y: 0, z:  0 }, facing: { x:  1, y: 0, z:  0 } }],
-    [4, { position: { x: -3, y: 0, z: -4 }, facing: { x:  0, y: 0, z:  1 } }],
-    [5, { position: { x:  0, y: 0, z: -4 }, facing: { x:  0, y: 0, z:  1 } }],
-    [6, { position: { x:  3, y: 0, z: -4 }, facing: { x:  0, y: 0, z:  1 } }],
-    [7, { position: { x:  6, y: 0, z:  0 }, facing: { x: -1, y: 0, z:  0 } }],
+describe('computeSeatLayout — default rectangle bounds', () => {
+  // Table 12 × 8 → bounds {halfWidth: 6, halfDepth: 4}. CCW from front-right.
+  const expected: SeatPose[] = [
+    { position: { x:  3, y: 0, z:  4 }, facing: { x:  0, y: 0, z: -1 } },
+    { position: { x:  0, y: 0, z:  4 }, facing: { x:  0, y: 0, z: -1 } },
+    { position: { x: -3, y: 0, z:  4 }, facing: { x:  0, y: 0, z: -1 } },
+    { position: { x: -6, y: 0, z:  0 }, facing: { x:  1, y: 0, z:  0 } },
+    { position: { x: -3, y: 0, z: -4 }, facing: { x:  0, y: 0, z:  1 } },
+    { position: { x:  0, y: 0, z: -4 }, facing: { x:  0, y: 0, z:  1 } },
+    { position: { x:  3, y: 0, z: -4 }, facing: { x:  0, y: 0, z:  1 } },
+    { position: { x:  6, y: 0, z:  0 }, facing: { x: -1, y: 0, z:  0 } },
   ];
 
-  test.each(cases)('seat %i', (i, expected) => {
-    expect(getSeatLayout('rectangle', i)).toEqual(expected);
+  test('returns 8 seat poses', () => {
+    expect(computeSeatLayout(DEFAULT_BOUNDS)).toHaveLength(8);
+  });
+
+  test.each(ALL_INDICES.map(i => [i, expected[i]] as const))('seat %i', (i, pose) => {
+    expect(computeSeatLayout(DEFAULT_BOUNDS)[i]).toEqual(pose);
+  });
+
+  test('matches the legacy getSeatLayout("rectangle", i)', () => {
+    const layout = computeSeatLayout(DEFAULT_BOUNDS);
+    for (const i of ALL_INDICES) {
+      expect(layout[i]).toEqual(getSeatLayout('rectangle', i));
+    }
+  });
+});
+
+describe('computeSeatLayout — scales with bounds', () => {
+  test('doubling bounds doubles seat distances from origin', () => {
+    const small = computeSeatLayout({ halfWidth: 3, halfDepth: 2 });
+    const big   = computeSeatLayout({ halfWidth: 6, halfDepth: 4 });
+    for (const i of ALL_INDICES) {
+      expect(big[i].position.x).toBeCloseTo(small[i].position.x * 2, 10);
+      expect(big[i].position.z).toBeCloseTo(small[i].position.z * 2, 10);
+      expect(big[i].facing).toEqual(small[i].facing);
+    }
   });
 });
 

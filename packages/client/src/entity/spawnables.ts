@@ -16,6 +16,7 @@ import { DeckComponent } from './components/DeckComponent';
 import { ZoneComponent } from './components/ZoneComponent';
 import { TweenComponent } from './components/TweenComponent';
 import { HandComponent } from './components/HandComponent';
+import { TableComponent } from './components/TableComponent';
 import { D6_FACE_MAP } from '../dice/d6';
 
 export function registerCorePrimitives(): void {
@@ -30,6 +31,21 @@ export function registerCorePrimitives(): void {
   if (!componentRegistry.has('zone'))      componentRegistry.register(ZoneComponent);
   if (!componentRegistry.has('tween'))     componentRegistry.register(TweenComponent);
   if (!componentRegistry.has('hand'))      componentRegistry.register(HandComponent);
+  if (!componentRegistry.has('table'))     componentRegistry.register(TableComponent);
+
+  if (!getSpawnable('table')) registerSpawnable({
+    type:        'table',
+    label:       'Table',
+    category:    'Fixtures',
+    defaultTags: ['table', 'fixture'],
+    hidden:      true,
+    components: [
+      { typeId: 'transform', state: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } },
+      { typeId: 'mesh',      state: { meshRef: 'prim:table-rect', textureRefs: { default: '' }, tint: '#4a3728', size: [12, 0.3, 8] } },
+      { typeId: 'physics',   state: { mass: 0, friction: 0.5, restitution: 0.3, isLocked: true } },
+      { typeId: 'table',     state: {} },
+    ],
+  });
 
   if (!getSpawnable('board')) registerSpawnable({
     type:        'board',

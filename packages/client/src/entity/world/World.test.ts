@@ -10,6 +10,8 @@ import { createInMemoryBusPair } from './InMemoryTransport';
 import { TransformComponent } from '../components/TransformComponent';
 import { ValueComponent } from '../components/ValueComponent';
 import { PhysicsComponent } from '../components/PhysicsComponent';
+import { TableComponent } from '../components/TableComponent';
+import { TABLE_ENTITY_ID } from '../tableEntity';
 import { type World } from './types';
 import { type SeatIndex } from '../../seats/SeatLayout';
 
@@ -42,6 +44,73 @@ function setup(): Pair {
   });
   return { host, guest, firePeerJoin: bus.firePeerJoin };
 }
+
+describe('World — Table boot path (table-as-entity slice 1)', () => {
+  let pair: Pair | null = null;
+
+  afterEach(() => {
+    pair?.host.dispose();
+    pair?.guest.dispose();
+    pair = null;
+  });
+
+  test('host bootstraps with the Table entity at the fixed GUID', () => {
+    pair = setup();
+    const table = pair.host.get(TABLE_ENTITY_ID);
+    expect(table).toBeDefined();
+    expect(table!.entity.type).toBe('table');
+    expect(table!.entity.tags.sort()).toEqual(['fixture', 'table']);
+    expect(table!.entity.getComponent(TableComponent)).toBeDefined();
+  });
+
+  test('Table is the sole entity in a fresh host World', () => {
+    pair = setup();
+    const ids = pair.host.all().map(h => h.id);
+    expect(ids).toEqual([TABLE_ENTITY_ID]);
+  });
+
+  test('fresh guest World has zero entities (Table arrives via replication)', () => {
+    pair = setup();
+    expect(pair.guest.all()).toEqual([]);
+  });
+
+  test('Table replicates to guest after first tick', () => {
+    pair = setup();
+    pair.host.tick(0.016);
+    const guestTable = pair.guest.get(TABLE_ENTITY_ID);
+    expect(guestTable).toBeDefined();
+    expect(guestTable!.entity.getComponent(TableComponent)).toBeDefined();
+  });
+
+  test('getTable returns the singleton handle on host', () => {
+    pair = setup();
+    expect(pair.host.getTable()?.id).toBe(TABLE_ENTITY_ID);
+  });
+
+  test('getTableBounds returns rect defaults on host', () => {
+    pair = setup();
+    const b = pair.host.getTableBounds();
+    expect(b.halfWidth).toBeCloseTo(6, 5);
+    expect(b.halfDepth).toBeCloseTo(4, 5);
+  });
+
+  test('getTableBounds scales linearly with uniform scale', () => {
+    pair = setup();
+    const table = pair.host.get(TABLE_ENTITY_ID)!;
+    const t = table.get(TransformComponent)!;
+    t.setState({ position: t.state.position, rotation: t.state.rotation, scale: [2, 2, 2] });
+    const b = pair.host.getTableBounds();
+    expect(b.halfWidth).toBeCloseTo(12, 5);
+    expect(b.halfDepth).toBeCloseTo(8, 5);
+  });
+
+  test('getTableBounds falls back to defaults on guest before replication', () => {
+    pair = setup();
+    const b = pair.guest.getTableBounds();
+    expect(b.halfWidth).toBeCloseTo(6, 5);
+    expect(b.halfDepth).toBeCloseTo(4, 5);
+  });
+});
 
 describe('World.pickByObject3D — isContained guard', () => {
   let pair: Pair | null = null;
@@ -109,7 +178,8 @@ describe('World — host→guest round-trip', () => {
     pair.host.spawn('token', { id: 'b' });
     pair.host.tick(0.016);
 
-    const ids = pair.guest.all().map(h => h.id).sort();
+    // Filter out the boot-spawned Table — the test is about user spawns.
+    const ids = pair.guest.all().map(h => h.id).filter(id => id !== TABLE_ENTITY_ID).sort();
     expect(ids).toEqual(['a', 'b']);
   });
 
@@ -422,11 +492,9 @@ describe('World — late-join scene-snapshot (issue #8)', () => {
 
   test('host pre-populates 3 entities; guest joins; sees full scene', () => {
     pair = setup();
-    // Pre-populate the host. The InMemoryTransport delivers spawns straight
-    // into the existing guest as they happen, so to exercise the late-join
-    // path specifically we capture the snapshot, dispose, rebuild the pair
-    // with a fresh empty guest, prime the host via loadSnapshot, then fire
-    // peer-join.
+    // Pre-populate the host. Snapshot includes the boot-spawned Table, so
+    // we use replaceScene (which cascade-despawns first) to seed the rebuilt
+    // host without colliding on the duplicate Table id.
     pair.host.spawn('die',   { id: 'd-1' });
     pair.host.spawn('token', { id: 't-1' });
     pair.host.spawn('board', { id: 'b-1' });
@@ -435,12 +503,11 @@ describe('World — late-join scene-snapshot (issue #8)', () => {
     pair.guest.dispose();
 
     pair = setup();
-    pair.host.loadSnapshot(snap);
-    expect(pair.guest.all()).toEqual([]);  // sanity: guest starts empty
+    pair.host.replaceScene(snap);
 
     pair.firePeerJoin('host', GUEST_PEER_ID);
 
-    const ids = pair.guest.all().map(h => h.id).sort();
+    const ids = pair.guest.all().map(h => h.id).filter(id => id !== TABLE_ENTITY_ID).sort();
     expect(ids).toEqual(['b-1', 'd-1', 't-1']);
 
     const guestDie = pair.guest.get('d-1')!;
@@ -456,11 +523,12 @@ describe('World — late-join scene-snapshot (issue #8)', () => {
     pair.guest.dispose();
 
     pair = setup();
-    pair.host.loadSnapshot(snap);
+    pair.host.replaceScene(snap);
 
     pair.firePeerJoin('host', GUEST_PEER_ID);
     expect(() => pair!.firePeerJoin('host', GUEST_PEER_ID)).not.toThrow();
-    expect(pair.guest.all().map(h => h.id)).toEqual(['d-1']);
+    const ids = pair.guest.all().map(h => h.id).filter(id => id !== TABLE_ENTITY_ID);
+    expect(ids).toEqual(['d-1']);
   });
 
   test('guest peer-join handler is a no-op (only host replays)', () => {
@@ -689,7 +757,7 @@ describe('World — replaceScene (PRD save/load issue #1)', () => {
 
     pair.host.replaceScene(snap);
 
-    const ids = pair.host.all().map(h => h.id).sort();
+    const ids = pair.host.all().map(h => h.id).filter(id => id !== TABLE_ENTITY_ID).sort();
     expect(ids).toEqual(['d-1', 't-1']);
   });
 
@@ -733,7 +801,7 @@ describe('World — replaceScene (PRD save/load issue #1)', () => {
 
     pair.host.replaceScene(snap);
 
-    const guestIds = pair.guest.all().map(h => h.id).sort();
+    const guestIds = pair.guest.all().map(h => h.id).filter(id => id !== TABLE_ENTITY_ID).sort();
     expect(guestIds).toEqual(['d-1', 't-1']);
     expect(pair.guest.get('d-2')).toBeUndefined();
   });
@@ -835,11 +903,13 @@ describe('World — history push hooks (issue #5)', () => {
     pair.host.tick(0.016);
     const entries = pair.host.history!.entries();
     expect(entries.length).toBeGreaterThan(0);
-    const root = entries[0];  // pre-spawn (empty) state
+    const root = entries[0];  // pre-spawn state (Table only)
 
     pair.host.history!.restore(root);
     pair.host.tick(0.016);
-    expect(pair.host.all()).toEqual([]);
-    expect(pair.guest.all()).toEqual([]);
+    const hostIds  = pair.host.all().map(h => h.id).filter(id => id !== TABLE_ENTITY_ID);
+    const guestIds = pair.guest.all().map(h => h.id).filter(id => id !== TABLE_ENTITY_ID);
+    expect(hostIds).toEqual([]);
+    expect(guestIds).toEqual([]);
   });
 });

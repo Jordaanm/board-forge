@@ -3,7 +3,6 @@ import * as THREE from 'three';
 import { type SpawnableType } from '../net/SceneState';
 import { resolveObjectMeta, type PropertyDef } from '../scene/objectMeta';
 import { SEAT_COLOURS } from '../seats/SeatLayout';
-import { type TableProps } from '../scene/Table';
 import { type SkydomeProps } from '../scene/Skydome';
 import { type KeyLightProps } from '../scene/KeyLight';
 import { type ManifestStore } from '../assets/ManifestStore';
@@ -24,14 +23,12 @@ interface Props {
   objects:              ObjectSummary[];
   selectedId:           string | null;
   isFreeCamera:         boolean;
-  tableProps:           TableProps;
   skydomeProps:         SkydomeProps;
   keyLightProps:        KeyLightProps;
   manifestStore:        ManifestStore | null;
   onSelect:             (id: string | null) => void;
   onRollDice:           () => void;
   onUpdateProp:         (id: string, key: string, value: unknown) => void;
-  onUpdateTableProp:    (key: keyof TableProps, value: unknown) => void;
   onUpdateSkydomeProp:  (key: keyof SkydomeProps, value: unknown) => void;
   onUpdateKeyLightProp: (key: keyof KeyLightProps, value: unknown) => void;
   onToggleFreeCamera:   (on: boolean) => void;
@@ -124,10 +121,10 @@ const CHIP_X: React.CSSProperties = {
 };
 
 export function EditorPanel({
-  objects, selectedId, isFreeCamera, tableProps, skydomeProps, keyLightProps,
+  objects, selectedId, isFreeCamera, skydomeProps, keyLightProps,
   manifestStore,
   onSelect, onRollDice, onUpdateProp,
-  onUpdateTableProp, onUpdateSkydomeProp, onUpdateKeyLightProp, onToggleFreeCamera,
+  onUpdateSkydomeProp, onUpdateKeyLightProp, onToggleFreeCamera,
 }: Props) {
   const [open, setOpen]           = useState(true);
   const [collapsed, setCollapsed] = useState(false);
@@ -162,43 +159,12 @@ export function EditorPanel({
         <>
           <SceneGraphList objects={objects} selectedId={selectedId} onSelect={onSelect} />
           <PropertyEditor selected={selected} manifestStore={manifestStore} onUpdateProp={onUpdateProp} />
-          <TableSection tableProps={tableProps} onUpdateTableProp={onUpdateTableProp} />
           <SkydomeSection skydomeProps={skydomeProps} manifestStore={manifestStore} onUpdateSkydomeProp={onUpdateSkydomeProp} />
           <KeyLightSection keyLightProps={keyLightProps} onUpdateKeyLightProp={onUpdateKeyLightProp} />
           <RollSection onRollDice={onRollDice} />
           <CameraSection isFreeCamera={isFreeCamera} onToggleFreeCamera={onToggleFreeCamera} />
         </>
       )}
-    </div>
-  );
-}
-
-function TableSection({
-  tableProps, onUpdateTableProp,
-}: { tableProps: TableProps; onUpdateTableProp: (key: keyof TableProps, value: unknown) => void }) {
-  return (
-    <div style={SECTION}>
-      <div style={SECTION_LABEL}>Table</div>
-      <div style={{ marginBottom: 8 }}>
-        <label style={{ display: 'block', color: '#aaa', fontSize: 11, marginBottom: 3 }}>Shape</label>
-        <select
-          style={INPUT}
-          value={tableProps.shape}
-          onChange={e => onUpdateTableProp('shape', e.target.value)}
-        >
-          <option value="rectangle">Rectangle</option>
-          <option value="circle">Circle</option>
-        </select>
-      </div>
-      <div>
-        <label style={{ display: 'block', color: '#aaa', fontSize: 11, marginBottom: 3 }}>Decoration (color)</label>
-        <input
-          type="color"
-          style={{ ...INPUT, padding: 2, height: 28 }}
-          value={tableProps.color}
-          onChange={e => onUpdateTableProp('color', e.target.value)}
-        />
-      </div>
     </div>
   );
 }

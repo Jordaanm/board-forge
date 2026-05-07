@@ -7,7 +7,7 @@
 // Ownership / lock state are irrelevant — pings are cosmetic.
 
 import * as THREE from 'three';
-import { TABLE_SURFACE_Y, TABLE_WIDTH, TABLE_DEPTH } from '../../scene/Table';
+import { TABLE_SURFACE_Y } from '../../scene/Table';
 import { TransformComponent } from '../../entity/components/TransformComponent';
 import { type Tool, type ToolContext, type ToolPointerEvent } from './types';
 
@@ -96,7 +96,8 @@ export class PingTool implements Tool {
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -TABLE_SURFACE_Y);
     const hit = new THREE.Vector3();
     if (!ctx.raycaster.ray.intersectPlane(plane, hit)) return null;
-    if (Math.abs(hit.x) > TABLE_WIDTH / 2 || Math.abs(hit.z) > TABLE_DEPTH / 2) return null;
+    const { halfWidth, halfDepth } = ctx.world.getTableBounds();
+    if (Math.abs(hit.x) > halfWidth || Math.abs(hit.z) > halfDepth) return null;
     return { point: [hit.x, hit.z] };
   }
 }

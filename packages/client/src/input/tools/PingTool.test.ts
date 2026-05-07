@@ -38,6 +38,7 @@ function makeWorld(handles: FakeEntityHandle[]): World {
     get(id: string): FakeEntityHandle | undefined {
       return handles.find(h => h.id === id);
     },
+    getTableBounds() { return { halfWidth: 6, halfDepth: 4 }; },
     broadcastToolMessage(toolId: string, payload: unknown) {
       broadcasts.push({ toolId, payload });
     },

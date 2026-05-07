@@ -85,11 +85,13 @@ export class MeshComponent extends EntityComponent<MeshState> {
     return halfExtentsFor(this.state.meshRef, this.state.size);
   }
 
-  meshKind(): 'cube' | 'meeple' | 'unknown' {
+  meshKind(): 'cube' | 'meeple' | 'cylinder' | 'unknown' {
     if (this.state.meshRef === 'prim:cube') return 'cube';
     if (this.state.meshRef === 'prim:d6')   return 'cube';
     if (this.state.meshRef === 'prim:card') return 'cube';
     if (this.state.meshRef === 'prim:deck') return 'cube';
+    if (this.state.meshRef === 'prim:table-rect')   return 'cube';
+    if (this.state.meshRef === 'prim:table-circle') return 'cylinder';
     if (this.state.meshRef === 'prim:meeple') return 'meeple';
     return 'unknown';
   }
@@ -188,6 +190,8 @@ function buildMesh(meshRef: string, size: MeshSize): THREE.Object3D {
   if (meshRef === 'prim:d6')   return buildD6(size);
   if (meshRef === 'prim:card') return buildCard(size);
   if (meshRef === 'prim:deck') return buildDeck(size);
+  if (meshRef === 'prim:table-rect')   return buildTableRect(size);
+  if (meshRef === 'prim:table-circle') return buildTableCircle(size);
   if (meshRef === 'prim:meeple') {
     const r = (typeof size === 'number' ? size : size[0]) * 0.5;
     const totalH = (typeof size === 'number' ? size : size[1]);
@@ -215,8 +219,15 @@ function halfExtentsFor(meshRef: string, size: MeshSize): [number, number, numbe
     meshRef === 'prim:cube' ||
     meshRef === 'prim:d6'   ||
     meshRef === 'prim:card' ||
-    meshRef === 'prim:deck'
+    meshRef === 'prim:deck' ||
+    meshRef === 'prim:table-rect'
   ) {
+    const [w, h, d] = sizeToBox(size);
+    return [w / 2, h / 2, d / 2];
+  }
+  if (meshRef === 'prim:table-circle') {
+    // size = [diameter, height, diameter] for a cylinder authored to match
+    // the rect's bounding box conventions.
     const [w, h, d] = sizeToBox(size);
     return [w / 2, h / 2, d / 2];
   }
@@ -227,6 +238,35 @@ function halfExtentsFor(meshRef: string, size: MeshSize): [number, number, numbe
   }
   const [w, h, d] = sizeToBox(size);
   return [w / 2, h / 2, d / 2];
+}
+
+// prim:table-rect — flat box authored with its top surface at local y=0 so
+// the entity's locked-at-origin transform places the play surface at world
+// y=0 regardless of uniform scale.
+function buildTableRect(size: MeshSize): THREE.Object3D {
+  const [w, h, d] = sizeToBox(size);
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(w, h, d),
+    new THREE.MeshLambertMaterial({ color: 0xffffff }),
+  );
+  mesh.position.y    = -h / 2;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+// prim:table-circle — flat cylinder authored with its top surface at local
+// y=0. `size` is consumed as [diameter, thickness, diameter] so the bounding
+// half-extents helper can treat all four flat primitives identically.
+function buildTableCircle(size: MeshSize): THREE.Object3D {
+  const [w, h, _d] = sizeToBox(size);
+  const radius = w / 2;
+  const mesh = new THREE.Mesh(
+    new THREE.CylinderGeometry(radius, radius, h, 64),
+    new THREE.MeshLambertMaterial({ color: 0xffffff }),
+  );
+  mesh.position.y    = -h / 2;
+  mesh.receiveShadow = true;
+  return mesh;
 }
 
 // D6 = chamfered cube body (RoundedBoxGeometry) plus six transparent pip

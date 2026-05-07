@@ -19,6 +19,10 @@ export interface SpawnableDef {
   // Internal spawnables are spawned by the host (e.g. via MergeService for
   // decks) and never appear in the spawn modal. Issue #2 of issues--deck.md.
   internal?:   boolean;
+  // Hidden spawnables are spawnable through Scene.spawn (used by World boot
+  // for the Table singleton) but never surface to discovery UIs (spawn modal,
+  // spawnable search, scripting list-spawnables).
+  hidden?:     boolean;
 }
 
 const SPAWNABLES = new Map<string, SpawnableDef>();
@@ -54,9 +58,10 @@ export function listSpawnables(): SpawnableDef[] {
 }
 
 // Spawnables suitable for the spawn modal — excludes ones flagged `internal`
-// (spawned by the host runtime, e.g. decks).
+// (spawned by the host runtime, e.g. decks) or `hidden` (singletons like the
+// Table that the user can never spawn directly).
 export function listPublicSpawnables(): SpawnableDef[] {
-  return [...SPAWNABLES.values()].filter(d => !d.internal);
+  return [...SPAWNABLES.values()].filter(d => !d.internal && !d.hidden);
 }
 
 export function clearSpawnables(): void {

@@ -15,7 +15,6 @@ import { type Entity } from '../entity/Entity';
 import { type MenuItem } from '../entity/EntityComponent';
 import { type ChannelMessage, type SpawnableType } from '../net/SceneState';
 import { type SeatIndex } from '../seats/SeatLayout';
-import { DEFAULT_TABLE_PROPS, type TableProps } from '../scene/Table';
 import { DEFAULT_SKYDOME_PROPS, type SkydomeProps } from '../scene/Skydome';
 import { DEFAULT_KEY_LIGHT_PROPS, type KeyLightProps } from '../scene/KeyLight';
 import { RoomStateManager } from '../seats/RoomStateManager';
@@ -54,7 +53,6 @@ export function Room({ roomId, isHost }: Props) {
   const [objects,      setObjects]      = useState<ObjectSummary[]>([]);
   const [selectedId,   setSelectedId]   = useState<string | null>(null);
   const [isFreeCamera, setIsFreeCamera] = useState(false);
-  const [tableProps,   setTableProps]   = useState<TableProps>(DEFAULT_TABLE_PROPS);
   const [skydomeProps, setSkydomeProps] = useState<SkydomeProps>(DEFAULT_SKYDOME_PROPS);
   const [keyLightProps, setKeyLightProps] = useState<KeyLightProps>(DEFAULT_KEY_LIGHT_PROPS);
   const [roomSnapshot, setRoomSnapshot] = useState<RoomStateSnapshot | null>(null);
@@ -85,7 +83,6 @@ export function Room({ roomId, isHost }: Props) {
   const shuffleDeckRef     = useRef<(deckId: string) => void>(noop);
   const dealFromDeckRef    = useRef<(deckId: string, count: number, callerSeat: SeatIndex | null) => void>(noop);
   const updatePropRef      = useRef<(id: string, key: string, value: unknown) => void>(noop);
-  const updateTablePropRef    = useRef<(key: keyof TableProps, value: unknown) => void>(noop);
   const updateSkydomePropRef  = useRef<(key: keyof SkydomeProps, value: unknown) => void>(noop);
   const updateKeyLightPropRef = useRef<(key: keyof KeyLightProps, value: unknown) => void>(noop);
   const freeCameraRef      = useRef<(on: boolean) => void>(noop);
@@ -331,11 +328,6 @@ export function Room({ roomId, isHost }: Props) {
     setShowAllZonesRef.current(on);
   };
 
-  const handleUpdateTableProp = (key: keyof TableProps, value: unknown) => {
-    setTableProps(p => ({ ...p, [key]: value }));
-    updateTablePropRef.current(key, value);
-  };
-
   const handleUpdateSkydomeProp = (key: keyof SkydomeProps, value: unknown) => {
     setSkydomeProps(p => ({ ...p, [key]: value as SkydomeProps[typeof key] }));
     updateSkydomePropRef.current(key, value);
@@ -373,7 +365,6 @@ export function Room({ roomId, isHost }: Props) {
         shuffleDeckRef={shuffleDeckRef}
         dealFromDeckRef={dealFromDeckRef}
         updatePropRef={updatePropRef}
-        updateTablePropRef={updateTablePropRef}
         updateSkydomePropRef={updateSkydomePropRef}
         updateKeyLightPropRef={updateKeyLightPropRef}
         freeCameraRef={freeCameraRef}
@@ -453,14 +444,12 @@ export function Room({ roomId, isHost }: Props) {
               objects={objects}
               selectedId={selectedId}
               isFreeCamera={isFreeCamera}
-              tableProps={tableProps}
               skydomeProps={skydomeProps}
               keyLightProps={keyLightProps}
               manifestStore={manifestStore}
               onSelect={setSelectedId}
               onRollDice={() => rollRef.current()}
               onUpdateProp={(id, key, value) => updatePropRef.current(id, key, value)}
-              onUpdateTableProp={handleUpdateTableProp}
               onUpdateSkydomeProp={handleUpdateSkydomeProp}
               onUpdateKeyLightProp={handleUpdateKeyLightProp}
               onToggleFreeCamera={handleToggleFreeCamera}

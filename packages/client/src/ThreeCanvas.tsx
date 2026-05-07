@@ -1,6 +1,5 @@
 import { useEffect, useRef, type MutableRefObject } from 'react';
 import * as THREE from 'three';
-import { createTable, applyTableProp, DEFAULT_TABLE_PROPS, type TableProps, type TableShape } from './scene/Table';
 import { PhysicsWorld } from './physics/PhysicsWorld';
 import { createSkydome, applySkydomeProp, type SkydomeProps } from './scene/Skydome';
 import { createKeyLight, applyKeyLightProp, type KeyLightProps } from './scene/KeyLight';
@@ -65,7 +64,6 @@ interface Props {
   shuffleDeckRef:      MutableRefObject<(deckId: string) => void>;
   dealFromDeckRef:     MutableRefObject<(deckId: string, count: number, callerSeat: SeatIndex | null) => void>;
   updatePropRef:       MutableRefObject<(id: string, key: string, value: unknown) => void>;
-  updateTablePropRef:    MutableRefObject<(key: keyof TableProps, value: unknown) => void>;
   updateSkydomePropRef:  MutableRefObject<(key: keyof SkydomeProps, value: unknown) => void>;
   updateKeyLightPropRef: MutableRefObject<(key: keyof KeyLightProps, value: unknown) => void>;
   freeCameraRef:       MutableRefObject<(on: boolean) => void>;
@@ -102,7 +100,7 @@ export function ThreeCanvas({
   isHost, sendRef, sendToRef, getTargetsRef, getSelfSeatRef, getSelfPeerIdRef, getPeerSeatRef,
   onMsgRef, onPeerLeftRef, onPeerJoinedRef,
   spawnRef, rollRef, onContextMenuRef, deleteObjectRef, drawFromDeckRef, shuffleDeckRef, dealFromDeckRef,
-  updatePropRef, updateTablePropRef, updateSkydomePropRef, updateKeyLightPropRef,
+  updatePropRef, updateSkydomePropRef, updateKeyLightPropRef,
   freeCameraRef, onObjectsChangeRef,
   onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,
   setShowAllZonesRef,
@@ -144,9 +142,6 @@ export function ThreeCanvas({
     const rimLight = new THREE.DirectionalLight(0x9cc9ff, 0.35);
     rimLight.position.set(-6, 6, -4);
     scene.add(rimLight);
-
-    const tableMesh = createTable();
-    scene.add(tableMesh);
 
     const physicsWorld = isHost ? new PhysicsWorld() : null;
 
@@ -407,12 +402,6 @@ export function ThreeCanvas({
       rollRef.current = () => {
         world.forEach((h) => h.entity.getComponent(DiceComponent)?.roll());
       };
-
-      updateTablePropRef.current = (key, value) => {
-        applyTableProp(tableMesh, key, value);
-        if (key === 'shape') physicsWorld?.setTableShape(value as TableShape);
-        sendRef.current({ type: 'table-update', partial: { [key]: value } as Partial<TableProps> }, { reliable: true });
-      };
     }
 
     updateSkydomePropRef.current  = (key, value) => applySkydomeProp(skydomeMesh, key, value);
@@ -422,12 +411,6 @@ export function ThreeCanvas({
     // Cursor traffic stays here (not a SceneMessage). Everything else is
     // forwarded into worldTransport so World's inbound dispatch handles it.
     onMsgRef.current = (peerId, msg) => {
-      if (msg.type === 'table-update') {
-        for (const [k, v] of Object.entries(msg.partial)) {
-          applyTableProp(tableMesh, k as keyof TableProps, v);
-        }
-        return;
-      }
       if (msg.type === 'cursor-position') {
         if (isHost) {
           // Star topology: host relays each guest's cursor to all other peers.
@@ -452,10 +435,6 @@ export function ThreeCanvas({
 
     onPeerJoinedRef.current = (peerId) => {
       transport.firePeerJoin(peerId);
-      if (isHost) {
-        const props = (tableMesh.userData.tableProps ?? DEFAULT_TABLE_PROPS) as TableProps;
-        sendToRef.current(peerId, { type: 'table-update', partial: { ...props } }, { reliable: true });
-      }
     };
 
     // ── Animation loop ────────────────────────────────────────────────────
@@ -556,7 +535,6 @@ export function ThreeCanvas({
       shuffleDeckRef.current  = () => {};
       dealFromDeckRef.current = () => {};
       updatePropRef.current      = () => {};
-      updateTablePropRef.current    = () => {};
       updateSkydomePropRef.current  = () => {};
       updateKeyLightPropRef.current = () => {};
       freeCameraRef.current      = () => {};
@@ -573,7 +551,7 @@ export function ThreeCanvas({
     isHost, sendRef, sendToRef, getTargetsRef, getSelfSeatRef, getSelfPeerIdRef, getPeerSeatRef,
     onMsgRef, onPeerLeftRef, onPeerJoinedRef,
     spawnRef, rollRef, onContextMenuRef, deleteObjectRef, drawFromDeckRef, shuffleDeckRef, dealFromDeckRef,
-    updatePropRef, updateTablePropRef, updateSkydomePropRef, updateKeyLightPropRef,
+    updatePropRef, updateSkydomePropRef, updateKeyLightPropRef,
     freeCameraRef, onObjectsChangeRef,
     onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,
     setShowAllZonesRef, setHandViewRef, requestHandTileMenuRef, playCardToTableRef,

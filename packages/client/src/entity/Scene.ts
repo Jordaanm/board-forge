@@ -8,6 +8,18 @@ import { type SpawnContext, type ComponentReplicator } from './EntityComponent';
 import { componentRegistry, type ComponentRegistry } from './ComponentRegistry';
 import { getSpawnable } from './SpawnableRegistry';
 import { type SeatIndex } from '../seats/SeatLayout';
+import {
+  TABLE_ENTITY_ID,
+  DEFAULT_TABLE_HALF_WIDTH,
+  DEFAULT_TABLE_HALF_DEPTH,
+} from './tableEntity';
+import { TransformComponent } from './components/TransformComponent';
+import { MeshComponent } from './components/MeshComponent';
+
+export interface TableBounds {
+  halfWidth: number;
+  halfDepth: number;
+}
 
 // Per-entity snapshot — also the save-format leaf (PRD § Save / Load).
 export interface EntitySerialized {
@@ -42,6 +54,33 @@ export class SceneImpl {
 
   all(): Entity[] {
     return [...this.entities.values()];
+  }
+
+  // Returns the singleton Table entity, or undefined when the scene has not
+  // yet bootstrapped (host pre-spawn) or the snapshot being loaded does not
+  // include one (legacy save — slice 7 re-bootstraps).
+  getTable(): Entity | undefined {
+    return this.entities.get(TABLE_ENTITY_ID);
+  }
+
+  // World-space half-extents of the Table's play surface. Derived from the
+  // Table's MeshComponent half-extents × TransformComponent.scale (X,Z only —
+  // surface plane is always world y=0). Falls back to default rect-table
+  // dimensions while the Table has not been spawned (e.g. on a guest before
+  // the first scene snapshot arrives).
+  getTableBounds(): TableBounds {
+    const table = this.getTable();
+    if (!table) {
+      return { halfWidth: DEFAULT_TABLE_HALF_WIDTH, halfDepth: DEFAULT_TABLE_HALF_DEPTH };
+    }
+    const mesh      = table.getComponent(MeshComponent);
+    const transform = table.getComponent(TransformComponent);
+    if (!mesh || !transform) {
+      return { halfWidth: DEFAULT_TABLE_HALF_WIDTH, halfDepth: DEFAULT_TABLE_HALF_DEPTH };
+    }
+    const [hx, _hy, hz] = mesh.halfExtents();
+    const [sx, _sy, sz] = transform.state.scale;
+    return { halfWidth: hx * sx, halfDepth: hz * sz };
   }
 
   add(entity: Entity): void {

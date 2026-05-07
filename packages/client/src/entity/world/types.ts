@@ -10,7 +10,7 @@
 import * as THREE from 'three';
 import { type Entity } from '../Entity';
 import { type EntityComponent, type ComponentClass } from '../EntityComponent';
-import { type EntitySerialized } from '../Scene';
+import { type EntitySerialized, type TableBounds } from '../Scene';
 import { type SceneMessage, type ToolBroadcast, type PlaySoundMessage } from '../wire';
 import { type SeatIndex } from '../../seats/SeatLayout';
 import { type PhysicsWorld } from '../../physics/PhysicsWorld';
@@ -90,6 +90,14 @@ export interface World {
   all(): EntityHandle[];
   pickByObject3D(obj: THREE.Object3D): EntityHandle | undefined;
   forEach(fn: (h: EntityHandle) => void): void;
+
+  // Singleton Table accessor + world-space half-extents helper. The Table is
+  // a regular entity (carries TransformComponent + MeshComponent + a marker
+  // TableComponent) but consumers needing its play-surface bounds (PingTool
+  // bounds-check, World on-table rest detection, SeatLayout) read through
+  // these helpers so the Table mesh / scale can change without touching them.
+  getTable(): EntityHandle | undefined;
+  getTableBounds(): TableBounds;
 
   // Coalesced subscription — fires once per state-affecting tick, not per patch.
   subscribe(fn: () => void): () => void;

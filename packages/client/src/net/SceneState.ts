@@ -1,24 +1,17 @@
 // Wire types for room + scene channels. Slice #4 of issues--scene-graph.md
-// stripped the legacy ObjectState / snapshot / patch / update-props /
-// table-update messages — scene replication now flows through the v2 wire
-// shapes in `entity/wire.ts`.
+// stripped the legacy ObjectState / snapshot / patch / update-props
+// messages — scene replication now flows through the v2 wire shapes in
+// `entity/wire.ts`. The bespoke `table-update` envelope was retired in the
+// Table-as-entity refactor (slice 1) once the Table became a regular entity
+// and its state began flowing through component-patches like everything else.
 
 import type { RoomStateMessage } from '../seats/RoomState';
 import type { SceneMessage, ManifestPublishMessage } from '../entity/wire';
 import type { SeatIndex } from '../seats/SeatLayout';
-import type { TableProps } from '../scene/Table';
 
 // Open string type — the spawnable registry is the source of truth. The old
 // closed union became fiction once `card` shipped and won't survive scripting.
 export type SpawnableType = string;
-
-// Table is a scene fixture (not an entity), so its props replicate through
-// this dedicated envelope rather than the entity/component wire. Sent by
-// the host on each prop change, and once on peer-join with the full state.
-export interface TableUpdate {
-  type:    'table-update';
-  partial: Partial<TableProps>;
-}
 
 export type GuestInputMessage =
   | { type: 'guest-drag-start'; objectId: string }
@@ -39,4 +32,4 @@ export interface CursorPosition {
   tool?:  string;
 }
 
-export type ChannelMessage = SceneMessage | GuestInputMessage | RoomStateMessage | CursorPosition | TableUpdate | ManifestPublishMessage;
+export type ChannelMessage = SceneMessage | GuestInputMessage | RoomStateMessage | CursorPosition | ManifestPublishMessage;
