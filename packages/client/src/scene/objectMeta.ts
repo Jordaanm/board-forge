@@ -8,7 +8,12 @@ import { getSpawnable } from '../entity/SpawnableRegistry';
 // table goes away.
 
 export type ActionDef   = { id: string; label: string };
-export type PropertyDef = { key: string; label: string; type: 'number' | 'string' | 'color' | 'boolean' | 'seat' };
+export type PropertyDef = {
+  key:   string;
+  label: string;
+  type:  'number' | 'string' | 'color' | 'boolean' | 'seat'
+       | 'asset:image' | 'asset:model' | 'asset:sound';
+};
 
 export interface ObjectMeta {
   type:           SpawnableType;
@@ -22,10 +27,20 @@ export const OBJECT_META: Record<string, ObjectMeta> = {
     type:  'board',
     label: 'Board',
     propertySchema: [
-      { key: 'name',       label: 'Name',    type: 'string' },
-      { key: 'width',      label: 'Width',   type: 'number' },
-      { key: 'depth',      label: 'Depth',   type: 'number' },
-      { key: 'textureUrl', label: 'Texture', type: 'string' },
+      { key: 'name',       label: 'Name',    type: 'string'      },
+      { key: 'width',      label: 'Width',   type: 'number'      },
+      { key: 'depth',      label: 'Depth',   type: 'number'      },
+      { key: 'textureUrl', label: 'Texture', type: 'asset:image' },
+    ],
+    actions: [],
+  },
+  card: {
+    type:  'card',
+    label: 'Card',
+    propertySchema: [
+      { key: 'name', label: 'Name', type: 'string'      },
+      { key: 'face', label: 'Face', type: 'asset:image' },
+      { key: 'back', label: 'Back', type: 'asset:image' },
     ],
     actions: [],
   },

@@ -450,6 +450,7 @@ export function Room({ roomId, isHost }: Props) {
               tableProps={tableProps}
               skydomeProps={skydomeProps}
               keyLightProps={keyLightProps}
+              manifestStore={manifestStore}
               onSelect={setSelectedId}
               onRollDice={() => rollRef.current()}
               onUpdateProp={(id, key, value) => updatePropRef.current(id, key, value)}

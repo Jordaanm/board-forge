@@ -15,6 +15,7 @@ import { DiceComponent } from './entity/components/DiceComponent';
 import { ZoneComponent } from './entity/components/ZoneComponent';
 import { HandComponent } from './entity/components/HandComponent';
 import { FlatViewComponent } from './entity/components/FlatViewComponent';
+import { CardComponent } from './entity/components/CardComponent';
 import { aggregateContextMenu } from './entity/contextMenu';
 import { encodeSaveFile, downloadSaveFile } from './entity/SaveFile';
 import { captureCanvasThumbnail } from './entity/thumbnail';
@@ -620,6 +621,7 @@ function entityToObjectSummary(entity: Entity): ObjectSummary {
   const mesh  = entity.getComponent(MeshComponent);
   const value = entity.getComponent(ValueComponent);
   const zone  = entity.getComponent(ZoneComponent);
+  const card  = entity.getComponent(CardComponent);
   const props: Record<string, unknown> = { name: entity.name };
   if (entity.type === 'board' && mesh) {
     const sz = mesh.state.size as [number, number, number];
@@ -630,6 +632,9 @@ function entityToObjectSummary(entity: Entity): ObjectSummary {
     props.color = mesh.state.tint;
   } else if (entity.type === 'die' && value) {
     props.value = value.state.value;
+  } else if (entity.type === 'card' && card) {
+    props.face = card.state.face;
+    props.back = card.state.back;
   }
   if (zone) {
     const [hx, hy, hz] = zone.state.halfExtents;

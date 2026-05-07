@@ -1,10 +1,15 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import * as THREE from 'three';
 import { type SpawnableType } from '../net/SceneState';
 import { resolveObjectMeta, type PropertyDef } from '../scene/objectMeta';
 import { SEAT_COLOURS } from '../seats/SeatLayout';
 import { type TableProps } from '../scene/Table';
 import { type SkydomeProps } from '../scene/Skydome';
 import { type KeyLightProps } from '../scene/KeyLight';
+import { type ManifestStore } from '../assets/ManifestStore';
+import { type AssetType } from '../assets/Manifest';
+import { AssetPicker } from './AssetPicker';
+import { assetService } from '../assets/AssetService';
 
 export interface ObjectSummary {
   id: string;
@@ -21,6 +26,7 @@ interface Props {
   tableProps:           TableProps;
   skydomeProps:         SkydomeProps;
   keyLightProps:        KeyLightProps;
+  manifestStore:        ManifestStore | null;
   onSelect:             (id: string | null) => void;
   onRollDice:           () => void;
   onUpdateProp:         (id: string, key: string, value: unknown) => void;
@@ -118,6 +124,7 @@ const CHIP_X: React.CSSProperties = {
 
 export function EditorPanel({
   objects, selectedId, isFreeCamera, tableProps, skydomeProps, keyLightProps,
+  manifestStore,
   onSelect, onRollDice, onUpdateProp,
   onUpdateTableProp, onUpdateSkydomeProp, onUpdateKeyLightProp, onToggleFreeCamera,
 }: Props) {
@@ -153,9 +160,9 @@ export function EditorPanel({
       {!collapsed && (
         <>
           <SceneGraphList objects={objects} selectedId={selectedId} onSelect={onSelect} />
-          <PropertyEditor selected={selected} onUpdateProp={onUpdateProp} />
+          <PropertyEditor selected={selected} manifestStore={manifestStore} onUpdateProp={onUpdateProp} />
           <TableSection tableProps={tableProps} onUpdateTableProp={onUpdateTableProp} />
-          <SkydomeSection skydomeProps={skydomeProps} onUpdateSkydomeProp={onUpdateSkydomeProp} />
+          <SkydomeSection skydomeProps={skydomeProps} manifestStore={manifestStore} onUpdateSkydomeProp={onUpdateSkydomeProp} />
           <KeyLightSection keyLightProps={keyLightProps} onUpdateKeyLightProp={onUpdateKeyLightProp} />
           <RollSection onRollDice={onRollDice} />
           <CameraSection isFreeCamera={isFreeCamera} onToggleFreeCamera={onToggleFreeCamera} />
@@ -196,19 +203,22 @@ function TableSection({
 }
 
 function SkydomeSection({
-  skydomeProps, onUpdateSkydomeProp,
-}: { skydomeProps: SkydomeProps; onUpdateSkydomeProp: (key: keyof SkydomeProps, value: unknown) => void }) {
+  skydomeProps, manifestStore, onUpdateSkydomeProp,
+}: {
+  skydomeProps:        SkydomeProps;
+  manifestStore:       ManifestStore | null;
+  onUpdateSkydomeProp: (key: keyof SkydomeProps, value: unknown) => void;
+}) {
   return (
     <div style={SECTION}>
       <div style={SECTION_LABEL}>Skydome</div>
       <div>
-        <label style={{ display: 'block', color: '#aaa', fontSize: 11, marginBottom: 3 }}>Image URL</label>
-        <input
-          type="text"
-          style={INPUT}
-          placeholder="https://… (equirectangular)"
+        <label style={{ display: 'block', color: '#aaa', fontSize: 11, marginBottom: 3 }}>Image</label>
+        <AssetField
+          assetType="image"
           value={skydomeProps.textureUrl}
-          onChange={e => onUpdateSkydomeProp('textureUrl', e.target.value)}
+          manifestStore={manifestStore}
+          onChange={(v) => onUpdateSkydomeProp('textureUrl', v)}
         />
       </div>
     </div>
@@ -354,8 +364,12 @@ function SceneGraphNode({
 }
 
 function PropertyEditor({
-  selected, onUpdateProp,
-}: { selected: ObjectSummary | null; onUpdateProp: (id: string, key: string, value: unknown) => void }) {
+  selected, manifestStore, onUpdateProp,
+}: {
+  selected:      ObjectSummary | null;
+  manifestStore: ManifestStore | null;
+  onUpdateProp:  (id: string, key: string, value: unknown) => void;
+}) {
   if (!selected) {
     return (
       <div style={SECTION}>
@@ -374,6 +388,7 @@ function PropertyEditor({
           key={p.key}
           def={p}
           value={selected.props[p.key]}
+          manifestStore={manifestStore}
           onChange={(v) => onUpdateProp(selected.id, p.key, v)}
         />
       ))}
@@ -432,8 +447,17 @@ function TagsRow({
 }
 
 function PropertyRow({
-  def, value, onChange,
-}: { def: PropertyDef; value: unknown; onChange: (v: unknown) => void }) {
+  def, value, manifestStore, onChange,
+}: {
+  def:           PropertyDef;
+  value:         unknown;
+  manifestStore: ManifestStore | null;
+  onChange:      (v: unknown) => void;
+}) {
+  const isAsset = def.type === 'asset:image' || def.type === 'asset:model' || def.type === 'asset:sound';
+  const assetType: AssetType | null = isAsset
+    ? (def.type.slice('asset:'.length) as AssetType)
+    : null;
   return (
     <div style={{ marginBottom: 8 }}>
       <label style={{ display: 'block', color: '#aaa', fontSize: 11, marginBottom: 3 }}>{def.label}</label>
@@ -472,8 +496,177 @@ function PropertyRow({
       {def.type === 'seat' && (
         <SeatSelect value={value as number} onChange={onChange} />
       )}
+      {assetType && (
+        <AssetField
+          assetType={assetType}
+          value={(value as string) ?? ''}
+          manifestStore={manifestStore}
+          onChange={(v) => onChange(v)}
+        />
+      )}
     </div>
   );
+}
+
+const ASSET_ROW: React.CSSProperties = {
+  display:      'flex',
+  alignItems:   'center',
+  gap:          6,
+  background:   'rgba(0,0,0,0.4)',
+  border:       '1px solid rgba(255,255,255,0.2)',
+  borderRadius: 3,
+  padding:      4,
+  cursor:       'pointer',
+  minHeight:    32,
+  boxSizing:    'border-box',
+};
+
+const ASSET_THUMB: React.CSSProperties = {
+  width:           28,
+  height:          28,
+  flex:            '0 0 auto',
+  background:      'rgba(255,255,255,0.06)',
+  border:          '1px solid rgba(255,255,255,0.08)',
+  borderRadius:    2,
+  display:         'flex',
+  alignItems:      'center',
+  justifyContent:  'center',
+  fontSize:        9,
+  color:           '#888',
+  textTransform:   'uppercase',
+  overflow:        'hidden',
+};
+
+const ASSET_THUMB_IMG: React.CSSProperties = {
+  width:    '100%',
+  height:   '100%',
+  objectFit: 'cover',
+};
+
+const ASSET_LABEL: React.CSSProperties = {
+  flex:         1,
+  fontSize:     12,
+  color:        '#e8e8e8',
+  whiteSpace:   'nowrap',
+  overflow:     'hidden',
+  textOverflow: 'ellipsis',
+  minWidth:     0,
+};
+
+const ASSET_BTN: React.CSSProperties = {
+  background:   'none',
+  border:       'none',
+  color:        '#aaa',
+  cursor:       'pointer',
+  fontSize:     14,
+  padding:      '0 4px',
+  flex:         '0 0 auto',
+};
+
+function AssetField({
+  assetType, value, manifestStore, onChange,
+}: {
+  assetType:     AssetType;
+  value:         string;
+  manifestStore: ManifestStore | null;
+  onChange:      (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = value || '';
+  const display = describeRef(ref, manifestStore);
+
+  return (
+    <>
+      <div
+        style={ASSET_ROW}
+        onClick={() => setOpen(true)}
+        title={ref || 'No asset selected'}
+      >
+        <AssetThumbnail assetType={assetType} ref_={ref} />
+        <span style={ASSET_LABEL}>{display}</span>
+        <span style={{ color: '#888', flex: '0 0 auto' }}>▼</span>
+        {ref && (
+          <button
+            type="button"
+            style={ASSET_BTN}
+            title="Clear"
+            onClick={(e) => { e.stopPropagation(); onChange(''); }}
+          >×</button>
+        )}
+      </div>
+      <AssetPicker
+        open={open}
+        onClose={() => setOpen(false)}
+        onSelect={(v) => onChange(v)}
+        type={assetType}
+        store={manifestStore}
+        currentRef={ref || undefined}
+      />
+    </>
+  );
+}
+
+function describeRef(ref: string, store: ManifestStore | null): string {
+  if (!ref) return 'No asset';
+  if (ref.includes(':') && !/^https?:|^data:|^blob:/i.test(ref)) {
+    const entry = store?.getDraft().get(ref);
+    if (entry) return entry.name;
+    return ref;
+  }
+  return shortUrl(ref);
+}
+
+function shortUrl(url: string): string {
+  if (url.length <= 40) return url;
+  const idx = url.lastIndexOf('/');
+  const tail = idx >= 0 ? url.slice(idx + 1) : url;
+  return tail.length > 0 ? '…/' + tail : url;
+}
+
+function AssetThumbnail({ assetType, ref_ }: { assetType: AssetType; ref_: string }) {
+  const [src, setSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSrc(null);
+    if (!ref_ || assetType !== 'image') return;
+    const unsub = assetService.subscribe(ref_, 'image', (tex, status) => {
+      if (status !== 'loaded') { setSrc(null); return; }
+      setSrc(textureToDataUrl(tex));
+    });
+    return unsub;
+  }, [ref_, assetType]);
+
+  if (assetType === 'image' && src) {
+    return (
+      <div style={ASSET_THUMB}>
+        <img src={src} alt="" style={ASSET_THUMB_IMG} />
+      </div>
+    );
+  }
+  return <div style={ASSET_THUMB}>{assetType[0]}</div>;
+}
+
+// Snapshot a Three texture into an <img>-friendly data URL by drawing the
+// underlying image to a small canvas. Returns null on environments without a
+// usable image (e.g. tests with the magenta placeholder DataTexture).
+function textureToDataUrl(tex: THREE.Texture): string | null {
+  if (typeof document === 'undefined') return null;
+  const img = (tex as { image?: unknown }).image;
+  if (!img) return null;
+  const w = (img as { width?: number }).width  ?? 0;
+  const h = (img as { height?: number }).height ?? 0;
+  if (!w || !h) return null;
+  try {
+    const canvas = document.createElement('canvas');
+    const SIZE = 64;
+    canvas.width = canvas.height = SIZE;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.drawImage(img as CanvasImageSource, 0, 0, SIZE, SIZE);
+    return canvas.toDataURL('image/png');
+  } catch {
+    return null;
+  }
 }
 
 function SeatSelect({ value, onChange }: { value: number | undefined; onChange: (v: unknown) => void }) {

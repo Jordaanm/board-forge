@@ -27,6 +27,7 @@ import { type SceneMessage, type EntityFieldsPartial } from '../wire';
 import { TransformComponent } from '../components/TransformComponent';
 import { PhysicsComponent } from '../components/PhysicsComponent';
 import { MeshComponent } from '../components/MeshComponent';
+import { CardComponent } from '../components/CardComponent';
 import { ZoneComponent } from '../components/ZoneComponent';
 import { TweenComponent } from '../components/TweenComponent';
 import { HandComponent } from '../components/HandComponent';
@@ -315,6 +316,11 @@ class WorldImpl implements World, HandleRouter {
       else if (key === 'textureUrl') mesh.setState({ textureRefs: { ...mesh.state.textureRefs, default: String(value ?? '') } });
     } else if (entity.type === 'token') {
       if (key === 'color') mesh.setState({ tint: String(value ?? '#ffffff') });
+    } else if (entity.type === 'card') {
+      const card = entity.getComponent(CardComponent);
+      if (card && (key === 'face' || key === 'back')) {
+        card.setState({ [key]: String(value ?? '') } as Partial<{ face: string; back: string }>);
+      }
     }
     this.notify();
   }
