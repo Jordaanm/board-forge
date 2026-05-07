@@ -16,7 +16,7 @@ import { Entity } from '../../entity/Entity';
 import { TableComponent } from '../../entity/components/TableComponent';
 import { type ToolContext, type ToolPointerEvent } from './types';
 import { type EntityHandle, type World } from '../../entity/world';
-import { builtinHostActions } from '../ContextMenuController';
+import { builtinHostActions, ContextMenuController, type ContextMenuRequest } from '../ContextMenuController';
 
 class FakeHandle {
   entity: Entity;
@@ -176,5 +176,33 @@ describe('ContextMenuController — Table suppresses Delete (slice 5)', () => {
     const items = builtinHostActions(e);
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({ kind: 'action', id: '__delete' });
+  });
+});
+
+describe('ContextMenuController — right-click on Table opens no menu', () => {
+  test('onOpen never fires when the contextmenu hit is a Table-bearing handle', () => {
+    const element = document.createElement('div');
+    Object.defineProperty(element, 'getBoundingClientRect', {
+      value: () => ({ left: 0, top: 0, right: 100, bottom: 100, width: 100, height: 100, x: 0, y: 0, toJSON: () => ({}) }),
+    });
+    document.body.appendChild(element);
+
+    const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
+    camera.position.set(0, 5, 0);
+    camera.lookAt(0, 0, 0);
+
+    const table = new FakeHandle('table-1', { table: true });
+    const world = makeWorld([table]);
+
+    const opens: ContextMenuRequest[] = [];
+    const controller = new ContextMenuController(
+      element, camera, /* isHost */ true, world, () => 0, (req) => opens.push(req),
+    );
+
+    element.dispatchEvent(new MouseEvent('contextmenu', { clientX: 50, clientY: 50, bubbles: true }));
+
+    expect(opens).toEqual([]);
+    controller.dispose();
+    document.body.innerHTML = '';
   });
 });

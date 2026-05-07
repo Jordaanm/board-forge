@@ -66,6 +66,11 @@ export class ContextMenuController {
     if (!handle) return;
     const entity = handle.entity;
 
+    // Singleton Table is undeletable and exposes no per-component actions to
+    // the user (PRD § Locking enforcement). Skip the menu entirely so a
+    // right-click on the Table mesh feels like a right-click on empty space.
+    if (entity.hasComponent(TableComponent)) return;
+
     const seat = this.getSelfSeat();
     const ctx: MenuContext = { recipientSeat: seat, isHost: this.isHost, entity };
     const items = aggregateContextMenu(entity, ctx);
