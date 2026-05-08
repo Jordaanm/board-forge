@@ -7,12 +7,13 @@
 // right-click invokes the standard entity context menu. Pointerdown + drag
 // out of the panel triggers `onPlayCardToTable` (issue #5).
 //
-// Issue #5 of issues--interaction.md adds parallel input lifecycle dispatch
-// (`pressed` / `released` / `click`) on the per-entity bus, so scripts and
-// components react to FlatView clicks the same way they react to 3D clicks.
-// Issue #6 layers `hover-start` / `hover-end` on the same callback. `worldHit`
-// is intentionally absent from the payload — scripts use `if (e.worldHit)`
-// as a 3D / 2D discriminant.
+// Issues #5 and #6 of issues--interaction.md add parallel input lifecycle
+// dispatch (`pressed` / `released` / `click` on pointerdown/pointerup,
+// `hover-start` / `hover-end` on pointerenter/pointerleave) on the per-entity
+// bus, so scripts and components react to FlatView events the same way they
+// react to 3D events. CSS hover is unchanged — the new events are additive.
+// `worldHit` is intentionally absent from the payload — scripts use
+// `if (e.worldHit)` as a 3D / 2D discriminant.
 
 import { useEffect, useRef } from 'react';
 import { registerDropTarget } from '../input/dropTargetRegistry';
@@ -36,11 +37,10 @@ interface Props {
   // When set, registers the panel root with `dropTargetRegistry` so GrabTool
   // can route 3D releases over the panel into this hand. Issue #7.
   handEntityId?:      string;
-  // Issue #5 of issues--interaction.md. When set, HandPanel dispatches
-  // `pressed` / `released` / `click` on the per-entity bus through this
-  // callback. Parent (ThreeCanvas via Room) wires it to `World.fireInputEvent`
-  // so dual-fire RPC works identically to 3D. Issue #6 will layer the hover
-  // events on the same callback.
+  // Issues #5 and #6 of issues--interaction.md. When set, HandPanel dispatches
+  // `pressed` / `released` / `click` / `hover-start` / `hover-end` on the
+  // per-entity bus through this callback. Parent (ThreeCanvas via Room) wires
+  // it to `World.fireInputEvent` so dual-fire RPC works identically to 3D.
   onTileInputEvent?:  (tileId: string, eventName: InputEventName, payload: InputEventPayload) => void;
   // Populates `payload.seat` for FlatView events. `null` is the unseated case
   // (spectator). Defaults to null when omitted.
@@ -131,6 +131,16 @@ export function HandPanel({
     document.addEventListener('pointerup',   onUp);
   };
 
+  // Hover events (issue #6). pointerenter/leave on each tile drive hover-
+  // start/hover-end. Native CSS :hover styling is unchanged — these are
+  // additive scripting events.
+  const handleTilePointerEnter = (cardId: string) => (e: React.PointerEvent) => {
+    onTileInputEvent?.(cardId, 'hover-start', buildPayload(e));
+  };
+  const handleTilePointerLeave = (cardId: string) => (e: React.PointerEvent) => {
+    onTileInputEvent?.(cardId, 'hover-end', buildPayload(e));
+  };
+
   return (
     <div className="hand-panel" data-testid="hand-panel" ref={panelRef}>
       {cards.length === 0 && (
@@ -149,6 +159,8 @@ export function HandPanel({
             onTileContextMenu(card.id, e.clientX, e.clientY);
           }}
           onPointerDown={handleTilePointerDown(card.id)}
+          onPointerEnter={handleTilePointerEnter(card.id)}
+          onPointerLeave={handleTilePointerLeave(card.id)}
         />
       ))}
     </div>
@@ -221,13 +233,15 @@ function isPointOverTile(clientX: number, clientY: number, tileId: string): bool
 }
 
 function Tile({
-  card, selected, onClick, onContextMenu, onPointerDown,
+  card, selected, onClick, onContextMenu, onPointerDown, onPointerEnter, onPointerLeave,
 }: {
-  card:          CardTile;
-  selected:      boolean;
-  onClick:       () => void;
-  onContextMenu: (e: React.MouseEvent) => void;
-  onPointerDown: (e: React.PointerEvent) => void;
+  card:           CardTile;
+  selected:       boolean;
+  onClick:        () => void;
+  onContextMenu:  (e: React.MouseEvent) => void;
+  onPointerDown:  (e: React.PointerEvent) => void;
+  onPointerEnter: (e: React.PointerEvent) => void;
+  onPointerLeave: (e: React.PointerEvent) => void;
 }) {
   const cls = `hand-panel__tile${selected ? ' hand-panel__tile--selected' : ''}`;
   return (
@@ -240,6 +254,8 @@ function Tile({
       onClick={onClick}
       onContextMenu={onContextMenu}
       onPointerDown={onPointerDown}
+      onPointerEnter={onPointerEnter}
+      onPointerLeave={onPointerLeave}
       title={card.name}
     >
       {!card.textureRef && (

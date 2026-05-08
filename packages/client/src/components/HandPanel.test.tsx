@@ -408,6 +408,68 @@ describe('HandPanel — input lifecycle dispatch (issue #5)', () => {
   });
 });
 
+describe('HandPanel — hover dispatch (issue #6)', () => {
+  function setupHoverPanel(opts: { selfSeat?: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | null } = {}) {
+    const onTileInputEvent = vi.fn();
+    const result = render(
+      <HandPanel
+        cards={SAMPLE}
+        selectedId={null}
+        onSelectTile={noop}
+        onTileContextMenu={noop}
+        onTileInputEvent={onTileInputEvent}
+        selfSeat={opts.selfSeat ?? 0}
+      />,
+    );
+    return { onTileInputEvent, result };
+  }
+
+  test('pointerenter on a tile fires hover-start', () => {
+    const { onTileInputEvent, result } = setupHoverPanel();
+    const tile = result.getByTestId('hand-panel-tile-c1');
+    fireEvent.pointerEnter(tile);
+    const calls = onTileInputEvent.mock.calls.filter(c => c[1] === 'hover-start');
+    expect(calls).toHaveLength(1);
+    expect(calls[0][0]).toBe('c1');
+  });
+
+  test('pointerleave on a tile fires hover-end', () => {
+    const { onTileInputEvent, result } = setupHoverPanel();
+    const tile = result.getByTestId('hand-panel-tile-c1');
+    fireEvent.pointerLeave(tile);
+    const calls = onTileInputEvent.mock.calls.filter(c => c[1] === 'hover-end');
+    expect(calls).toHaveLength(1);
+    expect(calls[0][0]).toBe('c1');
+  });
+
+  test('moving from one tile to another fires hover-end on old, hover-start on new', () => {
+    const { onTileInputEvent, result } = setupHoverPanel();
+    const c1 = result.getByTestId('hand-panel-tile-c1');
+    const c2 = result.getByTestId('hand-panel-tile-c2');
+    fireEvent.pointerEnter(c1);
+    fireEvent.pointerLeave(c1);
+    fireEvent.pointerEnter(c2);
+
+    const sequence = onTileInputEvent.mock.calls
+      .filter(c => c[1] === 'hover-start' || c[1] === 'hover-end')
+      .map(c => [c[0], c[1]]);
+    expect(sequence).toEqual([
+      ['c1', 'hover-start'],
+      ['c1', 'hover-end'],
+      ['c2', 'hover-start'],
+    ]);
+  });
+
+  test('hover payload omits worldHit and carries seat', () => {
+    const { onTileInputEvent, result } = setupHoverPanel({ selfSeat: 4 });
+    const tile = result.getByTestId('hand-panel-tile-c1');
+    fireEvent.pointerEnter(tile);
+    const payload = onTileInputEvent.mock.calls[0][2];
+    expect(payload.worldHit).toBeUndefined();
+    expect(payload.seat).toBe(4);
+  });
+});
+
 describe('HandPanel — drop-target registration (issue #7)', () => {
   test('registers panel root with handEntityId metadata when prop is set', () => {
     const { container } = render(

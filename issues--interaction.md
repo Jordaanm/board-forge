@@ -145,11 +145,12 @@ The existing tile click → select behavior, right-click → context menu, and p
 
 ---
 
-## Issue 6 — HandPanel: FlatView hover-start / hover-end on tiles
+## Issue 6 — HandPanel: FlatView hover-start / hover-end on tiles ✅
 
 **Type:** AFK
 **Blocked by:** #5
 **User stories:** 20
+**Status:** Complete
 
 ### What to build
 
@@ -157,9 +158,9 @@ Adds `hover-start` / `hover-end` dispatch on tile mouseenter / mouseleave (or po
 
 ### Acceptance criteria
 
-- [ ] Mousing over a hand tile fires `hover-start` on the corresponding entity's bus.
-- [ ] Mousing off (or onto a different tile) fires `hover-end` on the previously-hovered entity's bus.
-- [ ] Payload omits `worldHit`.
-- [ ] Events dual-fire — host receives `guest-input-event` for FlatView hover transitions from a guest peer.
-- [ ] Existing CSS / visual hover behavior on tiles is unchanged.
-- [ ] HandPanel unit test covers: hover transitions across tiles fire `hover-end` on the old, `hover-start` on the new.
+- [x] Mousing over a hand tile fires `hover-start` on the corresponding entity's bus.
+- [x] Mousing off (or onto a different tile) fires `hover-end` on the previously-hovered entity's bus.
+- [x] Payload omits `worldHit`.
+- [x] Events dual-fire — host receives `guest-input-event` for FlatView hover transitions from a guest peer.
+- [x] Existing CSS / visual hover behavior on tiles is unchanged.
+- [x] HandPanel unit test covers: hover transitions across tiles fire `hover-end` on the old, `hover-start` on the new.
