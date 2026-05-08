@@ -31,6 +31,7 @@ import { CameraController } from './camera/CameraController';
 import { ToolDispatcher, TOOL_CATALOGUE, type Tool } from './input/tools';
 import { GrabTool } from './input/tools/GrabTool';
 import { ContextMenuController, type ContextMenuRequest } from './input/ContextMenuController';
+import { InputDispatcher } from './input/InputDispatcher';
 import { type ChannelMessage, type SpawnableType } from './net/SceneState';
 import { type SeatIndex } from './seats/SeatLayout';
 import { CursorTracker } from './cursor/CursorTracker';
@@ -245,6 +246,16 @@ export function ThreeCanvas({
     });
     dispatcher.setActiveTool(grabTool);
 
+    // Parallel observer of pointer input — emits per-entity `pressed` /
+    // `released` / `click` events on the same canvas events the tool
+    // dispatcher consumes. Hover (issue #2) and dual-fire RPC (issue #4)
+    // layer on top of this same instance.
+    const inputDispatcher = new InputDispatcher({
+      world, camera,
+      element:     renderer.domElement,
+      getSelfSeat: () => getSelfSeatRef.current(),
+    });
+
     setActiveToolRef.current = (toolId) => {
       const tool = tools.find(t => t.id === toolId);
       if (!tool) return false;
@@ -447,6 +458,7 @@ export function ThreeCanvas({
 
       world.tick(dt);
       dispatcher.update(dt);
+      inputDispatcher.update(dt);
 
       // ── Cursor: throttled send + render sync ───────────────────────────
       const cursorNow = performance.now();
@@ -508,6 +520,7 @@ export function ThreeCanvas({
       unsubscribe();
       clearHighlightBox();
       dispatcher.dispose();
+      inputDispatcher.dispose();
       moveGizmo.dispose();
       camController.dispose();
       contextCtrl.dispose();
