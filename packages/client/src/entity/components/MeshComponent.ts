@@ -5,6 +5,11 @@
 //   - 'prim:d6'     → a chamfered cube body with pip overlays (single-material body)
 //   - 'prim:d20'    → an icosahedron body with numbered triangular face overlays
 //   - 'prim:meeple' → capsule + sphere group (matches the legacy Token shape)
+//   - 'prim:plane'  → single-quad PlaneGeometry in the local XY plane (normal
+//                     +Z), one `default` material slot. UVs flipped along V so
+//                     canvas top-left renders at the visual top when viewed
+//                     from +Z. Width = size[0], height = size[2]; size[1]
+//                     ignored. Used as the substrate for SurfaceComponent.
 //   - 'prim:card'   → thin box with three material slots: `face` on +Y, `back`
 //                     on -Y, `side` on the four edge faces (BoxGeometry material
 //                     groups remapped to a 3-material array).
@@ -110,6 +115,7 @@ export class MeshComponent extends EntityComponent<MeshState> {
     if (this.state.meshRef === 'prim:d20')  return 'icosahedron';
     if (this.state.meshRef === 'prim:card') return 'cube';
     if (this.state.meshRef === 'prim:deck') return 'cube';
+    if (this.state.meshRef === 'prim:plane') return 'cube';
     if (this.state.meshRef === 'prim:table-rect')   return 'cube';
     if (this.state.meshRef === 'prim:table-circle') return 'cylinder';
     if (this.state.meshRef === 'prim:meeple') return 'meeple';
@@ -211,6 +217,7 @@ function buildMesh(meshRef: string, size: MeshSize): THREE.Object3D {
   if (meshRef === 'prim:d20')  return buildD20(size);
   if (meshRef === 'prim:card') return buildCard(size);
   if (meshRef === 'prim:deck') return buildDeck(size);
+  if (meshRef === 'prim:plane') return buildPlane(size);
   if (meshRef === 'prim:table-rect')   return buildTableRect(size);
   if (meshRef === 'prim:table-circle') return buildTableCircle(size);
   if (meshRef === 'prim:meeple') {
@@ -253,6 +260,11 @@ function halfExtentsFor(meshRef: string, size: MeshSize): [number, number, numbe
     const r = (typeof size === 'number' ? size : size[0]) / 2;
     return [r, r, r];
   }
+  if (meshRef === 'prim:plane') {
+    // Plane lies in local XY: x-extent w/2, y-extent d/2, z-extent 0.
+    const [w, , d] = sizeToBox(size);
+    return [w / 2, d / 2, 0];
+  }
   if (meshRef === 'prim:table-circle') {
     // size = [diameter, height, diameter] for a cylinder authored to match
     // the rect's bounding box conventions.
@@ -266,6 +278,28 @@ function halfExtentsFor(meshRef: string, size: MeshSize): [number, number, numbe
   }
   const [w, h, d] = sizeToBox(size);
   return [w / 2, h / 2, d / 2];
+}
+
+// prim:plane — single-quad PlaneGeometry lying in local XY with normal +Z.
+// Width = size[0], height (in-plane) = size[2]; size[1] (thickness) ignored
+// since a plane has none. UVs are flipped along V so a Canvas2D drawing whose
+// (0, 0) origin is its top-left lands at the visual top-left when the plane
+// is viewed from +Z. Single 'default' material slot — applyMaterialAttributes
+// routes textureRefs.default to the material map.
+function buildPlane(size: MeshSize): THREE.Object3D {
+  const [w, , d] = sizeToBox(size);
+  const geometry = new THREE.PlaneGeometry(w, d);
+  const uv  = geometry.attributes.uv as THREE.BufferAttribute;
+  const arr = uv.array as Float32Array;
+  for (let i = 1; i < arr.length; i += 2) arr[i] = 1 - arr[i];
+  uv.needsUpdate = true;
+  const mesh = new THREE.Mesh(
+    geometry,
+    new THREE.MeshLambertMaterial({ color: 0xffffff }),
+  );
+  mesh.castShadow    = true;
+  mesh.receiveShadow = true;
+  return mesh;
 }
 
 // prim:table-rect — flat box authored with its top surface at local y=0 so
