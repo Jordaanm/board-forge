@@ -188,10 +188,14 @@ export class MeshComponent extends EntityComponent<MeshState> {
         for (const mat of child.material) {
           // Per-material skipTint (deck side stripe map keeps its procedural texture).
           if (mat.userData?.skipTint) continue;
+          // SurfaceComponent owns this slot's `map`; do not overwrite from
+          // textureRefs/tint flow.
+          if (mat.userData?.surfaceOwned) continue;
           const matSlot = (mat.userData?.materialSlot as string | undefined) ?? meshSlot;
           apply(mat, matSlot);
         }
       } else {
+        if ((child.material as THREE.Material).userData?.surfaceOwned) return;
         apply(child.material, meshSlot);
       }
     });
