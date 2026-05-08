@@ -37,7 +37,8 @@
       "Bash(npx *)",
       "Bash(echo \"tc=$?\")",
       "PowerShell(npm run *)",
-      "PowerShell(cd D:/dev/virtual-table/packages/client; npx tsx scripts/gen-script-globals.ts; echo \"EXIT: $LASTEXITCODE\")"
+      "PowerShell(cd D:/dev/virtual-table/packages/client; npx tsx scripts/gen-script-globals.ts; echo \"EXIT: $LASTEXITCODE\")",
+      "Bash(echo \"tsc=$?\")"
     ]
   }
 }
