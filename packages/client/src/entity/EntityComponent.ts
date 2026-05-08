@@ -10,6 +10,7 @@ import { type Entity } from './Entity';
 import { type SeatIndex } from '../seats/SeatLayout';
 import { type PhysicsWorld } from '../physics/PhysicsWorld';
 import { type ComponentPatch, type EntityFieldsPartial } from './wire';
+import { type InputEventPayload } from '../input/inputEvents';
 
 export type ReplicationChannel = 'reliable' | 'unreliable';
 
@@ -123,6 +124,33 @@ export abstract class EntityComponent<TState extends object> {
   onOwnerChanged       (_newOwner: SeatIndex | null, _oldOwner: SeatIndex | null):            void { }
   onIsContainedChanged (_isContained: boolean):                                               void { }
   onAction             (_actionId: string, _args: object | undefined, _ctx: ActionContext):   void { }
+
+  // Per-entity input lifecycle hooks (issue #3 of issues--interaction.md).
+  // Subclasses override these to react to bus events without writing
+  // `entity.addEventListener` boilerplate. The base class registers one
+  // listener per event in `attachInputBus`, called by `Entity.attachComponent`
+  // — subclasses override the methods, never the registration. Mirrors the
+  // existing `onContextMenu` / `onAction` shape.
+  onPress      (_payload: InputEventPayload): void { }
+  onReleased   (_payload: InputEventPayload): void { }
+  onClick      (_payload: InputEventPayload): void { }
+  onHoverStart (_payload: InputEventPayload): void { }
+  onHoverEnd   (_payload: InputEventPayload): void { }
+
+  // Internal — called once by `Entity.attachComponent` immediately after the
+  // component is bound to its entity. Routes bus events to the corresponding
+  // override above. Listeners die with the entity (its `EntityEventBus` is
+  // discarded when the entity is dropped from its scene), so no explicit
+  // teardown is needed.
+  attachInputBus(): void {
+    const e = this.entity;
+    if (!e) return;
+    e.addEventListener('pressed',     (p) => this.onPress     (p as InputEventPayload));
+    e.addEventListener('released',    (p) => this.onReleased  (p as InputEventPayload));
+    e.addEventListener('click',       (p) => this.onClick     (p as InputEventPayload));
+    e.addEventListener('hover-start', (p) => this.onHoverStart(p as InputEventPayload));
+    e.addEventListener('hover-end',   (p) => this.onHoverEnd  (p as InputEventPayload));
+  }
 
   // Host-only at runtime. Merges into `state`, fires `onPropertiesChanged`,
   // and queues a ComponentPatch on the owning World's replicator (if any).

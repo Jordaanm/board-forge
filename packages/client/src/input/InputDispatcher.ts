@@ -33,26 +33,14 @@ import { type Entity } from '../entity/Entity';
 import { type SeatIndex } from '../seats/SeatLayout';
 import { MeshComponent } from '../entity/components/MeshComponent';
 import { isEligibleForInput } from './InputEligibility';
+import { type InputEventName, type InputEventPayload } from './inputEvents';
+
+export type { InputEventName, InputEventPayload } from './inputEvents';
 
 // Shared with GrabTool — a press long / loose enough to start a carry is by
 // definition not a click.
 const MOVE_PX = 5;
 const HOLD_MS = 150;
-
-export type InputEventName =
-  | 'pressed'
-  | 'released'
-  | 'click'
-  | 'hover-start'
-  | 'hover-end';
-
-export interface InputEventPayload {
-  seat:      SeatIndex | null;
-  shiftKey:  boolean;
-  ctrlKey:   boolean;
-  altKey:    boolean;
-  worldHit?: { x: number; y: number; z: number };
-}
 
 export interface InputPickResult {
   entity:   Entity;

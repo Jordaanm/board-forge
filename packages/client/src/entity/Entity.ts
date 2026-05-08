@@ -85,6 +85,10 @@ export class Entity {
     // joins replication immediately. Pre-add attaches (the spawn / load path)
     // get their world reference filled in by SceneImpl.add.
     if (this.scene) comp.world = this.scene.world;
+    // Register lifecycle bus listeners (issue #3 of issues--interaction.md).
+    // The base class wires one listener per input event; subclasses just
+    // override the corresponding `onPress` / `onClick` / etc. methods.
+    comp.attachInputBus();
   }
 
   // Cancel any active tween on this entity. No-op if no TweenComponent is

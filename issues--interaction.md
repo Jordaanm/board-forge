@@ -67,11 +67,12 @@ Despawn while hovered drops the hover-target silently — no synthetic `hover-en
 
 ---
 
-## Issue 3 — EntityComponent lifecycle hooks
+## Issue 3 — EntityComponent lifecycle hooks ✅
 
 **Type:** AFK
 **Blocked by:** #1, #2
 **User stories:** 9, 10
+**Status:** Complete
 
 ### What to build
 
@@ -83,11 +84,11 @@ A small sample component (e.g. one-line `LogClickComponent` that records clicks 
 
 ### Acceptance criteria
 
-- [ ] `EntityComponent` exposes the five new optional methods with no-op defaults.
-- [ ] Subclassing and overriding `onClick` causes the method to fire when the entity's bus dispatches `click`, with the same payload.
-- [ ] Subscriptions are cleaned up by the existing despawn path; no leaks across spawn / despawn cycles.
-- [ ] Component-side consumer test: subclass `EntityComponent` overriding `onClick`, spawn the entity, dispatch `click` on its bus, assert the override was called with the payload. (Light end-to-end; really retesting that the route registers.)
-- [ ] Existing components (`MeshComponent`, `ZoneComponent`, etc.) continue to work unchanged.
+- [x] `EntityComponent` exposes the five new optional methods with no-op defaults.
+- [x] Subclassing and overriding `onClick` causes the method to fire when the entity's bus dispatches `click`, with the same payload.
+- [x] Subscriptions are cleaned up by the existing despawn path; no leaks across spawn / despawn cycles.
+- [x] Component-side consumer test: subclass `EntityComponent` overriding `onClick`, spawn the entity, dispatch `click` on its bus, assert the override was called with the payload. (Light end-to-end; really retesting that the route registers.)
+- [x] Existing components (`MeshComponent`, `ZoneComponent`, etc.) continue to work unchanged.
 
 ---
 
