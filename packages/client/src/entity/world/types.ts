@@ -17,6 +17,7 @@ import { type PhysicsWorld } from '../../physics/PhysicsWorld';
 import { type GuestInputMessage } from '../../net/SceneState';
 import { type SceneHistoryService } from '../SceneHistoryService';
 import { type ScriptHost } from '../../scripting/ScriptHost';
+import { type InputEventName, type InputEventPayload } from '../../input/inputEvents';
 
 // Inbound from the wire: scene-level replication plus guest input streams.
 export type WorldInboundMessage = SceneMessage | GuestInputMessage;
@@ -130,6 +131,13 @@ export interface World {
   // sees their own ping. On host inbound, relays to other peers.
   broadcastToolMessage(toolId: string, payload: unknown): void;
   onToolBroadcast(handler: (msg: ToolBroadcast) => void): () => void;
+
+  // Dual-fire entry point for entity-input events (issue #4 of
+  // issues--interaction.md). Local-bus dispatch first so components and
+  // scripts on the originating peer react instantly; on guests, also emits a
+  // `guest-input-event` RPC so the host re-fires on its bus and host-only
+  // scripts observe every peer's input.
+  fireInputEvent(entity: Entity, eventName: InputEventName, payload: InputEventPayload): void;
 
   // Cosmetic sound broadcast from a host script (`scene.playSound`) — issue
   // #11 of issues--asset-registry.md. Host fires local listeners and relays

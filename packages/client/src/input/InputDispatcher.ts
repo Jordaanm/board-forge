@@ -114,10 +114,11 @@ export class InputDispatcher {
     this.lastPointer = null;
   }
 
-  // Single dispatch entry point. Issue #4 grows this into the dual-fire
-  // (local + host RPC) seam. For now it's a thin wrapper over the bus.
+  // Single dual-fire entry point — delegates to `World.fireInputEvent` so the
+  // local bus dispatch and the (guest-only) `guest-input-event` RPC stay in
+  // lockstep. HandPanel (issues #5/#6) routes through this same method.
   fireInputEvent(entity: Entity, eventName: InputEventName, payload: InputEventPayload): void {
-    entity.dispatchEvent(eventName, payload);
+    this.deps.world.fireInputEvent(entity, eventName, payload);
   }
 
   // Per-frame tick — re-raycasts from the last pointer position and fires

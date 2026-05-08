@@ -57,6 +57,8 @@ import {
   type ReplicationPolicy,
 } from './types';
 import { type HoldRelease, type ToolBroadcast, type PlayCardToTable, type ReorderHand, type TweenIntoHand, type PlaySoundMessage } from '../wire';
+import { type InputEventName, type InputEventPayload } from '../../input/inputEvents';
+import { type GuestInputEvent } from '../../net/SceneState';
 
 // Bounds-enforcement constants — mirror SceneSystemV2 so behaviour is identical
 // during the parity slice. Issue #5 deletes the duplicate.
@@ -853,6 +855,23 @@ class WorldImpl implements World, HandleRouter {
     for (const h of this.playSoundHandlers) h(msg);
   }
 
+  // Dual-fire entry point for entity-input events (issue #4 of
+  // issues--interaction.md). Local bus first so components and scripts on
+  // the originating peer react instantly; guest peers also emit the RPC so
+  // the host's per-entity bus re-fires the event for host-only scripts.
+  fireInputEvent(entity: Entity, eventName: InputEventName, payload: InputEventPayload): void {
+    if (this.disposed) return;
+    entity.dispatchEvent(eventName, payload);
+    if (this.role === 'host') return;
+    const msg: GuestInputEvent = {
+      type:      'guest-input-event',
+      entityId:  entity.id,
+      eventName,
+      payload,
+    };
+    this.transport.send(msg, { reliable: true });
+  }
+
   // Peer-left hook — drops every hold owned by the leaving peer's seat.
   releasePeer(peerId: string): void {
     if (this.role !== 'host') return;
@@ -888,6 +907,19 @@ class WorldImpl implements World, HandleRouter {
       case 'guest-drag-end':
         // Reserved by the wire schema but not produced today.
         return;
+      case 'guest-input-event': {
+        // Dual-fire RPC re-fire (issue #4 of issues--interaction.md).
+        // Validate the sender's seat against the payload, drop on entity-not-
+        // found, then re-fire on the named entity's bus so host-only scripts
+        // observe every peer's input.
+        const senderSeat = this.getPeerSeat(peerId);
+        if (senderSeat === null) return;
+        if (msg.payload.seat !== senderSeat) return;
+        const entity = this.scene.getEntity(msg.entityId);
+        if (!entity) return;
+        entity.dispatchEvent(msg.eventName, msg.payload);
+        return;
+      }
       case 'tool-broadcast':
         // Notify local subscribers (host PingOverlay etc.), then relay to all
         // connected peers via transport.send. The original sender filters
@@ -1016,6 +1048,7 @@ class WorldImpl implements World, HandleRouter {
       case 'guest-drag-move':
       case 'guest-drag-start':
       case 'guest-drag-end':
+      case 'guest-input-event':
         // Host-only inbound paths. Guest drops.
         return;
     }

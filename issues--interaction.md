@@ -92,11 +92,12 @@ A small sample component (e.g. one-line `LogClickComponent` that records clicks 
 
 ---
 
-## Issue 4 — Dual-fire RPC: `guest-input-event` variant + host re-fire
+## Issue 4 — Dual-fire RPC: `guest-input-event` variant + host re-fire ✅
 
 **Type:** AFK
 **Blocked by:** #1, #2
 **User stories:** 7, 8, 26, 27, 28
+**Status:** Complete
 
 ### What to build
 
@@ -108,12 +109,12 @@ No throttling. Hover transitions are sparse; press / release / click are user-ra
 
 ### Acceptance criteria
 
-- [ ] `GuestInputMessage` discriminated union has the new variant; existing `guest-drag-*` variants unchanged.
-- [ ] All five event types use `fireInputEvent` for dispatch; local bus fires before the RPC is sent.
-- [ ] Host receives `guest-input-event` and re-fires on the named entity's bus when the sender's seat matches `payload.seat` and the entity exists.
-- [ ] Host rejects (silently, no host-side fire) when sender's seat does not match `payload.seat` or `entityId` is unknown.
-- [ ] Guest-originated events fire on the LOCAL guest's bus instantly (no host round-trip required for local components or scripts on that peer).
-- [ ] Dual-fire / RPC integration test (mirroring `RtcTransport.test.ts`):
+- [x] `GuestInputMessage` discriminated union has the new variant; existing `guest-drag-*` variants unchanged.
+- [x] All five event types use `fireInputEvent` for dispatch; local bus fires before the RPC is sent.
+- [x] Host receives `guest-input-event` and re-fires on the named entity's bus when the sender's seat matches `payload.seat` and the entity exists.
+- [x] Host rejects (silently, no host-side fire) when sender's seat does not match `payload.seat` or `entityId` is unknown.
+- [x] Guest-originated events fire on the LOCAL guest's bus instantly (no host round-trip required for local components or scripts on that peer).
+- [x] Dual-fire / RPC integration test (mirroring `RtcTransport.test.ts`):
   - guest fires `click` locally → emits `guest-input-event` over transport → host re-fires on the per-entity bus with the originating seat in the payload
   - sender seat mismatch → host rejects
   - unknown `entityId` → host rejects

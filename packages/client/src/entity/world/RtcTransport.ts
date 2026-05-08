@@ -132,8 +132,11 @@ export class RtcTransport implements WorldTransport {
 }
 
 function isSceneMessage(msg: WorldOutboundMessage): msg is SceneMessage {
-  // GuestInputMessage discriminator types are guest-drag-{start,move,end}.
+  // GuestInputMessage discriminators bypass scene-message scrubbing — they
+  // ride the broadcast path straight to the host (guests have no targets in
+  // production; we only care about the broadcast escape).
   return msg.type !== 'guest-drag-start'
       && msg.type !== 'guest-drag-move'
-      && msg.type !== 'guest-drag-end';
+      && msg.type !== 'guest-drag-end'
+      && msg.type !== 'guest-input-event';
 }

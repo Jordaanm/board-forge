@@ -94,6 +94,12 @@ beforeEach(() => {
     get(id: string) {
       return handles.get(id);
     },
+    // Issue #4 routes dispatch through the World; the dual-fire seam lives
+    // there. Test fake fires locally only — RPC behaviour is exercised in
+    // World.test.ts via the in-memory transport pair.
+    fireInputEvent(entity: Entity, eventName: string, payload: unknown) {
+      entity.dispatchEvent(eventName, payload);
+    },
   } as unknown as World;
 
   const picker: EntityPicker = (cx, cy): InputPickResult[] => {
