@@ -1,11 +1,5 @@
 ## TODO
 
-### Refactors
-* The root entity in a Scene is special, and it should be treated differently from other entities.
-  * It should still be an entity in the scene graph, but it should not be rendered.
-  * It instead carries all of the properties for the game/room, such as the Table, Lighting, Skydome, etc. Its also the root object that the script interacts with.
-  * Since it is an entity, it has customData, which is typically where Game-level state is stored, such as the current round, etc.
-
 ### Major Features
 * Turn order management / current turn
 * Multiselect
