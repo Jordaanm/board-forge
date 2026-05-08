@@ -20,6 +20,7 @@ import { TableComponent } from './components/TableComponent';
 import { SkydomeComponent } from './components/SkydomeComponent';
 import { LightingComponent } from './components/LightingComponent';
 import { D6_FACE_MAP } from '../dice/d6';
+import { D20_FACE_MAP } from '../dice/d20';
 
 export function registerCorePrimitives(): void {
   if (!componentRegistry.has('transform')) componentRegistry.register(TransformComponent);
@@ -76,6 +77,21 @@ export function registerCorePrimitives(): void {
       { typeId: 'physics',   state: { mass: 0.2, friction: 0.5, restitution: 0.5, isLocked: false } },
       { typeId: 'value',     state: { value: '6', isNumeric: true } },
       { typeId: 'dice',      state: { maxValue: 6, faceMap: D6_FACE_MAP } },
+      { typeId: 'tween',     state: {} },
+    ],
+  });
+
+  if (!getSpawnable('d20')) registerSpawnable({
+    type:        'd20',
+    label:       'Die (D20)',
+    category:    'Dice',
+    defaultTags: ['die'],
+    components: [
+      { typeId: 'transform', state: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } },
+      { typeId: 'mesh',      state: { meshRef: 'prim:d20', textureRefs: { default: '' }, tint: '#fafafa', size: 1.4 } },
+      { typeId: 'physics',   state: { mass: 0.25, friction: 0.5, restitution: 0.5, isLocked: false } },
+      { typeId: 'value',     state: { value: '20', isNumeric: true } },
+      { typeId: 'dice',      state: { maxValue: 20, faceMap: D20_FACE_MAP } },
       { typeId: 'tween',     state: {} },
     ],
   });

@@ -3,6 +3,7 @@
 // Resolves `meshRef`:
 //   - 'prim:cube'   → a unit cube scaled by `size` (scalar = uniform; tuple = [w,h,d])
 //   - 'prim:d6'     → a chamfered cube body with pip overlays (single-material body)
+//   - 'prim:d20'    → an icosahedron body with numbered triangular face overlays
 //   - 'prim:meeple' → capsule + sphere group (matches the legacy Token shape)
 //   - 'prim:card'   → thin box with three material slots: `face` on +Y, `back`
 //                     on -Y, `side` on the four edge faces (BoxGeometry material
@@ -24,6 +25,12 @@ import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeom
 import { EntityComponent, type SpawnContext, type MenuContext, type MenuItem, type ActionContext } from '../EntityComponent';
 import { TransformComponent } from './TransformComponent';
 import { assetService } from '../../assets/AssetService';
+import {
+  D20_VERTICES,
+  D20_FACES,
+  D20_FACE_MAP,
+  D20_BOUNDING_SPHERE_RADIUS,
+} from '../../dice/d20';
 
 export type MeshSize = number | [number, number, number];
 
@@ -97,9 +104,10 @@ export class MeshComponent extends EntityComponent<MeshState> {
     return [0, 0, 0];
   }
 
-  meshKind(): 'cube' | 'meeple' | 'cylinder' | 'unknown' {
+  meshKind(): 'cube' | 'meeple' | 'cylinder' | 'icosahedron' | 'unknown' {
     if (this.state.meshRef === 'prim:cube') return 'cube';
     if (this.state.meshRef === 'prim:d6')   return 'cube';
+    if (this.state.meshRef === 'prim:d20')  return 'icosahedron';
     if (this.state.meshRef === 'prim:card') return 'cube';
     if (this.state.meshRef === 'prim:deck') return 'cube';
     if (this.state.meshRef === 'prim:table-rect')   return 'cube';
@@ -200,6 +208,7 @@ function buildMesh(meshRef: string, size: MeshSize): THREE.Object3D {
     return mesh;
   }
   if (meshRef === 'prim:d6')   return buildD6(size);
+  if (meshRef === 'prim:d20')  return buildD20(size);
   if (meshRef === 'prim:card') return buildCard(size);
   if (meshRef === 'prim:deck') return buildDeck(size);
   if (meshRef === 'prim:table-rect')   return buildTableRect(size);
@@ -236,6 +245,13 @@ function halfExtentsFor(meshRef: string, size: MeshSize): [number, number, numbe
   ) {
     const [w, h, d] = sizeToBox(size);
     return [w / 2, h / 2, d / 2];
+  }
+  if (meshRef === 'prim:d20') {
+    // Bounding-sphere radius in each axis — overestimates the true AABB
+    // (which is 0.851× this) but gives PhysicsComponent a single radius value
+    // for the ConvexPolyhedron build, and is harmless for spawn placement.
+    const r = (typeof size === 'number' ? size : size[0]) / 2;
+    return [r, r, r];
   }
   if (meshRef === 'prim:table-circle') {
     // size = [diameter, height, diameter] for a cylinder authored to match
@@ -414,6 +430,128 @@ function stripeTextureFor(stripeCount: number): THREE.Texture | null {
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   stripeTextureCache.set(stripeCount, tex);
+  return tex;
+}
+
+// D20 = icosahedron body (single-material) plus 20 transparent triangular
+// overlays carrying numbered face textures. Geometry data is shared with
+// PhysicsComponent so the mesh and the ConvexPolyhedron hull line up exactly.
+function buildD20(size: MeshSize): THREE.Object3D {
+  const s     = typeof size === 'number' ? size : size[0];
+  const scale = (s / 2) / D20_BOUNDING_SPHERE_RADIUS;
+
+  const group = new THREE.Group();
+
+  const positions: number[] = [];
+  const normals:   number[] = [];
+  const centroids: Array<[number, number, number]> = [];
+  for (const face of D20_FACES) {
+    const va = D20_VERTICES[face[0]];
+    const vb = D20_VERTICES[face[1]];
+    const vc = D20_VERTICES[face[2]];
+    let nx = (vb[1] - va[1]) * (vc[2] - va[2]) - (vb[2] - va[2]) * (vc[1] - va[1]);
+    let ny = (vb[2] - va[2]) * (vc[0] - va[0]) - (vb[0] - va[0]) * (vc[2] - va[2]);
+    let nz = (vb[0] - va[0]) * (vc[1] - va[1]) - (vb[1] - va[1]) * (vc[0] - va[0]);
+    const nLen = Math.hypot(nx, ny, nz);
+    nx /= nLen; ny /= nLen; nz /= nLen;
+    for (const v of [va, vb, vc]) {
+      positions.push(v[0] * scale, v[1] * scale, v[2] * scale);
+      normals.push(nx, ny, nz);
+    }
+    centroids.push([
+      ((va[0] + vb[0] + vc[0]) / 3) * scale,
+      ((va[1] + vb[1] + vc[1]) / 3) * scale,
+      ((va[2] + vb[2] + vc[2]) / 3) * scale,
+    ]);
+  }
+  const bodyGeom = new THREE.BufferGeometry();
+  bodyGeom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  bodyGeom.setAttribute('normal',   new THREE.Float32BufferAttribute(normals,   3));
+  const body = new THREE.Mesh(bodyGeom, new THREE.MeshLambertMaterial({ color: 0xffffff }));
+  body.castShadow    = true;
+  body.receiveShadow = true;
+  group.add(body);
+
+  const INSET  = 0.45;   // shrink each label triangle toward its centroid
+  const OUTSET = 0.001;  // sub-mm push along the face normal to dodge z-fighting
+  for (let i = 0; i < D20_FACES.length; i++) {
+    const tex = numberTextureFor(D20_FACE_MAP[i].value);
+    if (!tex) continue;
+    const face = D20_FACES[i];
+    const c    = centroids[i];
+    const cLen = Math.hypot(c[0], c[1], c[2]);
+    const ox   = (c[0] / cLen) * OUTSET;
+    const oy   = (c[1] / cLen) * OUTSET;
+    const oz   = (c[2] / cLen) * OUTSET;
+
+    const lerp = (idx: number): [number, number, number] => {
+      const v  = D20_VERTICES[idx];
+      const sx = v[0] * scale, sy = v[1] * scale, sz = v[2] * scale;
+      return [
+        sx + (c[0] - sx) * INSET + ox,
+        sy + (c[1] - sy) * INSET + oy,
+        sz + (c[2] - sz) * INSET + oz,
+      ];
+    };
+    const pa = lerp(face[0]);
+    const pb = lerp(face[1]);
+    const pc = lerp(face[2]);
+
+    const planeGeom = new THREE.BufferGeometry();
+    planeGeom.setAttribute('position', new THREE.Float32BufferAttribute([
+      pa[0], pa[1], pa[2],
+      pb[0], pb[1], pb[2],
+      pc[0], pc[1], pc[2],
+    ], 3));
+    // UV triangle (0,0)-(1,0)-(0.5,1); centroid at (0.5, 0.333). The number
+    // texture draws its glyph at that UV so it lands on the face centre.
+    planeGeom.setAttribute('uv', new THREE.Float32BufferAttribute([
+      0, 0,
+      1, 0,
+      0.5, 1,
+    ], 2));
+    planeGeom.computeVertexNormals();
+
+    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true });
+    const plane = new THREE.Mesh(planeGeom, mat);
+    plane.userData.skipTint = true;
+    group.add(plane);
+  }
+
+  return group;
+}
+
+const numberTextureCache = new Map<number, THREE.Texture>();
+
+function numberTextureFor(value: number): THREE.Texture | null {
+  if (typeof document === 'undefined') return null;
+  const cached = numberTextureCache.get(value);
+  if (cached) return cached;
+
+  const SIZE   = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = SIZE;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  ctx.clearRect(0, 0, SIZE, SIZE);
+  ctx.fillStyle    = '#1a1a1a';
+  ctx.font         = 'bold 96px sans-serif';
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'middle';
+  // Draw at the UV-triangle centroid: u=0.5, v=0.333 → canvas (0.5, 1-0.333).
+  const cxPx = SIZE * 0.5;
+  const cyPx = SIZE * (1 - 1 / 3);
+  ctx.fillText(String(value), cxPx, cyPx);
+  // Underline 6 and 9 so the orientation reads correctly when settled.
+  if (value === 6 || value === 9) {
+    const w = SIZE * 0.18;
+    ctx.fillRect(cxPx - w / 2, cyPx + 44, w, 4);
+  }
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  numberTextureCache.set(value, tex);
   return tex;
 }
 

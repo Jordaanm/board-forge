@@ -17,6 +17,7 @@ import {
 import { type Entity } from '../Entity';
 import { TransformComponent } from './TransformComponent';
 import { MeshComponent } from './MeshComponent';
+import { D20_VERTICES, D20_FACES, D20_BOUNDING_SPHERE_RADIUS } from '../../dice/d20';
 
 export interface PhysicsState {
   mass:        number;
@@ -248,12 +249,25 @@ function buildBody(state: PhysicsState, mesh: MeshComponent): CANNON.Body {
 function buildShape(mesh: MeshComponent): CANNON.Shape {
   const [hx, hy, hz] = mesh.halfExtents();
   switch (mesh.meshKind()) {
-    case 'meeple':   return new CANNON.Cylinder(hx, hx, hy * 2, 12);
-    case 'cylinder': return new CANNON.Cylinder(hx, hx, hy * 2, 64);
+    case 'meeple':       return new CANNON.Cylinder(hx, hx, hy * 2, 12);
+    case 'cylinder':     return new CANNON.Cylinder(hx, hx, hy * 2, 64);
+    case 'icosahedron':  return buildIcosahedronShape(hx);
     case 'cube':
     case 'unknown':
-    default:         return new CANNON.Box(new CANNON.Vec3(hx, hy, hz));
+    default:             return new CANNON.Box(new CANNON.Vec3(hx, hy, hz));
   }
+}
+
+// d20 hull. `boundingRadius` is the bounding-sphere radius of the visible
+// mesh; the same scaling factor that MeshComponent.buildD20 applies to the
+// raw vertex set is used here so the hull and the mesh are coincident.
+function buildIcosahedronShape(boundingRadius: number): CANNON.ConvexPolyhedron {
+  const scale = boundingRadius / D20_BOUNDING_SPHERE_RADIUS;
+  const vertices = D20_VERTICES.map(
+    ([x, y, z]) => new CANNON.Vec3(x * scale, y * scale, z * scale),
+  );
+  const faces = D20_FACES.map(f => [f[0], f[1], f[2]]);
+  return new CANNON.ConvexPolyhedron({ vertices, faces });
 }
 
 // Linear scan; fine for PoC scale. A body→entity index is a future optimisation.

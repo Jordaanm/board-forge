@@ -9,6 +9,8 @@ import { ValueComponent } from './components/ValueComponent';
 import { DiceComponent } from './components/DiceComponent';
 import { registerCorePrimitives } from './spawnables';
 import { D6_FACE_MAP } from '../dice/d6';
+import { D20_FACE_MAP } from '../dice/d20';
+import * as CANNON from 'cannon-es';
 import { PhysicsWorld } from '../physics/PhysicsWorld';
 
 let scene: SceneImpl;
@@ -33,6 +35,23 @@ describe('spawnables — board / die / token spawn', () => {
     expect(dice).toBeDefined();
     expect(dice!.state.maxValue).toBe(6);
     expect(dice!.state.faceMap).toEqual(D6_FACE_MAP);
+  });
+
+  test('d20 spawns with prim:d20 mesh + 20-face dice map + ConvexPolyhedron body', () => {
+    const e = scene.spawn('d20', ctx);
+    expect(e.type).toBe('d20');
+    expect(e.tags).toEqual(['die']);
+    const mesh = e.getComponent(MeshComponent)!;
+    expect(mesh.state.meshRef).toBe('prim:d20');
+    expect(mesh.meshKind()).toBe('icosahedron');
+    const dice = e.getComponent(DiceComponent)!;
+    expect(dice.state.maxValue).toBe(20);
+    expect(dice.state.faceMap).toEqual(D20_FACE_MAP);
+    const phys = e.getComponent(PhysicsComponent)!;
+    expect(phys.body.shapes[0]).toBeInstanceOf(CANNON.ConvexPolyhedron);
+    const hull = phys.body.shapes[0] as CANNON.ConvexPolyhedron;
+    expect(hull.vertices).toHaveLength(12);
+    expect(hull.faces).toHaveLength(20);
   });
 
   test('board spawns with transform/mesh/physics; no value', () => {

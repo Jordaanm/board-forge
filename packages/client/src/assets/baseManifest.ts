@@ -25,6 +25,7 @@ export const BASE_MANIFEST_ENTRIES: AssetEntry[] = [
 export const PRIMITIVE_MANIFEST_ENTRIES: AssetEntry[] = [
   { slug: 'prim:cube',         name: 'Cube',         type: 'model', url: 'primitive://cube',         preload: true },
   { slug: 'prim:d6',           name: 'D6',           type: 'model', url: 'primitive://d6',           preload: true },
+  { slug: 'prim:d20',          name: 'D20',          type: 'model', url: 'primitive://d20',          preload: true },
   { slug: 'prim:card',         name: 'Card',         type: 'model', url: 'primitive://card',         preload: true },
   { slug: 'prim:deck',         name: 'Deck',         type: 'model', url: 'primitive://deck',         preload: true },
   { slug: 'prim:meeple',       name: 'Meeple',       type: 'model', url: 'primitive://meeple',       preload: true },
