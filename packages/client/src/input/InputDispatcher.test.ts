@@ -1,15 +1,18 @@
-// InputDispatcher unit tests — issue #1 of issues--interaction.md.
+// InputDispatcher unit tests — issues #1 and #2 of issues--interaction.md.
 //
 // Drives the dispatcher with synthetic `PointerEventLike` objects and a
-// scripted picker so the tests exercise pressed / released / click semantics
-// without a DOM environment, mirroring `ToolDispatcher.test.ts`. The picker
-// seam is the test-only override on InputDispatcherDeps; production wires up
-// the real raycaster against `MeshComponent.group`.
+// scripted picker so the tests exercise pressed / released / click / hover
+// semantics without a DOM environment, mirroring `ToolDispatcher.test.ts`.
+// The picker seam is the test-only override on `InputDispatcherDeps`;
+// production wires up the real raycaster against `MeshComponent.group`. The
+// fake picker returns a list (near→far) — eligibility and carry suppression
+// are applied inside the dispatcher.
 
 import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 import * as THREE from 'three';
 import { InputDispatcher, type EntityPicker, type InputPickResult } from './InputDispatcher';
 import { Entity } from '../entity/Entity';
+import { TableComponent } from '../entity/components/TableComponent';
 import { type World } from '../entity/world';
 
 interface FakeHandle {
@@ -71,9 +74,9 @@ let handles:    Map<string, FakeHandle>;
 let world:      World;
 let dispatcher: InputDispatcher;
 let now:        number;
-// Picker scripted per-test: clientX/clientY → entity id (or null). Returns
-// `null` when no entity should be considered hit.
-let pickFor:    (clientX: number, clientY: number) => string | null;
+// Picker scripted per-test: returns the entity ids under (cx, cy) near→far.
+// Empty array means "no hit".
+let pickFor:    (clientX: number, clientY: number) => string[];
 
 const HIT_POINT = { x: 1, y: 2, z: 3 };
 
@@ -82,7 +85,7 @@ beforeEach(() => {
   camera   = new THREE.PerspectiveCamera();
   handles  = new Map();
   now      = 0;
-  pickFor  = () => null;
+  pickFor  = () => [];
 
   world = {
     forEach(fn: (h: FakeHandle) => void) {
@@ -93,12 +96,11 @@ beforeEach(() => {
     },
   } as unknown as World;
 
-  const picker: EntityPicker = (cx, cy): InputPickResult | null => {
-    const id = pickFor(cx, cy);
-    if (!id) return null;
-    const h = handles.get(id);
-    if (!h) return null;
-    return { entity: h.entity, worldHit: { ...HIT_POINT } };
+  const picker: EntityPicker = (cx, cy): InputPickResult[] => {
+    return pickFor(cx, cy)
+      .map((id) => handles.get(id))
+      .filter((h): h is FakeHandle => !!h)
+      .map((h) => ({ entity: h.entity, worldHit: { ...HIT_POINT } }));
   };
 
   dispatcher = new InputDispatcher({
@@ -132,7 +134,7 @@ describe('InputDispatcher — press / release / click', () => {
   test('press → release within 150ms / 5px → fires pressed, released, click', () => {
     const e = addEntity('a');
     const { events } = recordEvents(e);
-    pickFor = () => 'a';
+    pickFor = () => ['a'];
 
     now = 0;
     element.dispatch('pointerdown', pointerEvent({ clientX: 50, clientY: 50 }));
@@ -145,7 +147,7 @@ describe('InputDispatcher — press / release / click', () => {
   test('press → release after 150ms → fires pressed and released only', () => {
     const e = addEntity('a');
     const { events } = recordEvents(e);
-    pickFor = () => 'a';
+    pickFor = () => ['a'];
 
     now = 0;
     element.dispatch('pointerdown', pointerEvent({ clientX: 50, clientY: 50 }));
@@ -158,7 +160,7 @@ describe('InputDispatcher — press / release / click', () => {
   test('press → release after move > 5px → fires pressed and released only', () => {
     const e = addEntity('a');
     const { events } = recordEvents(e);
-    pickFor = () => 'a';
+    pickFor = () => ['a'];
 
     now = 0;
     element.dispatch('pointerdown', pointerEvent({ clientX: 50, clientY: 50 }));
@@ -175,7 +177,7 @@ describe('InputDispatcher — press / release / click', () => {
     const aRec = recordEvents(a);
     const bRec = recordEvents(b);
 
-    pickFor = (cx) => (cx < 50 ? 'a' : 'b');
+    pickFor = (cx) => (cx < 50 ? ['a'] : ['b']);
 
     now = 0;
     element.dispatch('pointerdown', pointerEvent({ clientX: 25, clientY: 50 }));
@@ -189,13 +191,13 @@ describe('InputDispatcher — press / release / click', () => {
   test('despawn while press-captured → no released, no click', () => {
     const e = addEntity('a');
     const { events } = recordEvents(e);
-    pickFor = () => 'a';
+    pickFor = () => ['a'];
 
     now = 0;
     element.dispatch('pointerdown', pointerEvent());
 
     handles.delete('a');
-    pickFor = () => null;
+    pickFor = () => [];
 
     now = 50;
     element.dispatch('pointerup', pointerEvent());
@@ -206,7 +208,7 @@ describe('InputDispatcher — press / release / click', () => {
   test('right-click pointerdown / pointerup emit nothing', () => {
     const e = addEntity('a');
     const { events } = recordEvents(e);
-    pickFor = () => 'a';
+    pickFor = () => ['a'];
 
     element.dispatch('pointerdown', pointerEvent({ button: 2 }));
     element.dispatch('pointerup',   pointerEvent({ button: 2 }));
@@ -217,7 +219,7 @@ describe('InputDispatcher — press / release / click', () => {
   test('middle-click pointerdown / pointerup emit nothing', () => {
     const e = addEntity('a');
     const { events } = recordEvents(e);
-    pickFor = () => 'a';
+    pickFor = () => ['a'];
 
     element.dispatch('pointerdown', pointerEvent({ button: 1 }));
     element.dispatch('pointerup',   pointerEvent({ button: 1 }));
@@ -228,12 +230,23 @@ describe('InputDispatcher — press / release / click', () => {
   test('pointerdown over empty space → no events, no capture', () => {
     const e = addEntity('a');
     const { events } = recordEvents(e);
-    pickFor = () => null;
+    pickFor = () => [];
 
     element.dispatch('pointerdown', pointerEvent());
-    pickFor = () => 'a';
+    pickFor = () => ['a'];
     element.dispatch('pointerup',   pointerEvent());
 
+    expect(events).toEqual([]);
+  });
+
+  test('press on ineligible entity (Table) → no events', () => {
+    const e = addEntity('table');
+    e.attachComponent(new TableComponent());
+    const { events } = recordEvents(e);
+    pickFor = () => ['table'];
+
+    element.dispatch('pointerdown', pointerEvent());
+    element.dispatch('pointerup',   pointerEvent());
     expect(events).toEqual([]);
   });
 });
@@ -242,7 +255,7 @@ describe('InputDispatcher — payload', () => {
   test('payload carries seat, modifier keys, and worldHit', () => {
     const e = addEntity('a');
     const { events } = recordEvents(e);
-    pickFor = () => 'a';
+    pickFor = () => ['a'];
 
     now = 0;
     element.dispatch('pointerdown', pointerEvent({ shiftKey: true, ctrlKey: true, altKey: true }));
@@ -265,7 +278,7 @@ describe('InputDispatcher — payload', () => {
     const e = addEntity('a');
     const { events } = recordEvents(e);
 
-    pickFor = (cx) => (cx < 50 ? 'a' : null);
+    pickFor = (cx) => (cx < 50 ? ['a'] : []);
     now = 0;
     element.dispatch('pointerdown', pointerEvent({ clientX: 25, clientY: 50 }));
     now = 50;
@@ -277,11 +290,154 @@ describe('InputDispatcher — payload', () => {
   });
 });
 
+describe('InputDispatcher — hover-start / hover-end', () => {
+  test('cursor moves over entity → hover-start; moves off → hover-end', () => {
+    const a = addEntity('a');
+    const aRec = recordEvents(a);
+
+    pickFor = () => ['a'];
+    element.dispatch('pointermove', pointerEvent({ clientX: 50, clientY: 50 }));
+    dispatcher.update(0.016);
+    expect(aRec.events.map(ev => ev.name)).toEqual(['hover-start']);
+
+    pickFor = () => [];
+    element.dispatch('pointermove', pointerEvent({ clientX: 90, clientY: 50 }));
+    dispatcher.update(0.016);
+    expect(aRec.events.map(ev => ev.name)).toEqual(['hover-start', 'hover-end']);
+  });
+
+  test('cursor moves from A onto B → hover-end on A, hover-start on B', () => {
+    const a = addEntity('a');
+    const b = addEntity('b');
+    const aRec = recordEvents(a);
+    const bRec = recordEvents(b);
+
+    pickFor = () => ['a'];
+    element.dispatch('pointermove', pointerEvent({ clientX: 25, clientY: 50 }));
+    dispatcher.update(0.016);
+
+    pickFor = () => ['b'];
+    element.dispatch('pointermove', pointerEvent({ clientX: 75, clientY: 50 }));
+    dispatcher.update(0.016);
+
+    expect(aRec.events.map(ev => ev.name)).toEqual(['hover-start', 'hover-end']);
+    expect(bRec.events.map(ev => ev.name)).toEqual(['hover-start']);
+  });
+
+  test('entity moves under stationary cursor → hover-end on old, hover-start on new', () => {
+    const a = addEntity('a');
+    const b = addEntity('b');
+    const aRec = recordEvents(a);
+    const bRec = recordEvents(b);
+
+    // Cursor doesn't move, but the topmost entity changes between frames.
+    element.dispatch('pointermove', pointerEvent({ clientX: 50, clientY: 50 }));
+    pickFor = () => ['a'];
+    dispatcher.update(0.016);
+    pickFor = () => ['b'];
+    dispatcher.update(0.016);
+
+    expect(aRec.events.map(ev => ev.name)).toEqual(['hover-start', 'hover-end']);
+    expect(bRec.events.map(ev => ev.name)).toEqual(['hover-start']);
+  });
+
+  test('carrying entity A → hover-start fires on B (below A), not A', () => {
+    const a = addEntity('a');
+    const b = addEntity('b');
+    const aRec = recordEvents(a);
+    const bRec = recordEvents(b);
+
+    a.heldBy = 0;  // viewer seat carries A
+
+    // Picker reports A near, B far — same cursor position.
+    pickFor = () => ['a', 'b'];
+    element.dispatch('pointermove', pointerEvent({ clientX: 50, clientY: 50 }));
+    dispatcher.update(0.016);
+
+    expect(aRec.events).toEqual([]);
+    expect(bRec.events.map(ev => ev.name)).toEqual(['hover-start']);
+  });
+
+  test('despawn while hovered → no synthetic hover-end', () => {
+    const a = addEntity('a');
+    const aRec = recordEvents(a);
+
+    pickFor = () => ['a'];
+    element.dispatch('pointermove', pointerEvent({ clientX: 50, clientY: 50 }));
+    dispatcher.update(0.016);
+    expect(aRec.events.map(ev => ev.name)).toEqual(['hover-start']);
+
+    handles.delete('a');
+    pickFor = () => [];
+    dispatcher.update(0.016);
+
+    // No hover-end fired despite the cursor no longer hovering anything.
+    expect(aRec.events.map(ev => ev.name)).toEqual(['hover-start']);
+  });
+
+  test('eligibility flips mid-hover (isContained) → hover-end suppressed', () => {
+    const a = addEntity('a');
+    const aRec = recordEvents(a);
+
+    pickFor = () => ['a'];
+    element.dispatch('pointermove', pointerEvent({ clientX: 50, clientY: 50 }));
+    dispatcher.update(0.016);
+
+    a.isContained = true;
+    pickFor = () => [];  // (raycast would also lose A in real code)
+    dispatcher.update(0.016);
+
+    expect(aRec.events.map(ev => ev.name)).toEqual(['hover-start']);
+  });
+
+  test('eligibility flips mid-hover (privateToSeat) → hover-end suppressed', () => {
+    const a = addEntity('a');
+    const aRec = recordEvents(a);
+
+    pickFor = () => ['a'];
+    element.dispatch('pointermove', pointerEvent({ clientX: 50, clientY: 50 }));
+    dispatcher.update(0.016);
+
+    a.privateToSeat = 1;  // viewer is seat 0 — now ineligible
+    dispatcher.update(0.016);
+
+    expect(aRec.events.map(ev => ev.name)).toEqual(['hover-start']);
+  });
+
+  test('carry started mid-hover → hover-end suppressed', () => {
+    const a = addEntity('a');
+    const aRec = recordEvents(a);
+
+    pickFor = () => ['a'];
+    element.dispatch('pointermove', pointerEvent({ clientX: 50, clientY: 50 }));
+    dispatcher.update(0.016);
+
+    a.heldBy = 0;  // viewer picks it up — carry-suppression kicks in
+    dispatcher.update(0.016);
+
+    expect(aRec.events.map(ev => ev.name)).toEqual(['hover-start']);
+  });
+
+  test('hover payload carries seat and last modifier-key state', () => {
+    const a = addEntity('a');
+    const aRec = recordEvents(a);
+
+    pickFor = () => ['a'];
+    element.dispatch('pointermove', pointerEvent({ shiftKey: true }));
+    dispatcher.update(0.016);
+
+    const payload = aRec.events[0].payload as Record<string, unknown>;
+    expect(payload.seat).toBe(0);
+    expect(payload.shiftKey).toBe(true);
+    expect(payload.worldHit).toEqual(HIT_POINT);
+  });
+});
+
 describe('InputDispatcher — dispose', () => {
   test('dispose detaches listeners — subsequent events are ignored', () => {
     const e = addEntity('a');
     const { events } = recordEvents(e);
-    pickFor = () => 'a';
+    pickFor = () => ['a'];
 
     dispatcher.dispose();
     element.dispatch('pointerdown', pointerEvent());

@@ -40,11 +40,12 @@ The bus contract from `EntityEventBus` is preserved unchanged. `EntityFacade.add
 
 ---
 
-## Issue 2 — InputDispatcher: hover-start / hover-end on 3D entities
+## Issue 2 — InputDispatcher: hover-start / hover-end on 3D entities ✅
 
 **Type:** AFK
 **Blocked by:** #1
 **User stories:** 4, 5, 15, 23
+**Status:** Complete
 
 ### What to build
 
@@ -56,13 +57,13 @@ Despawn while hovered drops the hover-target silently — no synthetic `hover-en
 
 ### Acceptance criteria
 
-- [ ] `entity.addEventListener('hover-start', cb)` fires when the cursor moves over the entity.
-- [ ] `hover-end` fires when the cursor moves off, or onto a different topmost entity.
-- [ ] Moving an entity under a stationary cursor causes `hover-end` on the old entity and `hover-start` on the new one.
-- [ ] Carrying entity A with `GrabTool` suppresses hover events on A; entities under the cursor below A still fire normally.
-- [ ] Despawning the hovered entity drops the hover-target silently — no synthetic `hover-end`.
-- [ ] Eligibility flips during hover (entity becomes `isContained`, `privateToSeat` changes) silently drop the hover-target next frame — no synthetic `hover-end`.
-- [ ] Unit tests cover: enter/leave, moving entity under stationary cursor, carry suppression, despawn-while-hovered, eligibility-flip-while-hovered.
+- [x] `entity.addEventListener('hover-start', cb)` fires when the cursor moves over the entity.
+- [x] `hover-end` fires when the cursor moves off, or onto a different topmost entity.
+- [x] Moving an entity under a stationary cursor causes `hover-end` on the old entity and `hover-start` on the new one.
+- [x] Carrying entity A with `GrabTool` suppresses hover events on A; entities under the cursor below A still fire normally.
+- [x] Despawning the hovered entity drops the hover-target silently — no synthetic `hover-end`.
+- [x] Eligibility flips during hover (entity becomes `isContained`, `privateToSeat` changes) silently drop the hover-target next frame — no synthetic `hover-end`.
+- [x] Unit tests cover: enter/leave, moving entity under stationary cursor, carry suppression, despawn-while-hovered, eligibility-flip-while-hovered.
 
 ---
 
