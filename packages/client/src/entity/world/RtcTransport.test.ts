@@ -37,7 +37,7 @@ function privateEntity(id: string, seat: SeatIndex): Entity {
 }
 
 describe('RtcTransport — privacy scrubbing fan-out', () => {
-  test('component-patches: claimant gets full state, others get redacted', () => {
+  test('component-patches: claimant gets full state, non-claimant gets nothing (full-entity filter)', () => {
     const claimantSeat: SeatIndex = 1;
     const targets: ReplicationTarget[] = [
       { peerId: 'p-claimant', peerSeat: claimantSeat, isHost: false },
@@ -53,21 +53,20 @@ describe('RtcTransport — privacy scrubbing fan-out', () => {
     };
     transport.send(msg, { reliable: true });
 
-    expect(sent).toHaveLength(2);
-    const toClaimant = sent.find(s => s.peerId === 'p-claimant')!;
-    const toOther    = sent.find(s => s.peerId === 'p-other')!;
-    expect((toClaimant.msg as typeof msg).patches[0].partial).toEqual({ face: 'A♣', back: 'red' });
-    expect((toOther.msg    as typeof msg).patches[0].partial).toEqual({ face: '', back: 'red' });
+    expect(sent).toHaveLength(1);
+    expect(sent[0].peerId).toBe('p-claimant');
+    expect((sent[0].msg as typeof msg).patches[0].partial).toEqual({ face: 'A♣', back: 'red' });
   });
 
-  test('entity-spawn: components scrubbed for non-claimants', () => {
+  test('entity-spawn: claimant receives full spawn, non-claimant receives nothing', () => {
     const claimantSeat: SeatIndex = 2;
     const targets: ReplicationTarget[] = [
       { peerId: 'p-claimant', peerSeat: claimantSeat, isHost: false },
       { peerId: 'p-other',    peerSeat: 5,            isHost: false },
     ];
     const registry: PrivateFieldRegistry = { card: ['face'] };
-    const { transport, sent } = makeTransport(targets, new Map(), registry);
+    const entities = new Map<string, Entity>([['card-1', privateEntity('card-1', claimantSeat)]]);
+    const { transport, sent } = makeTransport(targets, entities, registry);
 
     const msg: SceneMessage = {
       type: 'entity-spawn',
@@ -79,10 +78,55 @@ describe('RtcTransport — privacy scrubbing fan-out', () => {
     };
     transport.send(msg, { reliable: true });
 
-    const toClaimant = sent.find(s => s.peerId === 'p-claimant')!;
-    const toOther    = sent.find(s => s.peerId === 'p-other')!;
-    expect((toClaimant.msg as typeof msg).entity.components.card).toEqual({ face: 'A♣', back: 'red' });
-    expect((toOther.msg    as typeof msg).entity.components.card).toEqual({ face: '', back: 'red' });
+    expect(sent).toHaveLength(1);
+    expect(sent[0].peerId).toBe('p-claimant');
+    expect((sent[0].msg as typeof msg).entity.components.card).toEqual({ face: 'A♣', back: 'red' });
+  });
+
+  test('component-patches: ancestor-private parent → child patches dropped for non-owner', () => {
+    const parent = privateEntity('parent', 1);
+    const child  = new Entity({ id: 'child', type: 'shape-element', name: 'shape' });
+    child.parentId = 'parent';
+    const targets: ReplicationTarget[] = [
+      { peerId: 'p-owner', peerSeat: 1, isHost: false },
+      { peerId: 'p-other', peerSeat: 5, isHost: false },
+    ];
+    const entities = new Map<string, Entity>([['parent', parent], ['child', child]]);
+    const { transport, sent } = makeTransport(targets, entities, {});
+
+    const msg: SceneMessage = {
+      type: 'component-patches', channel: 'reliable',
+      patches: [{ entityId: 'child', typeId: 'shape-element', partial: { x: 5 } }],
+    };
+    transport.send(msg, { reliable: true });
+
+    expect(sent).toHaveLength(1);
+    expect(sent[0].peerId).toBe('p-owner');
+  });
+
+  test('entity-spawn: child of a private parent is filtered entirely on non-owner fan-out', () => {
+    const parent = privateEntity('parent', 1);
+    const child  = new Entity({ id: 'child', type: 'shape-element', name: 'shape' });
+    child.parentId = 'parent';
+    const targets: ReplicationTarget[] = [
+      { peerId: 'p-owner', peerSeat: 1, isHost: false },
+      { peerId: 'p-other', peerSeat: 5, isHost: false },
+    ];
+    const entities = new Map<string, Entity>([['parent', parent], ['child', child]]);
+    const { transport, sent } = makeTransport(targets, entities, {});
+
+    const msg: SceneMessage = {
+      type: 'entity-spawn',
+      entity: {
+        id: 'child', type: 'shape-element', name: 'shape', tags: [],
+        owner: null, privateToSeat: null, parentId: 'parent', children: [],
+        components: { 'shape-element': { x: 0, y: 0, w: 10, h: 10, kind: 'rect' } },
+      },
+    };
+    transport.send(msg, { reliable: true });
+
+    expect(sent).toHaveLength(1);
+    expect(sent[0].peerId).toBe('p-owner');
   });
 
   test('public entity (privateToSeat null) goes to every peer unchanged', () => {

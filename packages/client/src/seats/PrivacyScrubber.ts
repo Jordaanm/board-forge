@@ -36,34 +36,37 @@ export const DEFAULT_PRIVATE_FIELDS: PrivateFieldRegistry = Object.freeze({
 // module no longer depends on the Scene singleton — issue #5 of issues--arch.md.
 export type EntityLookup = (entityId: string) => Entity | undefined;
 
-// Per-recipient scrub for v2 SceneMessages. Looks up each referenced entity
-// to read `entity.privateToSeat` and decides whether component state
-// fields listed in the registry must be redacted for this recipient.
+// Per-recipient scrub for v2 SceneMessages.
 //
-// With the empty registry shipped today this is the identity. PRD-2 fills in
-// the registry and the host loop already runs through this seam.
+// Two-layer privacy:
+//   1. Whole-entity filtering (issue #6 of issues--ui-surface.md): drop the
+//      entire spawn or patch when any ancestor of the referenced entity has
+//      `privateToSeat ≠ recipient` (host always sees all). Implemented by
+//      `isFilteredFor`. Returning `null` here tells the transport to skip
+//      sending entirely.
+//   2. Field-level redaction (issue #5 of issues--deck.md, #8 of
+//      issues--hand.md): when the entity is publicly visible but specific
+//      fields leak hidden state — the deck rule (`isInDeck`) plus
+//      `privateToSeat` field redaction — substitute the listed fields with
+//      empty strings.
+//
+// The two layers are complementary: layer 1 covers nested-private trees
+// (e.g. surface elements under a private hand-card parent); layer 2 covers
+// the deck case (deck is public, but card.face/back is hidden from all).
 export function scrubSceneMessage(
   ctx:       RecipientContext,
   msg:       SceneMessage,
   registry:  PrivateFieldRegistry,
   getEntity: EntityLookup,
-): SceneMessage {
-  if (Object.keys(registry).length === 0) return msg;
-
+): SceneMessage | null {
   switch (msg.type) {
-    case 'component-patches': {
-      const out = msg.patches.map(p => {
-        const entity = getEntity(p.entityId);
-        if (!entity) return p;
-        return redactComponentPatch(ctx, entity, p, registry, getEntity);
-      });
-      return { type: 'component-patches', channel: msg.channel, patches: out };
-    }
     case 'entity-spawn': {
-      const e          = msg.entity;
+      if (isFilteredFor(msg.entity.id, ctx.peerSeat, ctx.isHost, getEntity)) return null;
+      if (Object.keys(registry).length === 0) return msg;
+      const e        = msg.entity;
       if (ctx.isHost) return msg;
-      const seatPriv   = e.privateToSeat !== null && ctx.peerSeat !== e.privateToSeat;
-      const inDeck     = isInDeck(e.parentId, getEntity);
+      const seatPriv = e.privateToSeat !== null && ctx.peerSeat !== e.privateToSeat;
+      const inDeck   = isInDeck(e.parentId, getEntity);
       if (!seatPriv && !inDeck) return msg;
       const components: Record<string, object> = {};
       for (const [typeId, state] of Object.entries(e.components)) {
@@ -74,9 +77,49 @@ export function scrubSceneMessage(
       }
       return { type: 'entity-spawn', entity: { ...e, components } };
     }
+    case 'component-patches': {
+      const out: typeof msg.patches = [];
+      for (const p of msg.patches) {
+        if (isFilteredFor(p.entityId, ctx.peerSeat, ctx.isHost, getEntity)) continue;
+        if (Object.keys(registry).length === 0) { out.push(p); continue; }
+        const entity = getEntity(p.entityId);
+        if (!entity) { out.push(p); continue; }
+        out.push(redactComponentPatch(ctx, entity, p, registry, getEntity));
+      }
+      if (out.length === 0) return null;
+      return { type: 'component-patches', channel: msg.channel, patches: out };
+    }
+    case 'entity-patch': {
+      if (isFilteredFor(msg.entityId, ctx.peerSeat, ctx.isHost, getEntity)) return null;
+      return msg;
+    }
     default:
       return msg;
   }
+}
+
+// Walks the parent chain (including the entity itself) and returns true iff
+// any ancestor has `privateToSeat ≠ recipientSeat` and the recipient is not
+// the host. Used at fan-out time in `RtcTransport` so spawn/patch messages
+// for filtered entities are dropped entirely (whole-entity gating, not
+// field-level redaction). Issue #6 of issues--ui-surface.md.
+export function isFilteredFor(
+  entityId:      string,
+  recipientSeat: SeatIndex | null,
+  isHost:        boolean,
+  getEntity:     EntityLookup,
+): boolean {
+  if (isHost) return false;
+  let cur = getEntity(entityId);
+  // Belt-and-braces against accidental cycles in parentId chains.
+  let depth = 0;
+  while (cur && depth < 64) {
+    if (cur.privateToSeat !== null && cur.privateToSeat !== recipientSeat) return true;
+    if (!cur.parentId) return false;
+    cur = getEntity(cur.parentId);
+    depth++;
+  }
+  return false;
 }
 
 // True when the supplied parent id resolves to an entity carrying a

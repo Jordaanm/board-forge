@@ -68,7 +68,10 @@ export class RtcTransport implements WorldTransport {
   send(msg: WorldOutboundMessage, opts: { reliable: boolean }): void {
     const targets = this.getTargets();
     if (targets.length > 0 && isSceneMessage(msg)) {
-      // Host broadcast: per-peer fan-out + scrubbing.
+      // Host broadcast: per-peer fan-out + scrubbing. `null` from the
+      // scrubber means the message is fully filtered for this recipient
+      // (e.g. a spawn for an entity nested under a private parent) — skip
+      // the send rather than emitting an empty-payload envelope.
       for (const t of targets) {
         const scrubbed = scrubSceneMessage(
           { peerSeat: t.peerSeat, isHost: t.isHost },
@@ -76,6 +79,7 @@ export class RtcTransport implements WorldTransport {
           this.registry,
           this.getEntity,
         );
+        if (scrubbed === null) continue;
         this.sendTo_(t.peerId, scrubbed, { reliable: opts.reliable });
       }
       return;
@@ -98,6 +102,7 @@ export class RtcTransport implements WorldTransport {
       this.registry,
       this.getEntity,
     );
+    if (scrubbed === null) return;
     this.sendTo_(peerId, scrubbed);
   }
 
