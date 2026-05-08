@@ -439,6 +439,121 @@ describe('InputDispatcher — hover-start / hover-end', () => {
   });
 });
 
+describe('InputDispatcher — surfaceUV propagation', () => {
+  test('press payload carries surfaceUV when picker reports a uv', () => {
+    const e = addEntity('a');
+    const { events } = recordEvents(e);
+    pickFor = () => ['a'];
+
+    // Override picker to attach a uv to the result.
+    const customPicker: EntityPicker = (cx, cy) => {
+      return pickFor(cx, cy)
+        .map((id) => handles.get(id))
+        .filter((h): h is FakeHandle => !!h)
+        .map((h) => ({ entity: h.entity, worldHit: { ...HIT_POINT }, uv: { u: 0.25, v: 0.75 } }));
+    };
+    dispatcher.dispose();
+    dispatcher = new InputDispatcher({
+      world, camera,
+      element: element as unknown as HTMLElement,
+      getSelfSeat: () => 0,
+      pickAt:      customPicker,
+      now:         () => now,
+    });
+    e.addEventListener('pressed', (payload) => events.push({ name: 'pressed', payload }));
+    e.addEventListener('click',   (payload) => events.push({ name: 'click',   payload }));
+
+    now = 0;
+    element.dispatch('pointerdown', pointerEvent());
+    now = 50;
+    element.dispatch('pointerup',   pointerEvent());
+
+    const press = events.find(ev => ev.name === 'pressed');
+    expect((press!.payload as { surfaceUV?: unknown }).surfaceUV).toEqual({ u: 0.25, v: 0.75 });
+    const click = events.find(ev => ev.name === 'click');
+    expect((click!.payload as { surfaceUV?: unknown }).surfaceUV).toEqual({ u: 0.25, v: 0.75 });
+  });
+
+  test('hover-start payload carries surfaceUV when picker reports a uv', () => {
+    const e = addEntity('a');
+    const { events } = recordEvents(e);
+
+    const customPicker: EntityPicker = (cx, cy) => {
+      const ids = pickFor(cx, cy);
+      return ids
+        .map((id) => handles.get(id))
+        .filter((h): h is FakeHandle => !!h)
+        .map((h) => ({ entity: h.entity, worldHit: { ...HIT_POINT }, uv: { u: 0.5, v: 0.5 } }));
+    };
+    dispatcher.dispose();
+    dispatcher = new InputDispatcher({
+      world, camera,
+      element: element as unknown as HTMLElement,
+      getSelfSeat: () => 0,
+      pickAt:      customPicker,
+      now:         () => now,
+    });
+    e.addEventListener('hover-start', (payload) => events.push({ name: 'hover-start', payload }));
+
+    pickFor = () => ['a'];
+    element.dispatch('pointermove', pointerEvent({ clientX: 50, clientY: 50 }));
+    dispatcher.update(0.016);
+
+    const hover = events.find(ev => ev.name === 'hover-start');
+    expect((hover!.payload as { surfaceUV?: unknown }).surfaceUV).toEqual({ u: 0.5, v: 0.5 });
+  });
+
+  test('default raycast picker populates uv from THREE.Intersection.uv', () => {
+    // Build a real plane mesh and exercise defaultPick via the dispatcher's
+    // production path. The plane sits in front of the camera; the centre of
+    // the canvas should hit at uv≈(0.5, 0.5).
+    const planeEntity = addEntity('plane');
+    const planeMesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(2, 2),
+      new THREE.MeshBasicMaterial(),
+    );
+    // Place the plane 5 units in front of a camera at origin looking down -Z.
+    planeMesh.position.set(0, 0, -5);
+    const realCamera = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
+    realCamera.position.set(0, 0, 0);
+    realCamera.lookAt(0, 0, -5);
+
+    // Stand up a fake World wrapping the single plane mesh.
+    const fakeWorld = {
+      forEach(fn: (h: { get: (cls: unknown) => { group: THREE.Object3D } }) => void) {
+        fn({ get: () => ({ group: planeMesh }) });
+      },
+      pickByObject3D(_obj: THREE.Object3D) {
+        return { entity: planeEntity };
+      },
+      fireInputEvent(entity: Entity, eventName: string, payload: unknown) {
+        entity.dispatchEvent(eventName, payload);
+      },
+    } as unknown as World;
+
+    const realElement = new FakeElement();
+    const realDispatcher = new InputDispatcher({
+      world: fakeWorld,
+      camera: realCamera,
+      element: realElement as unknown as HTMLElement,
+      getSelfSeat: () => 0,
+      now: () => 0,
+    });
+
+    const events: { name: string; payload: unknown }[] = [];
+    planeEntity.addEventListener('pressed', (p) => events.push({ name: 'pressed', payload: p }));
+
+    realElement.dispatch('pointerdown', pointerEvent({ clientX: 50, clientY: 50 }));
+
+    expect(events).toHaveLength(1);
+    const uv = (events[0].payload as { surfaceUV?: { u: number; v: number } }).surfaceUV;
+    expect(uv).toBeDefined();
+    expect(uv!.u).toBeCloseTo(0.5, 5);
+    expect(uv!.v).toBeCloseTo(0.5, 5);
+    realDispatcher.dispose();
+  });
+});
+
 describe('InputDispatcher — dispose', () => {
   test('dispose detaches listeners — subsequent events are ignored', () => {
     const e = addEntity('a');

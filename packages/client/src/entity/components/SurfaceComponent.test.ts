@@ -11,6 +11,7 @@ import { SurfaceComponent } from './SurfaceComponent';
 import { ShapeElement } from './ShapeElement';
 import { surfaceRenderQueue } from './SurfaceRenderQueue';
 import { elementBitmapCache } from './ElementBitmapCache';
+import type { InputEventPayload } from '../../input/inputEvents';
 
 // jsdom does not ship a 2D rasteriser. We install a recording stub on the
 // canvas prototype so SurfaceComponent.onSpawn gets a non-null ctx and we
@@ -228,6 +229,119 @@ describe('SurfaceComponent — composition', () => {
 
     elements[0].onDespawn(ctx);
     expect(surfaceRenderQueue.size()).toBe(1);
+  });
+});
+
+describe('SurfaceComponent — press/click forwarding (issue #4)', () => {
+  function recordEvents(e: Entity, names: readonly string[] = ['pressed', 'released', 'click']) {
+    const events: { name: string; payload: unknown }[] = [];
+    for (const n of names) e.addEventListener(n, (p) => events.push({ name: n, payload: p }));
+    return events;
+  }
+  function mkPayload(uv?: { u: number; v: number }): InputEventPayload {
+    const p: InputEventPayload = { seat: 0, shiftKey: false, ctrlKey: false, altKey: false };
+    if (uv) p.surfaceUV = uv;
+    return p;
+  }
+
+  test('UV → pixel resolves to the correct child element; payload carries surfaceUV + pixel', () => {
+    const tree = spawnSurfaceTree({
+      canvasSize: [200, 100],
+      shapes: [
+        { id: 'a', state: { x: 0,   y: 0, w: 100, h: 100, kind: 'rect', fill: '#f00' } },
+        { id: 'b', state: { x: 100, y: 0, w: 100, h: 100, kind: 'rect', fill: '#0f0' } },
+      ],
+    });
+    const a = tree.scene.getEntity('a')!;
+    const b = tree.scene.getEntity('b')!;
+    const aEv = recordEvents(a);
+    const bEv = recordEvents(b);
+
+    // uv (0.25, 0.5) → pixel (50, 50) — inside element 'a'.
+    tree.surface.onClick(mkPayload({ u: 0.25, v: 0.5 }));
+    expect(aEv.map(e => e.name)).toEqual(['click']);
+    expect(bEv).toEqual([]);
+    const payload = aEv[0].payload as { surfaceUV: unknown; pixel: unknown; seat: number };
+    expect(payload.surfaceUV).toEqual({ u: 0.25, v: 0.5 });
+    expect(payload.pixel).toEqual({ x: 50, y: 50 });
+    expect(payload.seat).toBe(0);
+  });
+
+  test('reverse z-order: later child wins when bounds overlap', () => {
+    const tree = spawnSurfaceTree({
+      canvasSize: [100, 100],
+      shapes: [
+        { id: 'bottom', state: { x: 0, y: 0, w: 100, h: 100, kind: 'rect', fill: '#f00' } },
+        { id: 'top',    state: { x: 0, y: 0, w: 100, h: 100, kind: 'rect', fill: '#0f0' } },
+      ],
+    });
+    const bottom = tree.scene.getEntity('bottom')!;
+    const top    = tree.scene.getEntity('top')!;
+    const bottomEv = recordEvents(bottom);
+    const topEv    = recordEvents(top);
+
+    tree.surface.onClick(mkPayload({ u: 0.5, v: 0.5 }));
+    expect(topEv.map(e => e.name)).toEqual(['click']);
+    expect(bottomEv).toEqual([]);
+  });
+
+  test('miss (UV outside every element) leaves the event on the surface', () => {
+    const tree = spawnSurfaceTree({
+      canvasSize: [200, 200],
+      shapes: [
+        { id: 'a', state: { x: 0, y: 0, w: 50, h: 50, kind: 'rect', fill: '#f00' } },
+      ],
+    });
+    const a = tree.scene.getEntity('a')!;
+    const aEv = recordEvents(a);
+
+    // uv (0.9, 0.9) → pixel (180, 180) — outside element 'a'.
+    tree.surface.onClick(mkPayload({ u: 0.9, v: 0.9 }));
+    expect(aEv).toEqual([]);
+    // Surface entity's own listeners (the dispatcher fired these before the
+    // forwarding hook ran) are unaffected — onClick simply did not forward.
+  });
+
+  test('payload without surfaceUV is a no-op (no element dispatch)', () => {
+    const tree = spawnSurfaceTree({
+      shapes: [{ id: 'a', state: { x: 0, y: 0, w: 50, h: 50, kind: 'rect', fill: '#f00' } }],
+    });
+    const a = tree.scene.getEntity('a')!;
+    const aEv = recordEvents(a);
+
+    tree.surface.onClick(mkPayload());
+    expect(aEv).toEqual([]);
+  });
+
+  test('press / released / click all forward identically', () => {
+    const tree = spawnSurfaceTree({
+      shapes: [{ id: 'a', state: { x: 0, y: 0, w: 200, h: 200, kind: 'rect', fill: '#f00' } }],
+    });
+    const a = tree.scene.getEntity('a')!;
+    const aEv = recordEvents(a);
+
+    const payload = mkPayload({ u: 0.5, v: 0.5 });
+    tree.surface.onPress(payload);
+    tree.surface.onReleased(payload);
+    tree.surface.onClick(payload);
+    expect(aEv.map(e => e.name)).toEqual(['pressed', 'released', 'click']);
+  });
+
+  test('forward does NOT route through World.fireInputEvent (local-only re-fire)', () => {
+    // The element entity's bus must have received exactly one dispatch — if
+    // the surface re-routed through fireInputEvent (which on a guest also
+    // emits a guest-input-event RPC), that would re-enter the bus once more
+    // via the host inbound path. Here we simply verify the re-fire goes
+    // through entity.dispatchEvent directly, not through any world hook.
+    const tree = spawnSurfaceTree({
+      canvasSize: [200, 200],
+      shapes: [{ id: 'a', state: { x: 0, y: 0, w: 200, h: 200, kind: 'rect', fill: '#f00' } }],
+    });
+    const a = tree.scene.getEntity('a')!;
+    let calls = 0;
+    a.addEventListener('click', () => calls++);
+    tree.surface.onClick(mkPayload({ u: 0.5, v: 0.5 }));
+    expect(calls).toBe(1);
   });
 });
 

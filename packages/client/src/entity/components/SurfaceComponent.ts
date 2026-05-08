@@ -22,6 +22,8 @@ import { EntityComponent, type SpawnContext, type ReplicationChannel } from '../
 import { MeshComponent } from './MeshComponent';
 import { surfaceRenderQueue } from './SurfaceRenderQueue';
 import type { ElementComponent, ElementBounds } from './ElementComponent';
+import type { InputEventPayload } from '../../input/inputEvents';
+import type { Entity } from '../Entity';
 
 export interface SurfaceState {
   canvasSize: [number, number];
@@ -73,6 +75,48 @@ export class SurfaceComponent extends EntityComponent<SurfaceState> {
 
   markDirty(): void {
     surfaceRenderQueue.markDirty(this);
+  }
+
+  // Press / released / click forwarding (issue #4 of issues--ui-surface.md).
+  // The dispatcher fires the event on the surface entity bus with
+  // `payload.surfaceUV` populated from the THREE intersection. We resolve UV
+  // → pixel, walk children in reverse z-order, and re-fire the same event
+  // on the first element entity whose bounds contain the pixel. Re-fire is
+  // local-only (does NOT route through World.fireInputEvent — element-level
+  // dispatch is deterministic on every peer because element state is
+  // replicated). Misses leave the event on the surface.
+  onPress    (payload: InputEventPayload): void { this.forwardEvent('pressed',  payload); }
+  onReleased (payload: InputEventPayload): void { this.forwardEvent('released', payload); }
+  onClick    (payload: InputEventPayload): void { this.forwardEvent('click',    payload); }
+
+  private forwardEvent(name: 'pressed' | 'released' | 'click', payload: InputEventPayload): Entity | null {
+    const uv = payload.surfaceUV;
+    if (!uv) return null;
+    const hit = this.resolveElementAtUV(uv);
+    if (!hit) return null;
+    const extended: InputEventPayload = { ...payload, surfaceUV: { ...uv }, pixel: hit.pixel };
+    hit.entity.dispatchEvent(name, extended);
+    return hit.entity;
+  }
+
+  // Exposed so #5 (hover forwarding) can share the resolution path.
+  resolveElementAtUV(uv: { u: number; v: number }): { entity: Entity; pixel: { x: number; y: number } } | null {
+    const [w, h] = this.state.canvasSize;
+    const pixel  = { x: uv.u * w, y: uv.v * h };
+    const scene  = this.entity.scene;
+    if (!scene) return null;
+    const childIds = this.entity.children;
+    for (let i = childIds.length - 1; i >= 0; i--) {
+      const child = scene.getEntity(childIds[i]);
+      if (!child) continue;
+      const el = findElementComponent(child);
+      if (!el) continue;
+      const b = el.getBounds();
+      if (pixel.x < b.x || pixel.x >= b.x + b.w) continue;
+      if (pixel.y < b.y || pixel.y >= b.y + b.h) continue;
+      return { entity: child, pixel };
+    }
+    return null;
   }
 
   // Drain entry point — invoked by SurfaceRenderQueue. Walks

@@ -45,6 +45,11 @@ const HOLD_MS = 150;
 export interface InputPickResult {
   entity:   Entity;
   worldHit: { x: number; y: number; z: number };
+  // Optional UV at the hit point, populated by the default raycast picker
+  // from `THREE.Intersection.uv` (issue #4 of issues--ui-surface.md).
+  // Threaded into the event payload as `surfaceUV` so SurfaceComponent can
+  // resolve clicks onto the covered child element.
+  uv?: { u: number; v: number };
 }
 
 // Returns the list of entities under the pointer, sorted near→far. The
@@ -156,7 +161,7 @@ export class InputDispatcher {
       this.fireInputEvent(
         target.entity,
         'hover-start',
-        this.buildHoverPayload(seat, target.worldHit),
+        this.buildHoverPayload(seat, target.worldHit, target.uv),
       );
     }
   }
@@ -174,7 +179,7 @@ export class InputDispatcher {
       startT:    this.now(),
       pointerId: e.pointerId,
     };
-    this.fireInputEvent(hit.entity, 'pressed', this.buildPayload(e, hit.worldHit));
+    this.fireInputEvent(hit.entity, 'pressed', this.buildPayload(e, hit.worldHit, hit.uv));
   };
 
   private onPointerMove = (e: PointerEventLike): void => {
@@ -202,7 +207,11 @@ export class InputDispatcher {
     this.fireInputEvent(
       captured,
       'released',
-      this.buildPayload(e, overCaptured ? releaseHit?.worldHit : undefined),
+      this.buildPayload(
+        e,
+        overCaptured ? releaseHit?.worldHit : undefined,
+        overCaptured ? releaseHit?.uv       : undefined,
+      ),
     );
 
     if (!overCaptured) return;
@@ -211,7 +220,11 @@ export class InputDispatcher {
     if (dx * dx + dy * dy > MOVE_PX * MOVE_PX) return;
     if (this.now() - capture.startT >= HOLD_MS) return;
 
-    this.fireInputEvent(captured, 'click', this.buildPayload(e, releaseHit?.worldHit));
+    this.fireInputEvent(
+      captured,
+      'click',
+      this.buildPayload(e, releaseHit?.worldHit, releaseHit?.uv),
+    );
   };
 
   // Press uses eligibility-only filtering. Carry suppression doesn't apply —
@@ -237,14 +250,19 @@ export class InputDispatcher {
     return null;
   }
 
-  private buildPayload(e: PointerEventLike, worldHit?: { x: number; y: number; z: number }): InputEventPayload {
+  private buildPayload(
+    e: PointerEventLike,
+    worldHit?: { x: number; y: number; z: number },
+    uv?:       { u: number; v: number },
+  ): InputEventPayload {
     const payload: InputEventPayload = {
       seat:     this.deps.getSelfSeat(),
       shiftKey: e.shiftKey,
       ctrlKey:  e.ctrlKey,
       altKey:   e.altKey,
     };
-    if (worldHit) payload.worldHit = worldHit;
+    if (worldHit) payload.worldHit  = worldHit;
+    if (uv)       payload.surfaceUV = uv;
     return payload;
   }
 
@@ -253,7 +271,11 @@ export class InputDispatcher {
   // observed — keeps `shiftKey` etc. populated consistently with click events
   // even when hover transitions are entity-driven (entity moves under a
   // stationary cursor).
-  private buildHoverPayload(seat: SeatIndex | null, worldHit?: { x: number; y: number; z: number }): InputEventPayload {
+  private buildHoverPayload(
+    seat:      SeatIndex | null,
+    worldHit?: { x: number; y: number; z: number },
+    uv?:       { u: number; v: number },
+  ): InputEventPayload {
     const last = this.lastPointer;
     const payload: InputEventPayload = {
       seat,
@@ -261,7 +283,8 @@ export class InputDispatcher {
       ctrlKey:  last?.ctrlKey  ?? false,
       altKey:   last?.altKey   ?? false,
     };
-    if (worldHit) payload.worldHit = worldHit;
+    if (worldHit) payload.worldHit  = worldHit;
+    if (uv)       payload.surfaceUV = uv;
     return payload;
   }
 
@@ -293,10 +316,12 @@ export class InputDispatcher {
       if (!handle) continue;
       if (seen.has(handle.entity.id)) continue;
       seen.add(handle.entity.id);
-      results.push({
+      const result: InputPickResult = {
         entity:   handle.entity,
         worldHit: { x: hit.point.x, y: hit.point.y, z: hit.point.z },
-      });
+      };
+      if (hit.uv) result.uv = { u: hit.uv.x, v: hit.uv.y };
+      results.push(result);
     }
     return results;
   };
