@@ -93,9 +93,11 @@ interface PointerEventLike {
 }
 
 export class InputDispatcher {
-  private capture:   CaptureState | null = null;
-  private hoveredId: string | null       = null;
-  private lastPointer: PointerEventLike | null = null;
+  private capture:       CaptureState | null    = null;
+  private hoveredId:     string | null          = null;
+  private lastPointer:   PointerEventLike | null = null;
+  private lastWorldHit:  { x: number; y: number; z: number } | null = null;
+  private lastUV:        { u: number; v: number } | null            = null;
 
   private readonly raycaster = new THREE.Raycaster();
   private readonly ndc       = new THREE.Vector2();
@@ -114,9 +116,11 @@ export class InputDispatcher {
     this.deps.element.removeEventListener('pointerdown', this.onPointerDown as unknown as EventListener);
     this.deps.element.removeEventListener('pointermove', this.onPointerMove as unknown as EventListener);
     this.deps.element.removeEventListener('pointerup',   this.onPointerUp   as unknown as EventListener);
-    this.capture     = null;
-    this.hoveredId   = null;
-    this.lastPointer = null;
+    this.capture      = null;
+    this.hoveredId    = null;
+    this.lastPointer  = null;
+    this.lastWorldHit = null;
+    this.lastUV       = null;
   }
 
   // Single dual-fire entry point — delegates to `World.fireInputEvent` so the
@@ -127,18 +131,25 @@ export class InputDispatcher {
   }
 
   // Per-frame tick — re-raycasts from the last pointer position and fires
-  // hover-start / hover-end on transitions. Catches "entity moves under
-  // stationary cursor" because the raycast is keyed on time, not pointer
-  // events.
+  // hover-start / hover-end on transitions, plus hover-move (issue #5 of
+  // issues--ui-surface.md) when the target is unchanged but worldHit / uv
+  // shifted. hover-move is local-only — dispatched directly on the entity
+  // bus, not through `World.fireInputEvent` (no guest→host RPC).
   update(_dt: number): void {
     if (!this.lastPointer) return;
     const target = this.pickHoverTarget(this.lastPointer.clientX, this.lastPointer.clientY);
     const newId  = target?.entity.id ?? null;
-    if (newId === this.hoveredId) return;
+    const seat   = this.deps.getSelfSeat();
 
-    const seat = this.deps.getSelfSeat();
+    if (newId === this.hoveredId) {
+      if (target) this.maybeFireHoverMove(target, seat);
+      return;
+    }
+
     const oldId = this.hoveredId;
-    this.hoveredId = newId;
+    this.hoveredId    = newId;
+    this.lastWorldHit = target?.worldHit ?? null;
+    this.lastUV       = target?.uv       ?? null;
 
     if (oldId !== null) {
       // Fire hover-end only on a natural pointer transition. If the old
@@ -164,6 +175,24 @@ export class InputDispatcher {
         this.buildHoverPayload(seat, target.worldHit, target.uv),
       );
     }
+  }
+
+  // Fire hover-move when the target is unchanged but the worldHit OR uv
+  // shifted between frames. Local-only dispatch — bypasses the dual-fire
+  // guest→host RPC so a busy mouse cannot flood the network.
+  private maybeFireHoverMove(target: InputPickResult, seat: SeatIndex | null): void {
+    const wh = target.worldHit;
+    const uv = target.uv;
+    const worldChanged = !this.lastWorldHit
+      || wh.x !== this.lastWorldHit.x
+      || wh.y !== this.lastWorldHit.y
+      || wh.z !== this.lastWorldHit.z;
+    const uvChanged = (!!uv !== !!this.lastUV)
+      || (!!uv && !!this.lastUV && (uv.u !== this.lastUV.u || uv.v !== this.lastUV.v));
+    if (!worldChanged && !uvChanged) return;
+    this.lastWorldHit = wh;
+    this.lastUV       = uv ?? null;
+    target.entity.dispatchEvent('hover-move', this.buildHoverPayload(seat, wh, uv));
   }
 
   private onPointerDown = (e: PointerEventLike): void => {

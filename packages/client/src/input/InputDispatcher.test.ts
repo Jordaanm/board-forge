@@ -130,7 +130,7 @@ function addEntity(id: string): Entity {
 
 function recordEvents(entity: Entity): { events: { name: string; payload: unknown }[] } {
   const events: { name: string; payload: unknown }[] = [];
-  for (const name of ['pressed', 'released', 'click', 'hover-start', 'hover-end']) {
+  for (const name of ['pressed', 'released', 'click', 'hover-start', 'hover-move', 'hover-end']) {
     entity.addEventListener(name, (payload) => events.push({ name, payload }));
   }
   return { events };
@@ -436,6 +436,97 @@ describe('InputDispatcher — hover-start / hover-end', () => {
     expect(payload.seat).toBe(0);
     expect(payload.shiftKey).toBe(true);
     expect(payload.worldHit).toEqual(HIT_POINT);
+  });
+});
+
+describe('InputDispatcher — hover-move (issue #5)', () => {
+  function withCustomPicker(uvFn: (cx: number, cy: number) => { u: number; v: number } | undefined) {
+    const customPicker: EntityPicker = (cx, cy) => {
+      const ids = pickFor(cx, cy);
+      return ids
+        .map((id) => handles.get(id))
+        .filter((h): h is FakeHandle => !!h)
+        .map((h) => {
+          const r: InputPickResult = { entity: h.entity, worldHit: { x: cx, y: cy, z: 0 } };
+          const uv = uvFn(cx, cy);
+          if (uv) r.uv = uv;
+          return r;
+        });
+    };
+    dispatcher.dispose();
+    dispatcher = new InputDispatcher({
+      world, camera,
+      element: element as unknown as HTMLElement,
+      getSelfSeat: () => 0,
+      pickAt:      customPicker,
+      now:         () => now,
+    });
+  }
+
+  test('fires hover-move when target stays but worldHit changes', () => {
+    const a = addEntity('a');
+    withCustomPicker(() => undefined);
+    const aRec = recordEvents(a);
+
+    pickFor = () => ['a'];
+    element.dispatch('pointermove', pointerEvent({ clientX: 50, clientY: 50 }));
+    dispatcher.update(0.016);
+    element.dispatch('pointermove', pointerEvent({ clientX: 60, clientY: 50 }));
+    dispatcher.update(0.016);
+
+    expect(aRec.events.map(ev => ev.name)).toEqual(['hover-start', 'hover-move']);
+  });
+
+  test('fires hover-move when worldHit unchanged but uv changes', () => {
+    const a = addEntity('a');
+    let frame = 0;
+    withCustomPicker(() => (frame === 0 ? { u: 0.1, v: 0.1 } : { u: 0.5, v: 0.5 }));
+    const aRec = recordEvents(a);
+
+    pickFor = () => ['a'];
+    element.dispatch('pointermove', pointerEvent({ clientX: 50, clientY: 50 }));
+    dispatcher.update(0.016);
+    frame = 1;
+    dispatcher.update(0.016); // pointer didn't move; only uv changed
+
+    const moves = aRec.events.filter(ev => ev.name === 'hover-move');
+    expect(moves.length).toBe(1);
+    expect((moves[0].payload as { surfaceUV?: unknown }).surfaceUV).toEqual({ u: 0.5, v: 0.5 });
+  });
+
+  test('does NOT fire hover-move when neither worldHit nor uv changes', () => {
+    const a = addEntity('a');
+    withCustomPicker(() => ({ u: 0.5, v: 0.5 }));
+    const aRec = recordEvents(a);
+
+    pickFor = () => ['a'];
+    element.dispatch('pointermove', pointerEvent({ clientX: 50, clientY: 50 }));
+    dispatcher.update(0.016);
+    dispatcher.update(0.016);
+    dispatcher.update(0.016);
+
+    expect(aRec.events.map(ev => ev.name)).toEqual(['hover-start']);
+  });
+
+  test('hover-move bypasses World.fireInputEvent (local-only dispatch)', () => {
+    const a = addEntity('a');
+    let frame = 0;
+    withCustomPicker(() => (frame === 0 ? { u: 0.1, v: 0.1 } : { u: 0.9, v: 0.9 }));
+    const fireSpy: { calls: { name: string }[] } = { calls: [] };
+    (world as any).fireInputEvent = (entity: Entity, name: string, payload: unknown) => {
+      fireSpy.calls.push({ name });
+      entity.dispatchEvent(name, payload);
+    };
+    const aRec = recordEvents(a);
+
+    pickFor = () => ['a'];
+    element.dispatch('pointermove', pointerEvent({ clientX: 50, clientY: 50 }));
+    dispatcher.update(0.016); // hover-start through fireInputEvent
+    frame = 1;
+    dispatcher.update(0.016); // hover-move — direct dispatch
+
+    expect(fireSpy.calls.map(c => c.name)).toEqual(['hover-start']);
+    expect(aRec.events.map(ev => ev.name)).toEqual(['hover-start', 'hover-move']);
   });
 });
 

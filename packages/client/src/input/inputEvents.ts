@@ -10,7 +10,16 @@ export type InputEventName =
   | 'released'
   | 'click'
   | 'hover-start'
+  | 'hover-move'   // local-only — see note below.
   | 'hover-end';
+
+// Local-only events: bypass `World.fireInputEvent`'s guest→host RPC and
+// dispatch directly on the entity bus. Used for UI affordances that should
+// not consume game-state bandwidth.
+//   - `hover-move` (issue #5 of issues--ui-surface.md): fires when the hover
+//     target is unchanged but the worldHit/uv shifted. Mirror events on the
+//     host would be useless and a busy mouse would flood the network.
+export const LOCAL_ONLY_INPUT_EVENTS: ReadonlySet<InputEventName> = new Set(['hover-move']);
 
 export interface InputEventPayload {
   seat:      SeatIndex | null;

@@ -345,6 +345,105 @@ describe('SurfaceComponent — press/click forwarding (issue #4)', () => {
   });
 });
 
+describe('SurfaceComponent — hover forwarding (issue #5)', () => {
+  function recordEvents(e: Entity, names: readonly string[] = ['hover-start', 'hover-move', 'hover-end']) {
+    const events: { name: string; payload: unknown }[] = [];
+    for (const n of names) e.addEventListener(n, (p) => events.push({ name: n, payload: p }));
+    return events;
+  }
+  function mkPayload(uv?: { u: number; v: number }): InputEventPayload {
+    const p: InputEventPayload = { seat: 0, shiftKey: false, ctrlKey: false, altKey: false };
+    if (uv) p.surfaceUV = uv;
+    return p;
+  }
+
+  test('hover-start dispatches hover-start on the resolved element', () => {
+    const tree = spawnSurfaceTree({
+      canvasSize: [200, 100],
+      shapes: [
+        { id: 'a', state: { x: 0,   y: 0, w: 100, h: 100, kind: 'rect', fill: '#f00' } },
+        { id: 'b', state: { x: 100, y: 0, w: 100, h: 100, kind: 'rect', fill: '#0f0' } },
+      ],
+    });
+    const a = tree.scene.getEntity('a')!;
+    const b = tree.scene.getEntity('b')!;
+    const aEv = recordEvents(a);
+    const bEv = recordEvents(b);
+
+    tree.surface.onHoverStart(mkPayload({ u: 0.25, v: 0.5 }));
+    expect(aEv.map(e => e.name)).toEqual(['hover-start']);
+    expect(bEv).toEqual([]);
+  });
+
+  test('hover-move on same element dispatches hover-move on the element', () => {
+    const tree = spawnSurfaceTree({
+      shapes: [{ id: 'a', state: { x: 0, y: 0, w: 256, h: 256, kind: 'rect', fill: '#f00' } }],
+    });
+    const a  = tree.scene.getEntity('a')!;
+    const ev = recordEvents(a);
+
+    tree.surface.onHoverStart(mkPayload({ u: 0.25, v: 0.25 }));
+    tree.surface.onHoverMove (mkPayload({ u: 0.50, v: 0.50 }));
+    expect(ev.map(e => e.name)).toEqual(['hover-start', 'hover-move']);
+  });
+
+  test('crossing elements: hover-end on previous fires BEFORE hover-start on new', () => {
+    const tree = spawnSurfaceTree({
+      canvasSize: [200, 100],
+      shapes: [
+        { id: 'a', state: { x: 0,   y: 0, w: 100, h: 100, kind: 'rect', fill: '#f00' } },
+        { id: 'b', state: { x: 100, y: 0, w: 100, h: 100, kind: 'rect', fill: '#0f0' } },
+      ],
+    });
+    const a = tree.scene.getEntity('a')!;
+    const b = tree.scene.getEntity('b')!;
+    const sequence: string[] = [];
+    a.addEventListener('hover-end',   () => sequence.push('a:hover-end'));
+    a.addEventListener('hover-start', () => sequence.push('a:hover-start'));
+    b.addEventListener('hover-end',   () => sequence.push('b:hover-end'));
+    b.addEventListener('hover-start', () => sequence.push('b:hover-start'));
+
+    tree.surface.onHoverStart(mkPayload({ u: 0.25, v: 0.5 })); // → 'a'
+    tree.surface.onHoverMove (mkPayload({ u: 0.75, v: 0.5 })); // → 'b'
+    expect(sequence).toEqual(['a:hover-start', 'a:hover-end', 'b:hover-start']);
+  });
+
+  test('surface hover-end fires hover-end on the last hovered element and clears tracking', () => {
+    const tree = spawnSurfaceTree({
+      shapes: [{ id: 'a', state: { x: 0, y: 0, w: 256, h: 256, kind: 'rect', fill: '#f00' } }],
+    });
+    const a  = tree.scene.getEntity('a')!;
+    const ev = recordEvents(a);
+
+    tree.surface.onHoverStart(mkPayload({ u: 0.5, v: 0.5 }));
+    tree.surface.onHoverEnd  (mkPayload());
+    expect(ev.map(e => e.name)).toEqual(['hover-start', 'hover-end']);
+
+    // Subsequent hover-end with no current element is a no-op.
+    tree.surface.onHoverEnd(mkPayload());
+    expect(ev.map(e => e.name)).toEqual(['hover-start', 'hover-end']);
+  });
+
+  test('hover-move into element gap fires hover-end on previous, no hover-start', () => {
+    const tree = spawnSurfaceTree({
+      canvasSize: [200, 100],
+      shapes: [
+        { id: 'a', state: { x: 0,   y: 0, w: 50, h: 50, kind: 'rect', fill: '#f00' } },
+        { id: 'b', state: { x: 100, y: 0, w: 50, h: 50, kind: 'rect', fill: '#0f0' } },
+      ],
+    });
+    const a = tree.scene.getEntity('a')!;
+    const b = tree.scene.getEntity('b')!;
+    const aEv = recordEvents(a);
+    const bEv = recordEvents(b);
+
+    tree.surface.onHoverStart(mkPayload({ u: 0.1,  v: 0.1 })); // (20, 10) → 'a'
+    tree.surface.onHoverMove (mkPayload({ u: 0.4,  v: 0.5 })); // (80, 50) → gap
+    expect(aEv.map(e => e.name)).toEqual(['hover-start', 'hover-end']);
+    expect(bEv).toEqual([]);
+  });
+});
+
 describe('SurfaceComponent — save/load round-trip', () => {
   test('toJSON → fromJSON preserves canvasSize', () => {
     const surface = new SurfaceComponent();

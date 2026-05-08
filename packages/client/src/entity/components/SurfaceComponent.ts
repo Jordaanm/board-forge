@@ -37,6 +37,7 @@ export class SurfaceComponent extends EntityComponent<SurfaceState> {
   canvas:  HTMLCanvasElement | null   = null;
   texture: THREE.CanvasTexture | null = null;
   private ctx: CanvasRenderingContext2D | null = null;
+  private lastHoveredElementId: string | null = null;
 
   onSpawn(_ctx: SpawnContext): void {
     if (!this.state) this.state = { canvasSize: [512, 512] };
@@ -88,6 +89,49 @@ export class SurfaceComponent extends EntityComponent<SurfaceState> {
   onPress    (payload: InputEventPayload): void { this.forwardEvent('pressed',  payload); }
   onReleased (payload: InputEventPayload): void { this.forwardEvent('released', payload); }
   onClick    (payload: InputEventPayload): void { this.forwardEvent('click',    payload); }
+
+  // Hover forwarding (issue #5 of issues--ui-surface.md). Tracks
+  // lastHoveredElementId across frames; element transitions inside the same
+  // surface fire `hover-end` on the previous element BEFORE `hover-start` on
+  // the new one (no overlap). Element-level dispatches are local-only,
+  // matching the surface-level hover-move semantics.
+  onHoverStart(payload: InputEventPayload): void {
+    const uv = payload.surfaceUV;
+    if (!uv) return;
+    const hit = this.resolveElementAtUV(uv);
+    if (!hit) return;
+    this.lastHoveredElementId = hit.entity.id;
+    hit.entity.dispatchEvent('hover-start', { ...payload, surfaceUV: { ...uv }, pixel: hit.pixel });
+  }
+
+  onHoverMove(payload: InputEventPayload): void {
+    const uv = payload.surfaceUV;
+    if (!uv) return;
+    const hit   = this.resolveElementAtUV(uv);
+    const newId = hit?.entity.id ?? null;
+    if (newId === this.lastHoveredElementId) {
+      if (hit) {
+        hit.entity.dispatchEvent('hover-move', { ...payload, surfaceUV: { ...uv }, pixel: hit.pixel });
+      }
+      return;
+    }
+    if (this.lastHoveredElementId) {
+      const prev = this.entity.scene?.getEntity(this.lastHoveredElementId);
+      if (prev) prev.dispatchEvent('hover-end', { ...payload, surfaceUV: { ...uv } });
+    }
+    this.lastHoveredElementId = newId;
+    if (hit) {
+      hit.entity.dispatchEvent('hover-start', { ...payload, surfaceUV: { ...uv }, pixel: hit.pixel });
+    }
+  }
+
+  onHoverEnd(payload: InputEventPayload): void {
+    if (this.lastHoveredElementId) {
+      const prev = this.entity.scene?.getEntity(this.lastHoveredElementId);
+      if (prev) prev.dispatchEvent('hover-end', { ...payload });
+    }
+    this.lastHoveredElementId = null;
+  }
 
   private forwardEvent(name: 'pressed' | 'released' | 'click', payload: InputEventPayload): Entity | null {
     const uv = payload.surfaceUV;

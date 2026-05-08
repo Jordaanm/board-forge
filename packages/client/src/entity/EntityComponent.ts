@@ -135,6 +135,7 @@ export abstract class EntityComponent<TState extends object> {
   onReleased   (_payload: InputEventPayload): void { }
   onClick      (_payload: InputEventPayload): void { }
   onHoverStart (_payload: InputEventPayload): void { }
+  onHoverMove  (_payload: InputEventPayload): void { }
   onHoverEnd   (_payload: InputEventPayload): void { }
 
   // Internal — called once by `Entity.attachComponent` immediately after the
@@ -149,6 +150,7 @@ export abstract class EntityComponent<TState extends object> {
     e.addEventListener('released',    (p) => this.onReleased  (p as InputEventPayload));
     e.addEventListener('click',       (p) => this.onClick     (p as InputEventPayload));
     e.addEventListener('hover-start', (p) => this.onHoverStart(p as InputEventPayload));
+    e.addEventListener('hover-move',  (p) => this.onHoverMove (p as InputEventPayload));
     e.addEventListener('hover-end',   (p) => this.onHoverEnd  (p as InputEventPayload));
   }
 
