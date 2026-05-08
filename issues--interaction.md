@@ -121,11 +121,12 @@ No throttling. Hover transitions are sparse; press / release / click are user-ra
 
 ---
 
-## Issue 5 — HandPanel: FlatView press / released / click on tiles
+## Issue 5 — HandPanel: FlatView press / released / click on tiles ✅
 
 **Type:** AFK
 **Blocked by:** #4
 **User stories:** 19, 21, 25
+**Status:** Complete
 
 ### What to build
 
@@ -135,12 +136,12 @@ The existing tile click → select behavior, right-click → context menu, and p
 
 ### Acceptance criteria
 
-- [ ] Clicking a hand tile fires `pressed` and `click` (and a same-tile pointerup also fires `released`) on the corresponding entity's bus, with `worldHit` absent from the payload.
-- [ ] Tile pointerdown then drag away from the panel fires `pressed` then `released` (no `click`, because the threshold is exceeded) — and the existing `playCardToTable` flow still triggers.
-- [ ] Modifier keys (`shiftKey`, `ctrlKey`, `altKey`) and `seat` are populated correctly in the payload.
-- [ ] Existing tile click → select behavior still works; existing right-click → context menu still works; existing reorder / play-to-table still works.
-- [ ] Events dual-fire — host receives `guest-input-event` for FlatView-originated tile clicks from a guest peer.
-- [ ] HandPanel unit tests cover: pressed-released-click within thresholds, pressed-released only when over threshold, modifier keys propagated, `worldHit` absent.
+- [x] Clicking a hand tile fires `pressed` and `click` (and a same-tile pointerup also fires `released`) on the corresponding entity's bus, with `worldHit` absent from the payload.
+- [x] Tile pointerdown then drag away from the panel fires `pressed` then `released` (no `click`, because the threshold is exceeded) — and the existing `playCardToTable` flow still triggers.
+- [x] Modifier keys (`shiftKey`, `ctrlKey`, `altKey`) and `seat` are populated correctly in the payload.
+- [x] Existing tile click → select behavior still works; existing right-click → context menu still works; existing reorder / play-to-table still works.
+- [x] Events dual-fire — host receives `guest-input-event` for FlatView-originated tile clicks from a guest peer.
+- [x] HandPanel unit tests cover: pressed-released-click within thresholds, pressed-released only when over threshold, modifier keys propagated, `worldHit` absent.
 
 ---
 

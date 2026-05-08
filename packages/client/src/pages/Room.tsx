@@ -15,6 +15,7 @@ import { type Entity } from '../entity/Entity';
 import { type MenuItem } from '../entity/EntityComponent';
 import { type ChannelMessage, type SpawnableType } from '../net/SceneState';
 import { type SeatIndex } from '../seats/SeatLayout';
+import { type InputEventName, type InputEventPayload } from '../input/inputEvents';
 import { RoomStateManager } from '../seats/RoomStateManager';
 import { RoomStateClient } from '../seats/RoomStateClient';
 import type { RoomStateMessage, RoomStateSnapshot } from '../seats/RoomState';
@@ -91,6 +92,7 @@ export function Room({ roomId, isHost }: Props) {
   const requestHandTileMenuRef = useRef<(entityId: string, x: number, y: number) => void>(noop);
   const playCardToTableRef = useRef<(entityId: string, x: number, y: number) => void>(noop);
   const reorderHandRef     = useRef<(handEntityId: string, newOrder: string[]) => void>(noop);
+  const fireTileInputEventRef = useRef<(tileId: string, eventName: InputEventName, payload: InputEventPayload) => void>(noop);
   const claimSeatRef       = useRef<(seatIndex: SeatIndex) => void>(noop);
   const kickPeerRef        = useRef<(peerId: string) => void>(noop);
   const banPeerRef         = useRef<(peerId: string) => void>(noop);
@@ -361,6 +363,7 @@ export function Room({ roomId, isHost }: Props) {
         requestHandTileMenuRef={requestHandTileMenuRef}
         playCardToTableRef={playCardToTableRef}
         reorderHandRef={reorderHandRef}
+        fireTileInputEventRef={fireTileInputEventRef}
         saveSceneRef={saveSceneRef}
         replaceSceneRef={replaceSceneRef}
         sceneHistoryRef={sceneHistoryRef}
@@ -473,6 +476,8 @@ export function Room({ roomId, isHost }: Props) {
               onPlayCardToTable={(id, x, y) => playCardToTableRef.current(id, x, y)}
               onReorderHand={(newOrder) => reorderHandRef.current(handView.handEntityId, newOrder)}
               handEntityId={handView.handEntityId}
+              onTileInputEvent={(id, name, payload) => fireTileInputEventRef.current(id, name, payload)}
+              selfSeat={getSelfSeatRef.current()}
             />
           </UIPanel>
         )}

@@ -275,6 +275,139 @@ describe('HandPanel — drag-within-panel reorder (issue #6)', () => {
   });
 });
 
+describe('HandPanel — input lifecycle dispatch (issue #5)', () => {
+  function setupInputPanel(opts: { selfSeat?: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | null } = {}) {
+    const onTileInputEvent = vi.fn();
+    const result = render(
+      <HandPanel
+        cards={SAMPLE}
+        selectedId={null}
+        onSelectTile={noop}
+        onTileContextMenu={noop}
+        onTileInputEvent={onTileInputEvent}
+        selfSeat={opts.selfSeat ?? 0}
+      />,
+    );
+    const tile = result.getByTestId('hand-panel-tile-c1');
+    // jsdom returns zeroed rects; spoof the tile's rect so elementFromPoint
+    // walks the parent chain and hits the actual data-tile-id.
+    tile.getBoundingClientRect = () => ({
+      x: 100, y: 500, left: 100, top: 500, right: 200, bottom: 600,
+      width: 100, height: 100, toJSON: () => ({}),
+    } as DOMRect);
+    return { onTileInputEvent, tile };
+  }
+
+  function dispatchPointer(target: EventTarget, type: string, opts: {
+    x: number; y: number; button?: number;
+    shiftKey?: boolean; ctrlKey?: boolean; altKey?: boolean;
+  }): void {
+    target.dispatchEvent(new MouseEvent(type, {
+      bubbles: true, cancelable: true,
+      button: opts.button ?? 0, clientX: opts.x, clientY: opts.y,
+      shiftKey: opts.shiftKey ?? false,
+      ctrlKey:  opts.ctrlKey  ?? false,
+      altKey:   opts.altKey   ?? false,
+    }));
+  }
+
+  test('quick same-tile press/release fires pressed, released, and click', () => {
+    const { onTileInputEvent, tile } = setupInputPanel({ selfSeat: 2 });
+    document.elementFromPoint = (() => tile) as Document['elementFromPoint'];
+
+    dispatchPointer(tile,     'pointerdown', { x: 150, y: 550 });
+    dispatchPointer(document, 'pointerup',   { x: 151, y: 551 });
+
+    const names = onTileInputEvent.mock.calls.map(c => c[1]);
+    expect(names).toEqual(['pressed', 'released', 'click']);
+  });
+
+  test('press → drag > 5px → release fires pressed and released only (no click)', () => {
+    const { onTileInputEvent, tile } = setupInputPanel();
+    document.elementFromPoint = (() => tile) as Document['elementFromPoint'];
+
+    dispatchPointer(tile,     'pointerdown', { x: 150, y: 550 });
+    dispatchPointer(document, 'pointermove', { x: 200, y: 550 });
+    dispatchPointer(document, 'pointerup',   { x: 200, y: 550 });
+
+    const names = onTileInputEvent.mock.calls.map(c => c[1]);
+    expect(names).toEqual(['pressed', 'released']);
+  });
+
+  test('release on a different element suppresses click but fires released on captured tile', () => {
+    const { onTileInputEvent, tile } = setupInputPanel();
+    // Pretend something else is under the cursor at release time.
+    const stranger = document.createElement('div');
+    document.body.appendChild(stranger);
+    document.elementFromPoint = (() => stranger) as Document['elementFromPoint'];
+
+    dispatchPointer(tile,     'pointerdown', { x: 150, y: 550 });
+    dispatchPointer(document, 'pointerup',   { x: 151, y: 551 });
+
+    const names = onTileInputEvent.mock.calls.map(c => c[1]);
+    const ids   = onTileInputEvent.mock.calls.map(c => c[0]);
+    expect(names).toEqual(['pressed', 'released']);
+    expect(ids.every(id => id === 'c1')).toBe(true);
+  });
+
+  test('right-click pointerdown emits no input lifecycle events', () => {
+    const { onTileInputEvent, tile } = setupInputPanel();
+    document.elementFromPoint = (() => tile) as Document['elementFromPoint'];
+
+    dispatchPointer(tile,     'pointerdown', { x: 150, y: 550, button: 2 });
+    dispatchPointer(document, 'pointerup',   { x: 150, y: 550, button: 2 });
+
+    expect(onTileInputEvent).not.toHaveBeenCalled();
+  });
+
+  test('payload carries seat, modifier keys, and omits worldHit', () => {
+    const { onTileInputEvent, tile } = setupInputPanel({ selfSeat: 3 });
+    document.elementFromPoint = (() => tile) as Document['elementFromPoint'];
+
+    dispatchPointer(tile,     'pointerdown', { x: 150, y: 550, shiftKey: true, ctrlKey: true, altKey: true });
+    dispatchPointer(document, 'pointerup',   { x: 150, y: 550, shiftKey: true, ctrlKey: true, altKey: true });
+
+    for (const call of onTileInputEvent.mock.calls) {
+      const payload = call[2];
+      expect(payload.seat).toBe(3);
+      expect(payload.shiftKey).toBe(true);
+      expect(payload.ctrlKey).toBe(true);
+      expect(payload.altKey).toBe(true);
+      expect(payload.worldHit).toBeUndefined();
+    }
+  });
+
+  test('drag-out still fires pressed/released and the existing playCardToTable flow', () => {
+    const onPlay = vi.fn();
+    const onTileInputEvent = vi.fn();
+    const { getByTestId } = render(
+      <HandPanel
+        cards={SAMPLE}
+        selectedId={null}
+        onSelectTile={noop}
+        onTileContextMenu={noop}
+        onPlayCardToTable={onPlay}
+        onTileInputEvent={onTileInputEvent}
+        selfSeat={0}
+      />,
+    );
+    const tile = getByTestId('hand-panel-tile-c1');
+    const panel = getByTestId('hand-panel');
+    panel.getBoundingClientRect = () => ({
+      x: 100, y: 500, left: 100, top: 500, right: 300, bottom: 600,
+      width: 200, height: 100, toJSON: () => ({}),
+    } as DOMRect);
+    document.elementFromPoint = (() => null) as Document['elementFromPoint'];
+
+    dispatchPointer(tile,     'pointerdown', { x: 150, y: 550 });
+    dispatchPointer(document, 'pointermove', { x: 800, y: 200 });
+    dispatchPointer(document, 'pointerup',   { x: 800, y: 200 });
+
+    expect(onTileInputEvent.mock.calls.map(c => c[1])).toEqual(['pressed', 'released']);
+    expect(onPlay).toHaveBeenCalledWith('c1', 800, 200);
+  });
+});
+
 describe('HandPanel — drop-target registration (issue #7)', () => {
   test('registers panel root with handEntityId metadata when prop is set', () => {
     const { container } = render(

@@ -32,6 +32,7 @@ import { ToolDispatcher, TOOL_CATALOGUE, type Tool } from './input/tools';
 import { GrabTool } from './input/tools/GrabTool';
 import { ContextMenuController, type ContextMenuRequest } from './input/ContextMenuController';
 import { InputDispatcher } from './input/InputDispatcher';
+import { type InputEventName, type InputEventPayload } from './input/inputEvents';
 import { type ChannelMessage, type SpawnableType } from './net/SceneState';
 import { type SeatIndex } from './seats/SeatLayout';
 import { CursorTracker } from './cursor/CursorTracker';
@@ -77,6 +78,7 @@ interface Props {
   requestHandTileMenuRef: MutableRefObject<(entityId: string, x: number, y: number) => void>;
   playCardToTableRef:  MutableRefObject<(entityId: string, clientX: number, clientY: number) => void>;
   reorderHandRef:      MutableRefObject<(handEntityId: string, newOrder: string[]) => void>;
+  fireTileInputEventRef: MutableRefObject<(tileId: string, eventName: InputEventName, payload: InputEventPayload) => void>;
   saveSceneRef:        MutableRefObject<() => void>;
   replaceSceneRef:     MutableRefObject<(snaps: unknown[]) => void>;
   sceneHistoryRef:     MutableRefObject<SceneHistoryService | null>;
@@ -104,6 +106,7 @@ export function ThreeCanvas({
   onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,
   setShowAllZonesRef,
   setHandViewRef, requestHandTileMenuRef, playCardToTableRef, reorderHandRef,
+  fireTileInputEventRef,
   saveSceneRef, replaceSceneRef, sceneHistoryRef, onLastLoadedChangeRef,
   onHistoryServiceChangeRef, runScriptRef, saveScriptSourceRef, getSavedScriptSourceRef, loadScriptStateRef,
   onErrorLogChangeRef, getManifestRef,
@@ -303,6 +306,15 @@ export function ThreeCanvas({
 
     reorderHandRef.current = (handEntityId, newOrder) => {
       world.reorderHand(handEntityId, newOrder);
+    };
+
+    // FlatView (HandPanel) input dispatch — issue #5 of issues--interaction.md.
+    // Resolves the tile id to its entity and fires through the same dual-fire
+    // entry point as 3D events. Drops silently when the entity is missing.
+    fireTileInputEventRef.current = (tileId, eventName, payload) => {
+      const handle = world.get(tileId);
+      if (!handle) return;
+      world.fireInputEvent(handle.entity, eventName, payload);
     };
 
     // Compose a ContextMenuRequest for a hand-panel tile right-click. Reuses
@@ -541,6 +553,7 @@ export function ThreeCanvas({
       sceneHistoryRef.current = null;
       onHistoryServiceChangeRef.current(null);
       drawFromDeckRef.current = () => {};
+      fireTileInputEventRef.current = () => {};
       shuffleDeckRef.current  = () => {};
       dealFromDeckRef.current = () => {};
       updatePropRef.current      = () => {};
@@ -562,7 +575,7 @@ export function ThreeCanvas({
     freeCameraRef, onObjectsChangeRef,
     onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,
     setShowAllZonesRef, setHandViewRef, requestHandTileMenuRef, playCardToTableRef,
-    reorderHandRef, saveSceneRef, replaceSceneRef, sceneHistoryRef, onLastLoadedChangeRef,
+    reorderHandRef, fireTileInputEventRef, saveSceneRef, replaceSceneRef, sceneHistoryRef, onLastLoadedChangeRef,
     onHistoryServiceChangeRef, runScriptRef, saveScriptSourceRef, getSavedScriptSourceRef, loadScriptStateRef,
     onErrorLogChangeRef,
   ]);

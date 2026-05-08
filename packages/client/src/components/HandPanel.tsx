@@ -6,9 +6,18 @@
 // renders one tile per card. Click selects the corresponding 3D entity;
 // right-click invokes the standard entity context menu. Pointerdown + drag
 // out of the panel triggers `onPlayCardToTable` (issue #5).
+//
+// Issue #5 of issues--interaction.md adds parallel input lifecycle dispatch
+// (`pressed` / `released` / `click`) on the per-entity bus, so scripts and
+// components react to FlatView clicks the same way they react to 3D clicks.
+// Issue #6 layers `hover-start` / `hover-end` on the same callback. `worldHit`
+// is intentionally absent from the payload — scripts use `if (e.worldHit)`
+// as a 3D / 2D discriminant.
 
 import { useEffect, useRef } from 'react';
 import { registerDropTarget } from '../input/dropTargetRegistry';
+import { type InputEventName, type InputEventPayload } from '../input/inputEvents';
+import { type SeatIndex } from '../seats/SeatLayout';
 import './HandPanel.css';
 
 export interface CardTile {
@@ -27,16 +36,29 @@ interface Props {
   // When set, registers the panel root with `dropTargetRegistry` so GrabTool
   // can route 3D releases over the panel into this hand. Issue #7.
   handEntityId?:      string;
+  // Issue #5 of issues--interaction.md. When set, HandPanel dispatches
+  // `pressed` / `released` / `click` on the per-entity bus through this
+  // callback. Parent (ThreeCanvas via Room) wires it to `World.fireInputEvent`
+  // so dual-fire RPC works identically to 3D. Issue #6 will layer the hover
+  // events on the same callback.
+  onTileInputEvent?:  (tileId: string, eventName: InputEventName, payload: InputEventPayload) => void;
+  // Populates `payload.seat` for FlatView events. `null` is the unseated case
+  // (spectator). Defaults to null when omitted.
+  selfSeat?:          SeatIndex | null;
 }
 
 // Pixels of pointer travel before we treat a press-drag-release as a drag
 // rather than a click. Below the threshold the press is treated as a click
 // regardless of where the pointer is at release.
 const DRAG_THRESHOLD_PX = 5;
+// Click thresholds for the input lifecycle dispatch (issue #5). Match
+// `GrabTool.MOVE_PX` / `HOLD_MS` so FlatView semantics align with 3D.
+const CLICK_MOVE_PX = 5;
+const CLICK_HOLD_MS = 150;
 
 export function HandPanel({
   cards, selectedId, onSelectTile, onTileContextMenu, onPlayCardToTable, onReorderHand,
-  handEntityId,
+  handEntityId, onTileInputEvent, selfSeat,
 }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -45,11 +67,22 @@ export function HandPanel({
     return registerDropTarget(panelRef.current, { kind: 'hand-panel', handEntityId });
   }, [handEntityId]);
 
+  const buildPayload = (e: { shiftKey: boolean; ctrlKey: boolean; altKey: boolean }): InputEventPayload => ({
+    seat:     selfSeat ?? null,
+    shiftKey: e.shiftKey,
+    ctrlKey:  e.ctrlKey,
+    altKey:   e.altKey,
+    // worldHit intentionally absent — FlatView events have no 3D coords.
+  });
+
   const handleTilePointerDown = (cardId: string) => (e: React.PointerEvent) => {
     if (e.button !== 0) return;          // left button only
-    if (!onPlayCardToTable && !onReorderHand) return;
+
+    onTileInputEvent?.(cardId, 'pressed', buildPayload(e));
+
     const startX = e.clientX;
     const startY = e.clientY;
+    const startT = performance.now();
     let dragged = false;
 
     const onMove = (ev: PointerEvent) => {
@@ -60,7 +93,25 @@ export function HandPanel({
     const onUp = (ev: PointerEvent) => {
       document.removeEventListener('pointermove', onMove);
       document.removeEventListener('pointerup',   onUp);
-      if (!dragged) return;              // pure click — onClick handles select
+
+      // Released always pairs with the captured tile — same 3D semantics.
+      onTileInputEvent?.(cardId, 'released', buildPayload(ev));
+
+      // Click fires only when within thresholds AND cursor is still over the
+      // captured tile. elementFromPoint walks the actual DOM at release time
+      // so a release dragged off the tile (e.g. onto another tile) is
+      // correctly excluded.
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      if (dx * dx + dy * dy <= CLICK_MOVE_PX * CLICK_MOVE_PX
+          && performance.now() - startT < CLICK_HOLD_MS
+          && isPointOverTile(ev.clientX, ev.clientY, cardId)) {
+        onTileInputEvent?.(cardId, 'click', buildPayload(ev));
+      }
+
+      // ── Existing drag flow — unchanged. ────────────────────────────────
+      if (!dragged) return;
+      if (!onPlayCardToTable && !onReorderHand) return;
       const panel = panelRef.current;
       if (!panel) return;
       const rect = panel.getBoundingClientRect();
@@ -152,6 +203,21 @@ function sameOrder(a: readonly string[], b: readonly string[]): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
   return true;
+}
+
+// Walks the parent chain of whatever's under the cursor looking for a tile
+// element with the matching data-tile-id. Used to gate `click` dispatch on
+// "cursor still over the captured tile" — same intent as the 3D-side check
+// in InputDispatcher.
+function isPointOverTile(clientX: number, clientY: number, tileId: string): boolean {
+  if (typeof document === 'undefined' || typeof document.elementFromPoint !== 'function') return false;
+  const el = document.elementFromPoint(clientX, clientY);
+  let cur: Element | null = el;
+  while (cur) {
+    if (cur.getAttribute && cur.getAttribute('data-tile-id') === tileId) return true;
+    cur = cur.parentElement;
+  }
+  return false;
 }
 
 function Tile({
