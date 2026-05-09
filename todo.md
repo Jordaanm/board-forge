@@ -13,6 +13,7 @@
 
 
 ### Minor Features
+* Show all components + their editable properties in the scene editor panel.
 * Drag to resize Zone/Hand
 * HiddenInfo Zone
 * Selecting an item in the scene highlights it in the scene graph panel.
@@ -22,5 +23,7 @@
 ### Bugs
 
 ### Cleanup
+* Remove planning doc references from code comments
+* Convert current planning docs into proper documentation
 * Remove the transitional `__delete` host-local built-in from `ContextMenuController.ts`.
 * Decide whether Delete becomes a base-class action on every entity or moves into the editor panel UX. Either way, drop the special-cased id in `dispatchMenuAction`.
