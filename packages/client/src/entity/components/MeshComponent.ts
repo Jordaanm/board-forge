@@ -291,17 +291,14 @@ function halfExtentsFor(meshRef: string, size: MeshSize): [number, number, numbe
 
 // prim:plane — single-quad PlaneGeometry lying in local XY with normal +Z.
 // Width = size[0], height (in-plane) = size[2]; size[1] (thickness) ignored
-// since a plane has none. UVs are flipped along V so a Canvas2D drawing whose
-// (0, 0) origin is its top-left lands at the visual top-left when the plane
-// is viewed from +Z. Single 'default' material slot — applyMaterialAttributes
-// routes textureRefs.default to the material map.
+// since a plane has none. PlaneGeometry's default UVs already pair with a
+// `flipY = true` CanvasTexture so a Canvas2D drawing whose (0, 0) origin is
+// its top-left lands at the visual top-left when viewed from +Z. Single
+// 'default' material slot — applyMaterialAttributes routes textureRefs.default
+// to the material map.
 function buildPlane(size: MeshSize): THREE.Object3D {
   const [w, , d] = sizeToBox(size);
   const geometry = new THREE.PlaneGeometry(w, d);
-  const uv  = geometry.attributes.uv as THREE.BufferAttribute;
-  const arr = uv.array as Float32Array;
-  for (let i = 1; i < arr.length; i += 2) arr[i] = 1 - arr[i];
-  uv.needsUpdate = true;
   const mesh = new THREE.Mesh(
     geometry,
     new THREE.MeshLambertMaterial({ color: 0xffffff }),

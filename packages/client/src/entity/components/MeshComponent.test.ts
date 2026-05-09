@@ -83,15 +83,16 @@ describe('MeshComponent — prim:plane', () => {
     expect(mesh.halfExtents()).toEqual([2, 3, 0]);
   });
 
-  test('UV V-coordinate flipped so canvas top-left lands at visual top when viewed from +Z', () => {
+  test('default PlaneGeometry UVs paired with flipY=true CanvasTexture put canvas top-left at visual top when viewed from +Z', () => {
     const { mesh } = spawnPlane();
     const child = mesh.group.children[0] as THREE.Mesh;
     const uv = (child.geometry as THREE.PlaneGeometry).attributes.uv as THREE.BufferAttribute;
     // PlaneGeometry default vertex order: top-left, top-right, bottom-left,
-    // bottom-right where +Y is up. Default UVs put (0,1) at top-left; with the
-    // V-flip applied UV (0, 0) lands at the top-left vertex.
+    // bottom-right where +Y is up. Default UVs put V=1 at top-left; with
+    // flipY=true (CanvasTexture default) V=1 samples canvas y=0, so canvas
+    // top-left lands at the plane's top-left vertex.
     expect(uv.getX(0)).toBe(0);
-    expect(uv.getY(0)).toBe(0);
+    expect(uv.getY(0)).toBe(1);
   });
 
   test('round-trip: toJSON → fromJSON identity', () => {

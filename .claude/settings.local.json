@@ -38,7 +38,21 @@
       "Bash(echo \"tc=$?\")",
       "PowerShell(npm run *)",
       "PowerShell(cd D:/dev/virtual-table/packages/client; npx tsx scripts/gen-script-globals.ts; echo \"EXIT: $LASTEXITCODE\")",
-      "Bash(echo \"tsc=$?\")"
+      "Bash(echo \"tsc=$?\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5174/)",
+      "Bash(mkdir -p public/fonts)",
+      "Bash(curl -sL -o inter-regular.ttf \"https://github.com/rsms/inter/raw/v4.0/docs/font-files/Inter-Regular.otf\")",
+      "Bash(curl -sL -o inter-bold.ttf \"https://github.com/rsms/inter/raw/v4.0/docs/font-files/Inter-Bold.otf\")",
+      "Bash(curl -sL -o public/fonts/inter-regular.ttf \"https://github.com/google/fonts/raw/main/ofl/inter/Inter%5Bopsz%2Cwght%5D.ttf\")",
+      "Bash(node *)",
+      "Bash(curl -sL -o /tmp/inter.zip \"https://github.com/rsms/inter/releases/download/v3.19/Inter-3.19.zip\")",
+      "Read(//tmp/**)",
+      "Bash(unzip -l /tmp/inter.zip)",
+      "Bash(unzip -j /tmp/inter.zip \"Inter Hinted for Windows/Desktop/Inter-Regular.ttf\" \"Inter Hinted for Windows/Desktop/Inter-Bold.ttf\")",
+      "Bash(curl -s http://localhost:5174/ -o /dev/null -w \"%{http_code}\\\\n\")",
+      "Bash(tail *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5173/)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3001/)"
     ]
   }
 }
