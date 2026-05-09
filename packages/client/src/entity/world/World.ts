@@ -46,7 +46,12 @@ import { canManipulate } from '../../seats/OwnershipPolicy';
 import { EntityHandleImpl, type HandleRouter } from './EntityHandle';
 import { ScriptHost } from '../../scripting/ScriptHost';
 import { assetService } from '../../assets/AssetService';
-import { attachSticker, type StickerOpts } from '../components/attachSticker';
+import {
+  attachSticker, createSurfaceChild, createSurfaceElement,
+  type StickerOpts, type SurfaceChildOpts, type SurfaceElementKind,
+} from '../components/attachSticker';
+import { SurfaceComponent } from '../components/SurfaceComponent';
+import { ImageElement } from '../components/ImageElement';
 import {
   type World,
   type WorldOptions,
@@ -230,6 +235,50 @@ class WorldImpl implements World, HandleRouter {
     return this.spawnEntity(type, { position });
   }
 
+  // Host-only — spawn a child surface entity (prim:plane + SurfaceComponent)
+  // on `parentId` and replicate. Powers the Mesh component's "Add Surface"
+  // editor-panel tool. Returns the new surface entity's id, or null when the
+  // request can't be honoured (unknown parent, parent has no mesh).
+  attachSurface(parentId: string, opts: SurfaceChildOpts = {}): string | null {
+    if (this.role !== 'host') throw new Error('World.attachSurface is host-only');
+    const parent = this.scene.getEntity(parentId);
+    if (!parent) return null;
+    if (!parent.getComponent(MeshComponent)) return null;
+    const ctx: SpawnContext = { scene: this.threeScene, physics: this.physics, entityScene: this.scene };
+    try {
+      this.history_?.push('attach surface');
+      const surface = createSurfaceChild(this.scene, ctx, parent, opts);
+      if (this.replicator) this.replicator.enqueueEntitySpawn(entityToSerialized(surface));
+      this.notify();
+      return surface.id;
+    } catch (e) {
+      this.scripting_?.errorLog.push('attachSurface', e);
+      return null;
+    }
+  }
+
+  // Host-only — spawn one element entity (Rich / Image / Shape) parented to
+  // an existing surface entity. Backs the Surface component's per-kind editor
+  // tool buttons. Returns the new element entity's id, or null on a missing
+  // surface / surface without a SurfaceComponent.
+  attachElement(surfaceId: string, kind: SurfaceElementKind): string | null {
+    if (this.role !== 'host') throw new Error('World.attachElement is host-only');
+    const surface = this.scene.getEntity(surfaceId);
+    if (!surface) return null;
+    if (!surface.getComponent(SurfaceComponent)) return null;
+    const ctx: SpawnContext = { scene: this.threeScene, physics: this.physics, entityScene: this.scene };
+    try {
+      this.history_?.push(`attach ${kind} element`);
+      const element = createSurfaceElement(this.scene, ctx, surface, kind);
+      if (this.replicator) this.replicator.enqueueEntitySpawn(entityToSerialized(element));
+      this.notify();
+      return element.id;
+    } catch (e) {
+      this.scripting_?.errorLog.push('attachElement', e);
+      return null;
+    }
+  }
+
   // Backs `scene.attachSticker` (issue #9 of issues--ui-surface.md). Builds
   // the surface + element entity tree, enqueues spawns for both so guests
   // see them, and returns the element id to the script. Returns null when
@@ -366,6 +415,11 @@ class WorldImpl implements World, HandleRouter {
       else if (key === 'halfExtentsY') zone.setState({ halfExtents: [cur[0], Number(value), cur[2]] });
       else if (key === 'halfExtentsZ') zone.setState({ halfExtents: [cur[0], cur[1], Number(value)] });
       else if (key === 'isVisible')    zone.setState({ isVisible: Boolean(value) });
+    }
+
+    const image = entity.getComponent(ImageElement);
+    if (image && key === 'textureRef') {
+      image.setState({ textureRef: String(value ?? '') });
     }
 
     const mesh = entity.getComponent(MeshComponent);

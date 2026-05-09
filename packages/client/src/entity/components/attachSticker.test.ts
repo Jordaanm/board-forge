@@ -13,7 +13,7 @@ import { ImageElement } from './ImageElement';
 import { RichElement } from './RichElement';
 import { surfaceRenderQueue } from './SurfaceRenderQueue';
 import { elementBitmapCache } from './ElementBitmapCache';
-import { attachSticker } from './attachSticker';
+import { attachSticker, createSurfaceChild, createSurfaceElement } from './attachSticker';
 
 let originalGetContext: typeof HTMLCanvasElement.prototype.getContext;
 
@@ -187,6 +187,124 @@ describe('attachSticker — face math', () => {
     const y = surface.getComponent(TransformComponent)!.state.position[1];
     expect(y).toBeGreaterThan(0.5);
     expect(y - 0.5).toBeLessThan(0.01);
+  });
+});
+
+describe('createSurfaceChild', () => {
+  test('creates a surface entity (transform + plane mesh + surface) parented to the parent, no element child', () => {
+    const scene = new SceneImpl();
+    const ctx = makeCtx(scene);
+    const parent = makeParent(scene, ctx);
+
+    const surface = createSurfaceChild(scene, ctx, parent, { face: 'top' });
+
+    expect(surface.parentId).toBe(parent.id);
+    expect(parent.children).toContain(surface.id);
+    expect(surface.getComponent(TransformComponent)).toBeDefined();
+    expect(surface.getComponent(MeshComponent)!.state.meshRef).toBe('prim:plane');
+    expect(surface.getComponent(SurfaceComponent)).toBeDefined();
+    expect(surface.children).toEqual([]);
+  });
+
+  test('default size covers the parent face (top → [hx*2, hz*2])', () => {
+    const scene = new SceneImpl();
+    const ctx = makeCtx(scene);
+    const parent = makeParent(scene, ctx, [1, 0.5, 1.5]);
+
+    const surface = createSurfaceChild(scene, ctx, parent, { face: 'top' });
+
+    const meshSize = surface.getComponent(MeshComponent)!.state.size as [number, number, number];
+    expect(meshSize[0]).toBeCloseTo(2, 5);
+    expect(meshSize[2]).toBeCloseTo(3, 5);
+  });
+
+  test('throws when parent has no MeshComponent', () => {
+    const scene = new SceneImpl();
+    const ctx = makeCtx(scene);
+    const parent = new Entity({ id: 'no-mesh', type: 'token', name: 'NoMesh' });
+    scene.add(parent);
+    expect(() => createSurfaceChild(scene, ctx, parent, { face: 'top' })).toThrow();
+  });
+
+  test('omitting face defaults to top', () => {
+    const scene = new SceneImpl();
+    const ctx = makeCtx(scene);
+    const parent = makeParent(scene, ctx, [1, 0.5, 1]);
+    const surface = createSurfaceChild(scene, ctx, parent, {});
+    const t = surface.getComponent(TransformComponent)!;
+    expect(t.state.position[1]).toBeGreaterThan(0.5);
+  });
+});
+
+describe('createSurfaceElement', () => {
+  test('shape-rect kind spawns a ShapeElement child of the surface, sized to canvas', () => {
+    const scene = new SceneImpl();
+    const ctx = makeCtx(scene);
+    const parent = makeParent(scene, ctx);
+    const surface = createSurfaceChild(scene, ctx, parent, { face: 'top', canvasSize: [256, 128] });
+
+    const element = createSurfaceElement(scene, ctx, surface, 'shape-rect');
+
+    expect(element.parentId).toBe(surface.id);
+    expect(surface.children).toContain(element.id);
+    const shape = element.getComponent(ShapeElement)!;
+    expect(shape).toBeDefined();
+    expect(shape.state.kind).toBe('rect');
+    expect(shape.state.w).toBe(256);
+    expect(shape.state.h).toBe(128);
+  });
+
+  test('shape-circle kind sets ShapeKind to circle', () => {
+    const scene = new SceneImpl();
+    const ctx = makeCtx(scene);
+    const parent = makeParent(scene, ctx);
+    const surface = createSurfaceChild(scene, ctx, parent, { face: 'top' });
+    const element = createSurfaceElement(scene, ctx, surface, 'shape-circle');
+    expect(element.getComponent(ShapeElement)!.state.kind).toBe('circle');
+  });
+
+  test('image kind spawns an ImageElement with empty textureRef + fit=fit', () => {
+    const scene = new SceneImpl();
+    const ctx = makeCtx(scene);
+    const parent = makeParent(scene, ctx);
+    const surface = createSurfaceChild(scene, ctx, parent, { face: 'top' });
+    const element = createSurfaceElement(scene, ctx, surface, 'image');
+    const img = element.getComponent(ImageElement)!;
+    expect(img.state.textureRef).toBe('');
+    expect(img.state.fit).toBe('fit');
+  });
+
+  test('rich kind spawns a RichElement carrying placeholder html', () => {
+    const scene = new SceneImpl();
+    const ctx = makeCtx(scene);
+    const parent = makeParent(scene, ctx);
+    const surface = createSurfaceChild(scene, ctx, parent, { face: 'top' });
+    const element = createSurfaceElement(scene, ctx, surface, 'rich');
+    const rich = element.getComponent(RichElement)!;
+    expect(rich).toBeDefined();
+    expect(rich.state.html.length).toBeGreaterThan(0);
+  });
+
+  test('throws when target entity has no SurfaceComponent', () => {
+    const scene = new SceneImpl();
+    const ctx = makeCtx(scene);
+    const naked = new Entity({ id: 'no-surface', type: 't', name: 'no' });
+    scene.add(naked);
+    expect(() => createSurfaceElement(scene, ctx, naked, 'shape-rect')).toThrow();
+  });
+});
+
+describe('SurfaceComponent.onEditorTools', () => {
+  test('exposes Add Rich UI / Image / Rectangle / Circle buttons', () => {
+    const scene = new SceneImpl();
+    const ctx = makeCtx(scene);
+    const parent = makeParent(scene, ctx);
+    const surface = createSurfaceChild(scene, ctx, parent, { face: 'top' });
+    const tools = surface.getComponent(SurfaceComponent)!.onEditorTools({
+      recipientSeat: null, isHost: true, entity: surface,
+    });
+    const ids = tools.map(t => (t.kind === 'button' ? t.id : t.label));
+    expect(ids).toEqual(['add-rich', 'add-image', 'add-shape-rect', 'add-shape-circle']);
   });
 });
 

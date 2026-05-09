@@ -18,12 +18,13 @@
 // no TransformComponent — their layout is purely 2D in canvas pixels.
 
 import * as THREE from 'three';
-import { EntityComponent, type SpawnContext, type ReplicationChannel } from '../EntityComponent';
+import { EntityComponent, type SpawnContext, type MenuContext, type ReplicationChannel } from '../EntityComponent';
 import { MeshComponent } from './MeshComponent';
 import { surfaceRenderQueue } from './SurfaceRenderQueue';
 import type { ElementComponent, ElementBounds } from './ElementComponent';
 import type { InputEventPayload } from '../../input/inputEvents';
 import type { Entity } from '../Entity';
+import type { EditorToolItem } from '../editorTools';
 
 export interface SurfaceState {
   canvasSize: [number, number];
@@ -76,6 +77,15 @@ export class SurfaceComponent extends EntityComponent<SurfaceState> {
 
   markDirty(): void {
     surfaceRenderQueue.markDirty(this);
+  }
+
+  onEditorTools(_ctx: MenuContext): EditorToolItem[] {
+    return [
+      { kind: 'button', id: 'add-rich',         label: 'Add Rich UI'        },
+      { kind: 'button', id: 'add-image',        label: 'Add Image'          },
+      { kind: 'button', id: 'add-shape-rect',   label: 'Add Rectangle'      },
+      { kind: 'button', id: 'add-shape-circle', label: 'Add Circle'         },
+    ];
   }
 
   // Press / released / click forwarding (issue #4 of issues--ui-surface.md).
@@ -204,7 +214,12 @@ export class SurfaceComponent extends EntityComponent<SurfaceState> {
         // Surface keeps the canvas content authoritative — render with white
         // base colour so tint never tints the composed bitmap.
         lambert.color?.set(0xffffff);
-        mat.userData = { ...(mat.userData ?? {}), surfaceOwned: true };
+        // Canvas pixels outside element bounds are clearRect'd to alpha=0;
+        // an opaque material would render those as black. Enable transparency
+        // so the surface is genuinely clear where no element draws.
+        const prevTransparent = mat.transparent;
+        mat.transparent = true;
+        mat.userData = { ...(mat.userData ?? {}), surfaceOwned: true, prevTransparent };
         lambert.needsUpdate = true;
       };
       if (Array.isArray(child.material)) {
@@ -227,7 +242,12 @@ export class SurfaceComponent extends EntityComponent<SurfaceState> {
         if (!mat.userData?.surfaceOwned) return;
         const lambert = mat as THREE.MeshLambertMaterial;
         lambert.map = null;
-        delete (mat.userData as Record<string, unknown>).surfaceOwned;
+        const ud = mat.userData as Record<string, unknown>;
+        if ('prevTransparent' in ud) {
+          mat.transparent = Boolean(ud.prevTransparent);
+          delete ud.prevTransparent;
+        }
+        delete ud.surfaceOwned;
         lambert.needsUpdate = true;
       };
       if (Array.isArray(child.material)) {

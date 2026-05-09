@@ -28,6 +28,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { EntityComponent, type SpawnContext, type MenuContext, type MenuItem, type ActionContext } from '../EntityComponent';
+import { type EditorToolItem } from '../editorTools';
 import { TransformComponent } from './TransformComponent';
 import { assetService } from '../../assets/AssetService';
 import {
@@ -124,6 +125,10 @@ export class MeshComponent extends EntityComponent<MeshState> {
 
   onContextMenu(_ctx: MenuContext): MenuItem[] {
     return [{ kind: 'colorpicker', id: 'set-tint', label: 'Tint', value: this.state.tint || '#ffffff' }];
+  }
+
+  onEditorTools(_ctx: MenuContext): EditorToolItem[] {
+    return [{ kind: 'button', id: 'add-surface', label: 'Add Surface' }];
   }
 
   onAction(actionId: string, args: object | undefined, _ctx: ActionContext): void {

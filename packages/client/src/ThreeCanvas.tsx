@@ -15,6 +15,8 @@ import { ZoneComponent } from './entity/components/ZoneComponent';
 import { HandComponent } from './entity/components/HandComponent';
 import { FlatViewComponent } from './entity/components/FlatViewComponent';
 import { CardComponent } from './entity/components/CardComponent';
+import { ImageElement } from './entity/components/ImageElement';
+import { surfaceRenderQueue } from './entity/components/SurfaceRenderQueue';
 import { aggregateContextMenu } from './entity/contextMenu';
 import { encodeSaveFile, downloadSaveFile } from './entity/SaveFile';
 import { captureCanvasThumbnail } from './entity/thumbnail';
@@ -62,6 +64,8 @@ interface Props {
   rollRef:             MutableRefObject<() => void>;
   onContextMenuRef:    MutableRefObject<(req: ContextMenuRequest) => void>;
   deleteObjectRef:     MutableRefObject<(id: string) => void>;
+  attachSurfaceRef:    MutableRefObject<(parentId: string) => void>;
+  attachElementRef:    MutableRefObject<(surfaceId: string, kind: 'rich' | 'image' | 'shape-rect' | 'shape-circle') => void>;
   drawFromDeckRef:     MutableRefObject<(deckId: string, count: number, callerSeat: SeatIndex | null) => void>;
   shuffleDeckRef:      MutableRefObject<(deckId: string) => void>;
   dealFromDeckRef:     MutableRefObject<(deckId: string, count: number, callerSeat: SeatIndex | null) => void>;
@@ -100,7 +104,7 @@ export interface HandView {
 export function ThreeCanvas({
   isHost, sendRef, sendToRef, getTargetsRef, getSelfSeatRef, getSelfPeerIdRef, getPeerSeatRef,
   onMsgRef, onPeerLeftRef, onPeerJoinedRef,
-  spawnRef, rollRef, onContextMenuRef, deleteObjectRef, drawFromDeckRef, shuffleDeckRef, dealFromDeckRef,
+  spawnRef, rollRef, onContextMenuRef, deleteObjectRef, attachSurfaceRef, attachElementRef, drawFromDeckRef, shuffleDeckRef, dealFromDeckRef,
   updatePropRef,
   freeCameraRef, onObjectsChangeRef,
   onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,
@@ -416,6 +420,8 @@ export function ThreeCanvas({
 
       spawnRef.current        = (type) => { world.spawn(type); };
       deleteObjectRef.current = (id)   => world.despawn(id);
+      attachSurfaceRef.current = (parentId) => { world.attachSurface(parentId); };
+      attachElementRef.current = (surfaceId, kind) => { world.attachElement(surfaceId, kind); };
       drawFromDeckRef.current = (deckId, count, seat) => world.drawFromDeck(deckId, count, seat);
       shuffleDeckRef.current  = (deckId) => world.shuffleDeck(deckId);
       dealFromDeckRef.current = (deckId, count, seat) => world.dealFromDeck(deckId, count, seat);
@@ -506,6 +512,11 @@ export function ThreeCanvas({
 
       if (highlightHelper) highlightHelper.update();
 
+      // Drain UI-surface composition once per frame before rendering — element
+      // setState / asset-resolve callbacks only flip dirty flags; nothing
+      // composites unless someone drains the queue.
+      surfaceRenderQueue.drain();
+
       renderer.render(scene, camera);
     };
     animate();
@@ -543,6 +554,8 @@ export function ThreeCanvas({
       spawnRef.current        = () => {};
       rollRef.current         = () => {};
       deleteObjectRef.current = () => {};
+      attachSurfaceRef.current = () => {};
+      attachElementRef.current = () => {};
       saveSceneRef.current    = () => {};
       replaceSceneRef.current = () => {};
       runScriptRef.current    = () => Promise.resolve({ ok: false, error: 'Canvas torn down.' });
@@ -570,7 +583,7 @@ export function ThreeCanvas({
   }, [
     isHost, sendRef, sendToRef, getTargetsRef, getSelfSeatRef, getSelfPeerIdRef, getPeerSeatRef,
     onMsgRef, onPeerLeftRef, onPeerJoinedRef,
-    spawnRef, rollRef, onContextMenuRef, deleteObjectRef, drawFromDeckRef, shuffleDeckRef, dealFromDeckRef,
+    spawnRef, rollRef, onContextMenuRef, deleteObjectRef, attachSurfaceRef, attachElementRef, drawFromDeckRef, shuffleDeckRef, dealFromDeckRef,
     updatePropRef,
     freeCameraRef, onObjectsChangeRef,
     onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,
@@ -660,6 +673,9 @@ function entityToObjectSummary(entity: Entity): ObjectSummary {
   } else if (entity.type === 'card' && card) {
     props.face = card.state.face;
     props.back = card.state.back;
+  } else if (entity.type === 'image-element') {
+    const img = entity.getComponent(ImageElement);
+    if (img) props.textureRef = img.state.textureRef;
   }
   if (zone) {
     const [hx, hy, hz] = zone.state.halfExtents;

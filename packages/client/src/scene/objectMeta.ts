@@ -89,6 +89,14 @@ export const OBJECT_META: Record<string, ObjectMeta> = {
     ],
     actions: [],
   },
+  'image-element': {
+    type:  'image-element' as SpawnableType,
+    label: 'Image Element',
+    propertySchema: [
+      { key: 'textureRef', label: 'Image', type: 'asset:image' },
+    ],
+    actions: [],
+  },
   hand: {
     type:  'hand',
     label: 'Hand',

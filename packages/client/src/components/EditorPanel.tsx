@@ -9,6 +9,7 @@ import { type AssetType } from '../assets/Manifest';
 import { AssetPicker } from './AssetPicker';
 import { assetService } from '../assets/AssetService';
 import { BASE_MANIFEST, PRIMITIVE_MANIFEST } from '../assets/baseManifest';
+import { type EditorToolItem } from '../entity/editorTools';
 
 export interface ObjectSummary {
   id: string;
@@ -23,10 +24,12 @@ interface Props {
   selectedId:           string | null;
   isFreeCamera:         boolean;
   manifestStore:        ManifestStore | null;
+  selectedTools:        EditorToolItem[];
   onSelect:             (id: string | null) => void;
   onRollDice:           () => void;
   onUpdateProp:         (id: string, key: string, value: unknown) => void;
   onToggleFreeCamera:   (on: boolean) => void;
+  onToolAction:         (item: EditorToolItem & { kind: 'button' }) => void;
 }
 
 const PANEL: React.CSSProperties = {
@@ -117,9 +120,9 @@ const CHIP_X: React.CSSProperties = {
 
 export function EditorPanel({
   objects, selectedId, isFreeCamera,
-  manifestStore,
+  manifestStore, selectedTools,
   onSelect, onRollDice, onUpdateProp,
-  onToggleFreeCamera,
+  onToggleFreeCamera, onToolAction,
 }: Props) {
   const [open, setOpen]           = useState(true);
   const [collapsed, setCollapsed] = useState(false);
@@ -154,6 +157,7 @@ export function EditorPanel({
         <>
           <SceneGraphList objects={objects} selectedId={selectedId} onSelect={onSelect} />
           <PropertyEditor selected={selected} manifestStore={manifestStore} onUpdateProp={onUpdateProp} />
+          <ToolsSection tools={selected ? selectedTools : []} onToolAction={onToolAction} />
           <RollSection onRollDice={onRollDice} />
           <CameraSection isFreeCamera={isFreeCamera} onToggleFreeCamera={onToggleFreeCamera} />
         </>
@@ -603,6 +607,40 @@ function SeatSelect({ value, onChange }: { value: number | undefined; onChange: 
           </option>
         ))}
       </select>
+    </div>
+  );
+}
+
+function ToolsSection({
+  tools, onToolAction,
+}: {
+  tools:        EditorToolItem[];
+  onToolAction: (item: EditorToolItem & { kind: 'button' }) => void;
+}) {
+  if (tools.length === 0) return null;
+  return (
+    <div style={SECTION}>
+      <div style={SECTION_LABEL}>Tools</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {tools.map((item, i) => {
+          if (item.kind === 'heading') {
+            return (
+              <div
+                key={`h-${i}`}
+                style={{ ...SECTION_LABEL, marginBottom: 0, marginTop: i === 0 ? 0 : 4 }}
+              >{item.label}</div>
+            );
+          }
+          return (
+            <button
+              key={`${item.componentTypeId ?? ''}:${item.id}`}
+              style={SPAWN_BTN}
+              disabled={item.disabled}
+              onClick={() => onToolAction(item)}
+            >{item.label}</button>
+          );
+        })}
+      </div>
     </div>
   );
 }

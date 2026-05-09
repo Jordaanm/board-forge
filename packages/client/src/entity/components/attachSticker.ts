@@ -66,26 +66,37 @@ export interface AttachStickerResult {
   element: Entity;
 }
 
-// Creates the surface + element entity tree under `parent`, runs onSpawn for
-// each, and registers them in `scene`. Returns both for inspection — callers
-// surface only the element to scripts (the element is what scripts attach
-// listeners to).
-export function attachSticker(
+// Surface-only spawn options — the subset of StickerOpts that controls the
+// child surface entity itself (no element). Used by `createSurfaceChild` and
+// shared with `attachSticker`. `face` defaults to `'top'` when omitted.
+export interface SurfaceChildOpts {
+  face?:       StickerFace;
+  size?:       [number, number];
+  offset?:     number;
+  canvasSize?: [number, number];
+}
+
+// Creates the surface entity (transform + plane mesh + SurfaceComponent) as
+// a child of `parent`, parented to the requested face. Runs onSpawn for each
+// component and registers the entity in `scene`. Replication is the caller's
+// responsibility — see `World.attachSurface` / `World.attachSticker`.
+export function createSurfaceChild(
   scene:  SceneImpl,
   ctx:    SpawnContext,
   parent: Entity,
-  opts:   StickerOpts,
-): AttachStickerResult {
+  opts:   SurfaceChildOpts,
+): Entity {
   const parentMesh = parent.getComponent(MeshComponent);
   if (!parentMesh) {
-    throw new Error(`attachSticker: parent ${parent.id} has no MeshComponent`);
+    throw new Error(`createSurfaceChild: parent ${parent.id} has no MeshComponent`);
   }
 
   const halfExtents = parentMesh.halfExtents();
   const offset      = opts.offset ?? DEFAULT_OFFSET;
   const canvasSize  = opts.canvasSize ?? [512, 512];
-  const size        = opts.size ?? [1, 1];
-  const { position, rotation } = faceTransform(opts.face, halfExtents, offset);
+  const face        = opts.face ?? 'top';
+  const size        = opts.size ?? defaultSurfaceSize(face, halfExtents);
+  const { position, rotation } = faceTransform(face, halfExtents, offset);
 
   const surfaceId = newId();
   const surfaceEntity = new Entity({
@@ -113,6 +124,102 @@ export function attachSticker(
   transform.onSpawn(ctx);
   mesh.onSpawn(ctx);
   surface.onSpawn(ctx);
+
+  return surfaceEntity;
+}
+
+// Element kinds the host editor panel knows how to spawn onto a surface.
+export type SurfaceElementKind = 'rich' | 'image' | 'shape-rect' | 'shape-circle';
+
+// Spawns one element entity (no TransformComponent) parented to `surface`,
+// runs onSpawn, and registers it in `scene`. State defaults size the element
+// to fully cover the surface canvas; the author resizes via Properties.
+// Replication is the caller's responsibility — see `World.attachElement`.
+export function createSurfaceElement(
+  scene:   SceneImpl,
+  ctx:     SpawnContext,
+  surface: Entity,
+  kind:    SurfaceElementKind,
+): Entity {
+  const surfaceComp = surface.getComponent(SurfaceComponent);
+  if (!surfaceComp) {
+    throw new Error(`createSurfaceElement: entity ${surface.id} has no SurfaceComponent`);
+  }
+  const [w, h] = surfaceComp.state.canvasSize;
+  const elementId = newId();
+  const elementEntity = new Entity({
+    id:       elementId,
+    type:     elementTypeForKind(kind),
+    name:     `${surface.name}/${kind}`,
+    parentId: surface.id,
+  });
+  const elementComp = createElementForKind(kind, w, h);
+  elementEntity.attachComponent(elementComp);
+  surface.children.push(elementId);
+  scene.add(elementEntity);
+  elementComp.onSpawn(ctx);
+  return elementEntity;
+}
+
+function elementTypeForKind(kind: SurfaceElementKind): string {
+  if (kind === 'rich')  return 'rich-element';
+  if (kind === 'image') return 'image-element';
+  return 'shape-element';
+}
+
+function createElementForKind(
+  kind: SurfaceElementKind,
+  w: number, h: number,
+): ShapeElement | ImageElement | RichElement {
+  if (kind === 'rich') {
+    const c = new RichElement();
+    c.fromJSON({
+      x: 0, y: 0, w, h,
+      html: '<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:32px;color:#fff;background:#1e293b;">Rich Text</div>',
+    });
+    return c;
+  }
+  if (kind === 'image') {
+    const c = new ImageElement();
+    c.fromJSON({ x: 0, y: 0, w, h, textureRef: '', fit: 'fit' });
+    return c;
+  }
+  const c = new ShapeElement();
+  c.fromJSON({
+    x: 0, y: 0, w, h,
+    kind: kind === 'shape-circle' ? 'circle' : 'rect',
+    fill: '#88c0ff',
+  });
+  return c;
+}
+
+// Picks an in-plane size that covers the parent's face. Width / height
+// are the two axes orthogonal to the face normal.
+function defaultSurfaceSize(face: StickerFace, h: [number, number, number]): [number, number] {
+  const [hx, hy, hz] = h;
+  switch (face) {
+    case 'top':
+    case 'bottom': return [hx * 2, hz * 2];
+    case 'front':
+    case 'back':   return [hx * 2, hy * 2];
+    case 'left':
+    case 'right':  return [hz * 2, hy * 2];
+  }
+}
+
+// Creates the surface + element entity tree under `parent`, runs onSpawn for
+// each, and registers them in `scene`. Returns both for inspection — callers
+// surface only the element to scripts (the element is what scripts attach
+// listeners to).
+export function attachSticker(
+  scene:  SceneImpl,
+  ctx:    SpawnContext,
+  parent: Entity,
+  opts:   StickerOpts,
+): AttachStickerResult {
+  const surfaceEntity = createSurfaceChild(scene, ctx, parent, opts);
+  const surfaceId     = surfaceEntity.id;
+  const canvasSize    = opts.canvasSize ?? [512, 512];
 
   const elementId = newId();
   const elementEntity = new Entity({

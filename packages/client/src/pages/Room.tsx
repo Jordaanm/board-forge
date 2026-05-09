@@ -13,6 +13,7 @@ import { TOOL_CATALOGUE } from '../input/tools';
 import { type ContextMenuRequest, dispatchMenuAction } from '../input/ContextMenuController';
 import { type Entity } from '../entity/Entity';
 import { type MenuItem } from '../entity/EntityComponent';
+import { aggregateEditorTools, dispatchEditorTool, type EditorToolItem } from '../entity/editorTools';
 import { type ChannelMessage, type SpawnableType } from '../net/SceneState';
 import { type SeatIndex } from '../seats/SeatLayout';
 import { type InputEventName, type InputEventPayload } from '../input/inputEvents';
@@ -76,6 +77,8 @@ export function Room({ roomId, isHost }: Props) {
   const rollRef            = useRef<() => void>(noop);
   const onContextMenuRef   = useRef<(req: ContextMenuRequest) => void>(noop);
   const deleteObjectRef    = useRef<(id: string) => void>(noop);
+  const attachSurfaceRef   = useRef<(parentId: string) => void>(noop);
+  const attachElementRef   = useRef<(surfaceId: string, kind: 'rich' | 'image' | 'shape-rect' | 'shape-circle') => void>(noop);
   const drawFromDeckRef    = useRef<(deckId: string, count: number, callerSeat: SeatIndex | null) => void>(noop);
   const shuffleDeckRef     = useRef<(deckId: string) => void>(noop);
   const dealFromDeckRef    = useRef<(deckId: string, count: number, callerSeat: SeatIndex | null) => void>(noop);
@@ -290,6 +293,28 @@ export function Room({ roomId, isHost }: Props) {
     };
   }, []);
 
+  const selectedTools: EditorToolItem[] = (() => {
+    if (!isHost || !selectedId) return [];
+    const entity = getEntityRef.current(selectedId);
+    if (!entity) return [];
+    return aggregateEditorTools(entity, {
+      recipientSeat: getSelfSeatRef.current(),
+      isHost:        true,
+      entity,
+    });
+  })();
+
+  const handleToolAction = (item: EditorToolItem & { kind: 'button' }) => {
+    if (!selectedId) return;
+    dispatchEditorTool(item, undefined, selectedId, {
+      entity:    getEntityRef.current(selectedId),
+      hostLocal: {
+        attachSurface: (id) => attachSurfaceRef.current(id),
+        attachElement: (id, kind) => attachElementRef.current(id, kind),
+      },
+    });
+  };
+
   const handleContextAction = (
     item: MenuItem & { kind: 'action' | 'colorpicker' },
     args: object | undefined,
@@ -347,6 +372,8 @@ export function Room({ roomId, isHost }: Props) {
         rollRef={rollRef}
         onContextMenuRef={onContextMenuRef}
         deleteObjectRef={deleteObjectRef}
+        attachSurfaceRef={attachSurfaceRef}
+        attachElementRef={attachElementRef}
         drawFromDeckRef={drawFromDeckRef}
         shuffleDeckRef={shuffleDeckRef}
         dealFromDeckRef={dealFromDeckRef}
@@ -430,10 +457,12 @@ export function Room({ roomId, isHost }: Props) {
               selectedId={selectedId}
               isFreeCamera={isFreeCamera}
               manifestStore={manifestStore}
+              selectedTools={selectedTools}
               onSelect={setSelectedId}
               onRollDice={() => rollRef.current()}
               onUpdateProp={(id, key, value) => updatePropRef.current(id, key, value)}
               onToggleFreeCamera={handleToggleFreeCamera}
+              onToolAction={handleToolAction}
             />
           </UIPanel>
         )}

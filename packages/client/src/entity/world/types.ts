@@ -82,6 +82,16 @@ export interface World {
   despawn(id: string): void;
   updateProp(id: string, key: string, value: unknown): void;
 
+  // Host-only — spawn a child surface entity (prim:plane + SurfaceComponent)
+  // on the given parent. Backs the Mesh component's "Add Surface" editor-panel
+  // tool. Defaults to the parent's +Y face sized to its mesh footprint.
+  attachSurface(parentId: string, opts?: import('../components/attachSticker').SurfaceChildOpts): string | null;
+
+  // Host-only — spawn an element entity (Rich / Image / Shape) parented to
+  // an existing surface entity. Backs the Surface component's editor-panel
+  // "Add … Element" buttons.
+  attachElement(surfaceId: string, kind: import('../components/attachSticker').SurfaceElementKind): string | null;
+
   // Per-frame driver. Host: physics step, bounds, syncFromPhysics, replicator
   // flush. Guest: no-op (inbound state arrives via transport.onMessage).
   tick(dtSeconds: number): void;

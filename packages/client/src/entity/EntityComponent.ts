@@ -11,6 +11,7 @@ import { type SeatIndex } from '../seats/SeatLayout';
 import { type PhysicsWorld } from '../physics/PhysicsWorld';
 import { type ComponentPatch, type EntityFieldsPartial } from './wire';
 import { type InputEventPayload } from '../input/inputEvents';
+import type { EditorToolItem } from './editorTools';
 
 export type ReplicationChannel = 'reliable' | 'unreliable';
 
@@ -119,6 +120,11 @@ export abstract class EntityComponent<TState extends object> {
 
   onDespawn            (_ctx: SpawnContext):                                                  void { }
   onContextMenu        (_ctx: MenuContext):                                                   MenuItem[] { return []; }
+  // Component-driven editor-panel tool aggregation. Each component returns a
+  // flat list of buttons (or headings) to render in the host editor panel for
+  // the selected entity. Buttons dispatch through `onAction` like context-menu
+  // actions, but the panel is host-only so there's no invoke-action RPC path.
+  onEditorTools        (_ctx: MenuContext):                                                   EditorToolItem[] { return []; }
   onCollision          (_other: Entity, _event: CollisionEvent):                              void { }
   onParentChanged      (_newParentId: string | null, _oldParentId: string | null):            void { }
   onOwnerChanged       (_newOwner: SeatIndex | null, _oldOwner: SeatIndex | null):            void { }
