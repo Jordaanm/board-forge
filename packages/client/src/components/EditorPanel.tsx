@@ -10,6 +10,13 @@ import { AssetPicker } from './AssetPicker';
 import { assetService } from '../assets/AssetService';
 import { BASE_MANIFEST, PRIMITIVE_MANIFEST } from '../assets/baseManifest';
 import { type EditorToolItem } from '../entity/editorTools';
+import { type SurfaceElement } from '../entity/components/SurfaceElement';
+import { HtmlEditorModal } from './HtmlEditorModal';
+
+export interface SurfaceSummary {
+  canvasSize: [number, number];
+  elements:   SurfaceElement[];
+}
 
 export interface ObjectSummary {
   id: string;
@@ -17,6 +24,9 @@ export interface ObjectSummary {
   tags: string[];
   props: Record<string, unknown>;
   parentId: string | null;
+  // Populated when the entity carries a SurfaceComponent. Drives the
+  // SurfaceElementsSection in the editor panel.
+  surface?: SurfaceSummary | null;
 }
 
 interface Props {
@@ -30,6 +40,8 @@ interface Props {
   onUpdateProp:         (id: string, key: string, value: unknown) => void;
   onToggleFreeCamera:   (on: boolean) => void;
   onToolAction:         (item: EditorToolItem & { kind: 'button' }) => void;
+  onMutateElement:      (surfaceId: string, elementId: string, patch: Record<string, unknown>) => void;
+  onRemoveElement:      (surfaceId: string, elementId: string) => void;
 }
 
 const PANEL: React.CSSProperties = {
@@ -123,6 +135,7 @@ export function EditorPanel({
   manifestStore, selectedTools,
   onSelect, onRollDice, onUpdateProp,
   onToggleFreeCamera, onToolAction,
+  onMutateElement, onRemoveElement,
 }: Props) {
   const [open, setOpen]           = useState(true);
   const [collapsed, setCollapsed] = useState(false);
@@ -157,6 +170,15 @@ export function EditorPanel({
         <>
           <SceneGraphList objects={objects} selectedId={selectedId} onSelect={onSelect} />
           <PropertyEditor selected={selected} manifestStore={manifestStore} onUpdateProp={onUpdateProp} />
+          {selected?.surface && (
+            <SurfaceElementsSection
+              surfaceId={selected.id}
+              surface={selected.surface}
+              manifestStore={manifestStore}
+              onMutateElement={onMutateElement}
+              onRemoveElement={onRemoveElement}
+            />
+          )}
           <ToolsSection tools={selected ? selectedTools : []} onToolAction={onToolAction} />
           <RollSection onRollDice={onRollDice} />
           <CameraSection isFreeCamera={isFreeCamera} onToggleFreeCamera={onToggleFreeCamera} />
@@ -675,4 +697,310 @@ function CameraSection({
       </label>
     </div>
   );
+}
+
+// ── Surface Elements ────────────────────────────────────────────────────────
+
+const ELEMENT_CARD: React.CSSProperties = {
+  background:   'rgba(255,255,255,0.04)',
+  border:       '1px solid rgba(255,255,255,0.08)',
+  borderRadius: 4,
+  padding:      8,
+  marginBottom: 6,
+};
+
+const ELEMENT_HEADER: React.CSSProperties = {
+  display:        'flex',
+  alignItems:     'center',
+  justifyContent: 'space-between',
+  marginBottom:   6,
+};
+
+const KIND_BADGE: React.CSSProperties = {
+  fontSize:      10,
+  textTransform: 'uppercase',
+  letterSpacing: 1,
+  background:    'rgba(80,140,220,0.25)',
+  color:         '#cfe1ff',
+  padding:       '2px 6px',
+  borderRadius:  3,
+};
+
+const PAIR_ROW: React.CSSProperties = {
+  display:       'grid',
+  gridTemplateColumns: '1fr 1fr',
+  gap:           6,
+  marginBottom:  6,
+};
+
+const PAIR_LABEL: React.CSSProperties = {
+  display:    'block',
+  color:      '#aaa',
+  fontSize:   11,
+  marginBottom: 3,
+};
+
+const HTML_PREVIEW: React.CSSProperties = {
+  background:   'rgba(0,0,0,0.4)',
+  border:       '1px solid rgba(255,255,255,0.15)',
+  borderRadius: 3,
+  padding:      6,
+  fontSize:     11,
+  fontFamily:   'monospace',
+  color:        '#bdbdbd',
+  whiteSpace:   'nowrap',
+  overflow:     'hidden',
+  textOverflow: 'ellipsis',
+  marginBottom: 6,
+};
+
+function SurfaceElementsSection({
+  surfaceId, surface, manifestStore, onMutateElement, onRemoveElement,
+}: {
+  surfaceId:       string;
+  surface:         SurfaceSummary;
+  manifestStore:   ManifestStore | null;
+  onMutateElement: (surfaceId: string, elementId: string, patch: Record<string, unknown>) => void;
+  onRemoveElement: (surfaceId: string, elementId: string) => void;
+}) {
+  return (
+    <div style={SECTION}>
+      <div style={SECTION_LABEL}>Surface Elements ({surface.elements.length})</div>
+      {surface.elements.length === 0 && (
+        <div style={{ color: '#666', fontSize: 12 }}>
+          Use the Tools section below to add Rich UI / Image / Shape elements.
+        </div>
+      )}
+      {surface.elements.map((el) => (
+        <SurfaceElementCard
+          key={el.id}
+          surfaceId={surfaceId}
+          element={el}
+          manifestStore={manifestStore}
+          onMutate={(patch) => onMutateElement(surfaceId, el.id, patch)}
+          onRemove={() => onRemoveElement(surfaceId, el.id)}
+        />
+      ))}
+    </div>
+  );
+}
+
+function SurfaceElementCard({
+  surfaceId, element, manifestStore, onMutate, onRemove,
+}: {
+  surfaceId:     string;
+  element:       SurfaceElement;
+  manifestStore: ManifestStore | null;
+  onMutate:      (patch: Record<string, unknown>) => void;
+  onRemove:      () => void;
+}) {
+  void surfaceId;
+  return (
+    <div style={ELEMENT_CARD}>
+      <div style={ELEMENT_HEADER}>
+        <span style={KIND_BADGE}>{element.kind}</span>
+        <span style={{ color: '#888', fontSize: 10, fontFamily: 'monospace', flex: 1, marginLeft: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {element.id.slice(0, 8)}
+        </span>
+        <button
+          onClick={onRemove}
+          style={{ ...CHIP_X, fontSize: 16 }}
+          title="Remove element"
+        >×</button>
+      </div>
+
+      <div style={PAIR_ROW}>
+        <div>
+          <label style={PAIR_LABEL}>X</label>
+          <input
+            type="number"
+            step="1"
+            style={INPUT}
+            value={element.x}
+            onChange={e => onMutate({ x: numberOr(e.target.value, 0) })}
+          />
+        </div>
+        <div>
+          <label style={PAIR_LABEL}>Y</label>
+          <input
+            type="number"
+            step="1"
+            style={INPUT}
+            value={element.y}
+            onChange={e => onMutate({ y: numberOr(e.target.value, 0) })}
+          />
+        </div>
+      </div>
+
+      <div style={PAIR_ROW}>
+        <div>
+          <label style={PAIR_LABEL}>Width</label>
+          <input
+            type="number"
+            step="1"
+            min="0"
+            style={INPUT}
+            value={element.w}
+            onChange={e => onMutate({ w: numberOr(e.target.value, 0) })}
+          />
+        </div>
+        <div>
+          <label style={PAIR_LABEL}>Height</label>
+          <input
+            type="number"
+            step="1"
+            min="0"
+            style={INPUT}
+            value={element.h}
+            onChange={e => onMutate({ h: numberOr(e.target.value, 0) })}
+          />
+        </div>
+      </div>
+
+      {element.kind === 'shape' && (
+        <ShapeKindRow element={element} onMutate={onMutate} />
+      )}
+      {element.kind === 'image' && (
+        <ImageKindRow element={element} manifestStore={manifestStore} onMutate={onMutate} />
+      )}
+      {element.kind === 'rich' && (
+        <RichKindRow element={element} onMutate={onMutate} />
+      )}
+    </div>
+  );
+}
+
+function ShapeKindRow({
+  element, onMutate,
+}: {
+  element:  SurfaceElement & { kind: 'shape' };
+  onMutate: (patch: Record<string, unknown>) => void;
+}) {
+  return (
+    <>
+      <div style={{ marginBottom: 6 }}>
+        <label style={PAIR_LABEL}>Shape</label>
+        <select
+          style={INPUT}
+          value={element.shape}
+          onChange={e => onMutate({ shape: e.target.value as 'rect' | 'circle' })}
+        >
+          <option value="rect">Rectangle</option>
+          <option value="circle">Circle</option>
+        </select>
+      </div>
+      <div style={PAIR_ROW}>
+        <div>
+          <label style={PAIR_LABEL}>Fill</label>
+          <input
+            type="color"
+            style={{ ...INPUT, padding: 2, height: 28 }}
+            value={element.fill ?? '#88c0ff'}
+            onChange={e => onMutate({ fill: e.target.value })}
+          />
+        </div>
+        <div>
+          <label style={PAIR_LABEL}>Stroke</label>
+          <input
+            type="color"
+            style={{ ...INPUT, padding: 2, height: 28 }}
+            value={element.stroke ?? '#000000'}
+            onChange={e => onMutate({ stroke: e.target.value })}
+          />
+        </div>
+      </div>
+      <div style={PAIR_ROW}>
+        <div>
+          <label style={PAIR_LABEL}>Stroke W</label>
+          <input
+            type="number"
+            min="0"
+            step="0.5"
+            style={INPUT}
+            value={element.strokeWidth ?? 0}
+            onChange={e => onMutate({ strokeWidth: numberOr(e.target.value, 0) })}
+          />
+        </div>
+        {element.shape === 'rect' && (
+          <div>
+            <label style={PAIR_LABEL}>Radius</label>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              style={INPUT}
+              value={element.radius ?? 0}
+              onChange={e => onMutate({ radius: numberOr(e.target.value, 0) })}
+            />
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+function ImageKindRow({
+  element, manifestStore, onMutate,
+}: {
+  element:       SurfaceElement & { kind: 'image' };
+  manifestStore: ManifestStore | null;
+  onMutate:      (patch: Record<string, unknown>) => void;
+}) {
+  return (
+    <>
+      <div style={{ marginBottom: 6 }}>
+        <label style={PAIR_LABEL}>Image</label>
+        <AssetField
+          assetType="image"
+          value={element.textureRef}
+          manifestStore={manifestStore}
+          onChange={(v) => onMutate({ textureRef: v })}
+        />
+      </div>
+      <div style={{ marginBottom: 0 }}>
+        <label style={PAIR_LABEL}>Fit</label>
+        <select
+          style={INPUT}
+          value={element.fit}
+          onChange={e => onMutate({ fit: e.target.value })}
+        >
+          <option value="fit">Fit (letterbox)</option>
+          <option value="cover">Cover (crop)</option>
+          <option value="stretch">Stretch</option>
+          <option value="none">None (native size)</option>
+        </select>
+      </div>
+    </>
+  );
+}
+
+function RichKindRow({
+  element, onMutate,
+}: {
+  element:  SurfaceElement & { kind: 'rich' };
+  onMutate: (patch: Record<string, unknown>) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  return (
+    <>
+      <div>
+        <label style={PAIR_LABEL}>HTML</label>
+        <div style={HTML_PREVIEW} title={element.html}>{element.html || '(empty)'}</div>
+        <button style={{ ...SPAWN_BTN, width: '100%' }} onClick={() => setEditing(true)}>
+          Edit HTML…
+        </button>
+      </div>
+      <HtmlEditorModal
+        open={editing}
+        initial={element.html}
+        onClose={() => setEditing(false)}
+        onSave={(next) => { onMutate({ html: next }); setEditing(false); }}
+      />
+    </>
+  );
+}
+
+function numberOr(raw: string, fallback: number): number {
+  const n = parseFloat(raw);
+  return Number.isFinite(n) ? n : fallback;
 }

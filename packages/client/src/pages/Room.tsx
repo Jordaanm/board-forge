@@ -79,6 +79,8 @@ export function Room({ roomId, isHost }: Props) {
   const deleteObjectRef    = useRef<(id: string) => void>(noop);
   const attachSurfaceRef   = useRef<(parentId: string) => void>(noop);
   const attachElementRef   = useRef<(surfaceId: string, kind: 'rich' | 'image' | 'shape-rect' | 'shape-circle') => void>(noop);
+  const mutateSurfaceElementRef = useRef<(surfaceId: string, elementId: string, patch: Record<string, unknown>) => void>(noop);
+  const removeSurfaceElementRef = useRef<(surfaceId: string, elementId: string) => void>(noop);
   const drawFromDeckRef    = useRef<(deckId: string, count: number, callerSeat: SeatIndex | null) => void>(noop);
   const shuffleDeckRef     = useRef<(deckId: string) => void>(noop);
   const dealFromDeckRef    = useRef<(deckId: string, count: number, callerSeat: SeatIndex | null) => void>(noop);
@@ -374,6 +376,8 @@ export function Room({ roomId, isHost }: Props) {
         deleteObjectRef={deleteObjectRef}
         attachSurfaceRef={attachSurfaceRef}
         attachElementRef={attachElementRef}
+        mutateSurfaceElementRef={mutateSurfaceElementRef}
+        removeSurfaceElementRef={removeSurfaceElementRef}
         drawFromDeckRef={drawFromDeckRef}
         shuffleDeckRef={shuffleDeckRef}
         dealFromDeckRef={dealFromDeckRef}
@@ -463,6 +467,8 @@ export function Room({ roomId, isHost }: Props) {
               onUpdateProp={(id, key, value) => updatePropRef.current(id, key, value)}
               onToggleFreeCamera={handleToggleFreeCamera}
               onToolAction={handleToolAction}
+              onMutateElement={(sid, eid, patch) => mutateSurfaceElementRef.current(sid, eid, patch)}
+              onRemoveElement={(sid, eid) => removeSurfaceElementRef.current(sid, eid)}
             />
           </UIPanel>
         )}

@@ -13,6 +13,7 @@ import { ValueComponent } from './entity/components/ValueComponent';
 import { DiceComponent } from './entity/components/DiceComponent';
 import { ZoneComponent } from './entity/components/ZoneComponent';
 import { HandComponent } from './entity/components/HandComponent';
+import { SurfaceComponent } from './entity/components/SurfaceComponent';
 import { FlatViewComponent } from './entity/components/FlatViewComponent';
 import { CardComponent } from './entity/components/CardComponent';
 import { surfaceRenderQueue } from './entity/components/SurfaceRenderQueue';
@@ -65,6 +66,8 @@ interface Props {
   deleteObjectRef:     MutableRefObject<(id: string) => void>;
   attachSurfaceRef:    MutableRefObject<(parentId: string) => void>;
   attachElementRef:    MutableRefObject<(surfaceId: string, kind: 'rich' | 'image' | 'shape-rect' | 'shape-circle') => void>;
+  mutateSurfaceElementRef: MutableRefObject<(surfaceId: string, elementId: string, patch: Record<string, unknown>) => void>;
+  removeSurfaceElementRef: MutableRefObject<(surfaceId: string, elementId: string) => void>;
   drawFromDeckRef:     MutableRefObject<(deckId: string, count: number, callerSeat: SeatIndex | null) => void>;
   shuffleDeckRef:      MutableRefObject<(deckId: string) => void>;
   dealFromDeckRef:     MutableRefObject<(deckId: string, count: number, callerSeat: SeatIndex | null) => void>;
@@ -103,7 +106,7 @@ export interface HandView {
 export function ThreeCanvas({
   isHost, sendRef, sendToRef, getTargetsRef, getSelfSeatRef, getSelfPeerIdRef, getPeerSeatRef,
   onMsgRef, onPeerLeftRef, onPeerJoinedRef,
-  spawnRef, rollRef, onContextMenuRef, deleteObjectRef, attachSurfaceRef, attachElementRef, drawFromDeckRef, shuffleDeckRef, dealFromDeckRef,
+  spawnRef, rollRef, onContextMenuRef, deleteObjectRef, attachSurfaceRef, attachElementRef, mutateSurfaceElementRef, removeSurfaceElementRef, drawFromDeckRef, shuffleDeckRef, dealFromDeckRef,
   updatePropRef,
   freeCameraRef, onObjectsChangeRef,
   onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,
@@ -421,6 +424,8 @@ export function ThreeCanvas({
       deleteObjectRef.current = (id)   => world.despawn(id);
       attachSurfaceRef.current = (parentId) => { world.attachSurface(parentId); };
       attachElementRef.current = (surfaceId, kind) => { world.attachElement(surfaceId, kind); };
+      mutateSurfaceElementRef.current = (surfaceId, elementId, patch) => world.mutateSurfaceElement(surfaceId, elementId, patch);
+      removeSurfaceElementRef.current = (surfaceId, elementId) => world.removeSurfaceElement(surfaceId, elementId);
       drawFromDeckRef.current = (deckId, count, seat) => world.drawFromDeck(deckId, count, seat);
       shuffleDeckRef.current  = (deckId) => world.shuffleDeck(deckId);
       dealFromDeckRef.current = (deckId, count, seat) => world.dealFromDeck(deckId, count, seat);
@@ -555,6 +560,8 @@ export function ThreeCanvas({
       deleteObjectRef.current = () => {};
       attachSurfaceRef.current = () => {};
       attachElementRef.current = () => {};
+      mutateSurfaceElementRef.current = () => {};
+      removeSurfaceElementRef.current = () => {};
       saveSceneRef.current    = () => {};
       replaceSceneRef.current = () => {};
       runScriptRef.current    = () => Promise.resolve({ ok: false, error: 'Canvas torn down.' });
@@ -582,7 +589,7 @@ export function ThreeCanvas({
   }, [
     isHost, sendRef, sendToRef, getTargetsRef, getSelfSeatRef, getSelfPeerIdRef, getPeerSeatRef,
     onMsgRef, onPeerLeftRef, onPeerJoinedRef,
-    spawnRef, rollRef, onContextMenuRef, deleteObjectRef, attachSurfaceRef, attachElementRef, drawFromDeckRef, shuffleDeckRef, dealFromDeckRef,
+    spawnRef, rollRef, onContextMenuRef, deleteObjectRef, attachSurfaceRef, attachElementRef, mutateSurfaceElementRef, removeSurfaceElementRef, drawFromDeckRef, shuffleDeckRef, dealFromDeckRef,
     updatePropRef,
     freeCameraRef, onObjectsChangeRef,
     onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,
@@ -686,11 +693,17 @@ function entityToObjectSummary(entity: Entity): ObjectSummary {
     props.isPrivate  = hand.state.isPrivate;
     props.owner      = entity.owner ?? -1;
   }
+  const surfaceComp = entity.getComponent(SurfaceComponent);
+  const surface = surfaceComp ? {
+    canvasSize: [...surfaceComp.state.canvasSize] as [number, number],
+    elements:   surfaceComp.state.elements.map(el => ({ ...el })),
+  } : null;
   return {
     id:         entity.id,
     objectType: entity.type as SpawnableType,
     tags:       [...entity.tags],
     props,
     parentId:   entity.parentId,
+    surface,
   };
 }

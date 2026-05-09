@@ -277,6 +277,30 @@ class WorldImpl implements World, HandleRouter {
     }
   }
 
+  // Host-only — patch one element in a surface's elements array. Replicates
+  // the whole array via the surface's standard component-patch path.
+  // No-op on a missing surface / unknown element id.
+  mutateSurfaceElement(surfaceId: string, elementId: string, patch: Record<string, unknown>): void {
+    if (this.role !== 'host') throw new Error('World.mutateSurfaceElement is host-only');
+    const surface = this.scene.getEntity(surfaceId)?.getComponent(SurfaceComponent);
+    if (!surface) return;
+    if (!surface.getElement(elementId)) return;
+    surface.mutateElement(elementId, patch);
+    this.notify();
+  }
+
+  // Host-only — drop an element from a surface's elements array. Replicates
+  // via the surface's standard component-patch path.
+  removeSurfaceElement(surfaceId: string, elementId: string): void {
+    if (this.role !== 'host') throw new Error('World.removeSurfaceElement is host-only');
+    const surface = this.scene.getEntity(surfaceId)?.getComponent(SurfaceComponent);
+    if (!surface) return;
+    if (!surface.getElement(elementId)) return;
+    this.history_?.push('remove surface element');
+    surface.removeElement(elementId);
+    this.notify();
+  }
+
   // Backs `scene.attachSticker` (issue #9 of issues--ui-surface.md). Builds
   // the surface entity, appends one element to its state.elements array,
   // enqueues the surface spawn so guests see it, and returns

@@ -92,6 +92,14 @@ export interface World {
   // "Add … Element" buttons. Returns the new element id.
   attachElement(surfaceId: string, kind: import('../components/SurfaceElement').EditorElementKind): string | null;
 
+  // Host-only — patch one element of a surface (bounds, kind-specific
+  // fields). Backs the editor-panel per-element rows.
+  mutateSurfaceElement(surfaceId: string, elementId: string, patch: Record<string, unknown>): void;
+
+  // Host-only — drop one element from a surface. Backs the editor-panel's
+  // per-element delete button.
+  removeSurfaceElement(surfaceId: string, elementId: string): void;
+
   // Per-frame driver. Host: physics step, bounds, syncFromPhysics, replicator
   // flush. Guest: no-op (inbound state arrives via transport.onMessage).
   tick(dtSeconds: number): void;
