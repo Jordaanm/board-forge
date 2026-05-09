@@ -308,6 +308,129 @@ describe('SurfaceComponent.onEditorTools', () => {
   });
 });
 
+describe('attachSticker — parent pose composition (issue #1 of refactor)', () => {
+  function makeParentAt(
+    scene: SceneImpl,
+    ctx: SpawnContext,
+    position: [number, number, number],
+    rotation: [number, number, number, number],
+    halfExtents: [number, number, number] = [1, 0.5, 1.5],
+  ): Entity {
+    const parent = new Entity({ id: 'parent-1', type: 'token', name: 'Token' });
+    const transform = new TransformComponent();
+    transform.fromJSON({ position, rotation, scale: [1, 1, 1] });
+    parent.attachComponent(transform);
+    const mesh = new MeshComponent();
+    mesh.fromJSON({
+      meshRef:     'prim:cube',
+      textureRefs: { default: '' },
+      tint:        '#888',
+      size:        [halfExtents[0] * 2, halfExtents[1] * 2, halfExtents[2] * 2],
+    });
+    parent.attachComponent(mesh);
+    scene.add(parent);
+    transform.onSpawn(ctx);
+    mesh.onSpawn(ctx);
+    return parent;
+  }
+
+  test('non-origin / non-identity parent: sticker world = parent.world * sticker.local', () => {
+    const scene = new SceneImpl();
+    const ctx = makeCtx(scene);
+    const parentPos: [number, number, number] = [3, 5, -2];
+    const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 4);
+    const parentRot: [number, number, number, number] = [q.x, q.y, q.z, q.w];
+    const parent = makeParentAt(scene, ctx, parentPos, parentRot);
+
+    const { surface } = attachSticker(scene, ctx, parent, {
+      face:    'top',
+      offset:  0,
+      content: { shape: { kind: 'rect' } },
+    });
+
+    const t = surface.getComponent(TransformComponent)!;
+    t.object3d.updateWorldMatrix(true, false);
+
+    const expected = new THREE.Matrix4()
+      .compose(
+        new THREE.Vector3(...parentPos),
+        new THREE.Quaternion(...parentRot),
+        new THREE.Vector3(1, 1, 1),
+      )
+      .multiply(new THREE.Matrix4().compose(
+        new THREE.Vector3(...t.state.position),
+        new THREE.Quaternion(...t.state.rotation),
+        new THREE.Vector3(1, 1, 1),
+      ));
+    const expPos   = new THREE.Vector3();
+    const expQuat  = new THREE.Quaternion();
+    const expScale = new THREE.Vector3();
+    expected.decompose(expPos, expQuat, expScale);
+
+    const actualPos  = new THREE.Vector3();
+    const actualQuat = new THREE.Quaternion();
+    t.object3d.getWorldPosition(actualPos);
+    t.object3d.getWorldQuaternion(actualQuat);
+
+    expect(actualPos.x).toBeCloseTo(expPos.x, 5);
+    expect(actualPos.y).toBeCloseTo(expPos.y, 5);
+    expect(actualPos.z).toBeCloseTo(expPos.z, 5);
+    expect(Math.abs(actualQuat.dot(expQuat))).toBeCloseTo(1, 5);
+
+    // Sticker face (+Z in surface-local) points outward from the parent's top
+    // face (+Y in parent-local). Apply parent rotation to that to get the
+    // expected world-space outward normal.
+    const outward = new THREE.Vector3(0, 0, 1).applyQuaternion(actualQuat);
+    const expectedOutwardWorld = new THREE.Vector3(0, 1, 0).applyQuaternion(new THREE.Quaternion(...parentRot));
+    expect(outward.x).toBeCloseTo(expectedOutwardWorld.x, 5);
+    expect(outward.y).toBeCloseTo(expectedOutwardWorld.y, 5);
+    expect(outward.z).toBeCloseTo(expectedOutwardWorld.z, 5);
+  });
+
+  test('parent moves after spawn: sticker follows without setState on the surface transform', () => {
+    const scene = new SceneImpl();
+    const ctx = makeCtx(scene);
+    const parent = makeParentAt(scene, ctx, [0, 0, 0], [0, 0, 0, 1]);
+    const { surface } = attachSticker(scene, ctx, parent, {
+      face:    'top',
+      offset:  0,
+      content: { shape: { kind: 'rect' } },
+    });
+    const surfaceT = surface.getComponent(TransformComponent)!;
+    const stickerLocal: [number, number, number] = [...surfaceT.state.position];
+
+    const parentT = parent.getComponent(TransformComponent)!;
+    parentT.object3d.position.set(10, 2, -3);
+    parentT.object3d.updateMatrixWorld(true);
+
+    const worldPos = new THREE.Vector3();
+    surfaceT.object3d.getWorldPosition(worldPos);
+    expect(worldPos.x).toBeCloseTo(10 + stickerLocal[0], 5);
+    expect(worldPos.y).toBeCloseTo(2  + stickerLocal[1], 5);
+    expect(worldPos.z).toBeCloseTo(-3 + stickerLocal[2], 5);
+
+    // Sticker's data state is unchanged — the follow happens through the
+    // THREE scene-graph parent link, not via a setState.
+    expect(surfaceT.state.position).toEqual(stickerLocal);
+  });
+
+  test('SurfaceComponent.onDespawn detaches the surface object3d from the parent', () => {
+    const scene = new SceneImpl();
+    const ctx = makeCtx(scene);
+    const parent = makeParentAt(scene, ctx, [0, 0, 0], [0, 0, 0, 1]);
+    const { surface } = attachSticker(scene, ctx, parent, {
+      face:    'top',
+      content: { shape: { kind: 'rect' } },
+    });
+    const parentObj  = parent .getComponent(TransformComponent)!.object3d;
+    const surfaceObj = surface.getComponent(TransformComponent)!.object3d;
+    expect(parentObj.children).toContain(surfaceObj);
+
+    surface.getComponent(SurfaceComponent)!.onDespawn(ctx);
+    expect(parentObj.children).not.toContain(surfaceObj);
+  });
+});
+
 describe('attachSticker — element response to mutations', () => {
   test('returned element responds to ShapeElement.setState (parent surface dirty flips)', () => {
     const scene = new SceneImpl();

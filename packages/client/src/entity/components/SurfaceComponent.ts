@@ -20,6 +20,7 @@
 import * as THREE from 'three';
 import { EntityComponent, type SpawnContext, type MenuContext, type ReplicationChannel } from '../EntityComponent';
 import { MeshComponent } from './MeshComponent';
+import { TransformComponent } from './TransformComponent';
 import { surfaceRenderQueue } from './SurfaceRenderQueue';
 import type { ElementComponent, ElementBounds } from './ElementComponent';
 import type { InputEventPayload } from '../../input/inputEvents';
@@ -42,6 +43,7 @@ export class SurfaceComponent extends EntityComponent<SurfaceState> {
 
   onSpawn(_ctx: SpawnContext): void {
     if (!this.state) this.state = { canvasSize: [512, 512] };
+    this.attachToParentObject3D();
     if (typeof document === 'undefined') return;
 
     const [w, h] = this.state.canvasSize;
@@ -59,10 +61,40 @@ export class SurfaceComponent extends EntityComponent<SurfaceState> {
 
   onDespawn(_ctx: SpawnContext): void {
     this.unbindFromMesh();
+    this.detachFromParentObject3D();
     this.texture?.dispose();
     this.texture = null;
     this.canvas  = null;
     this.ctx     = null;
+  }
+
+  // Re-parent the surface entity's THREE object3d under the owning entity's
+  // object3d so the surface tracks the parent's pose without a per-frame
+  // setState. Uses `parent.add` (not `attach`) because the surface's
+  // TransformComponent state is already authored in the parent's local frame
+  // — we want that local pose preserved verbatim under the new parent.
+  private attachToParentObject3D(): void {
+    const parent = this.findParentObject3D();
+    const self   = this.entity.getComponent(TransformComponent)?.object3d;
+    if (!parent || !self) return;
+    parent.add(self);
+  }
+
+  private detachFromParentObject3D(): void {
+    const self = this.entity.getComponent(TransformComponent)?.object3d;
+    if (!self) return;
+    const parent = this.findParentObject3D();
+    if (parent && self.parent === parent) parent.remove(self);
+  }
+
+  private findParentObject3D(): THREE.Object3D | null {
+    const parentId = this.entity?.parentId;
+    if (!parentId) return null;
+    const scene = this.entity.scene;
+    if (!scene) return null;
+    const parentEntity = scene.getEntity(parentId);
+    if (!parentEntity) return null;
+    return parentEntity.getComponent(TransformComponent)?.object3d ?? null;
   }
 
   onPropertiesChanged(changed: Partial<SurfaceState>): void {
