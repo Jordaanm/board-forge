@@ -22,6 +22,7 @@ import { LightingComponent } from './components/LightingComponent';
 import { SurfaceComponent } from './components/SurfaceComponent';
 import { ShapeElement } from './components/ShapeElement';
 import { ImageElement } from './components/ImageElement';
+import { RichElement } from './components/RichElement';
 import { D6_FACE_MAP } from '../dice/d6';
 import { D20_FACE_MAP } from '../dice/d20';
 
@@ -43,6 +44,7 @@ export function registerCorePrimitives(): void {
   if (!componentRegistry.has('surface'))       componentRegistry.register(SurfaceComponent);
   if (!componentRegistry.has('shape-element')) componentRegistry.register(ShapeElement);
   if (!componentRegistry.has('image-element')) componentRegistry.register(ImageElement);
+  if (!componentRegistry.has('rich-element'))  componentRegistry.register(RichElement);
 
   if (!getSpawnable('table')) registerSpawnable({
     type:        'table',
