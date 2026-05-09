@@ -6,6 +6,9 @@ import { SceneFacade } from './SceneFacade';
 import { EntityFacade } from './EntityFacade';
 import { Manifest } from '../assets/Manifest';
 import { TABLE_ENTITY_ID } from '../entity/tableEntity';
+import { RichElement } from '../entity/components/RichElement';
+import { ImageElement } from '../entity/components/ImageElement';
+import { ShapeElement } from '../entity/components/ShapeElement';
 
 class StubScene implements EntityScene {
   private byId = new Map<string, Entity>();
@@ -503,5 +506,167 @@ describe('SceneFacade — script integration', () => {
     `);
     expect(result.ok).toBe(true);
     expect(logs).toEqual([TABLE_ENTITY_ID, 'custom:sky/blue']);
+  });
+});
+
+describe('EntityFacade — element mutators (#9 of issues--ui-surface.md)', () => {
+  function makeStickerEntity(): Entity {
+    return new Entity({ id: 's-1', type: 'sticker-element', name: 'StickerEl' });
+  }
+
+  test('setHtml routes to RichElement.setState', () => {
+    const e   = makeStickerEntity();
+    const rc  = new RichElement();
+    rc.fromJSON({ x: 0, y: 0, w: 10, h: 10, html: '<div/>' });
+    e.attachComponent(rc);
+    const scene = new StubScene();
+    scene.add(e);
+    const facade = new SceneFacade(scene, { registrations: [] }).getObjectById('s-1')!;
+    facade.setHtml('<b>hi</b>');
+    expect(rc.state.html).toBe('<b>hi</b>');
+  });
+
+  test('setImageRef routes to ImageElement.setState', () => {
+    const e   = makeStickerEntity();
+    const ic  = new ImageElement();
+    ic.fromJSON({ x: 0, y: 0, w: 10, h: 10, textureRef: '', fit: 'fit' });
+    e.attachComponent(ic);
+    const scene = new StubScene();
+    scene.add(e);
+    const facade = new SceneFacade(scene, { registrations: [] }).getObjectById('s-1')!;
+    facade.setImageRef('base:tex/portrait');
+    expect(ic.state.textureRef).toBe('base:tex/portrait');
+  });
+
+  test('setShape routes to ShapeElement.setState', () => {
+    const e   = makeStickerEntity();
+    const sc  = new ShapeElement();
+    sc.fromJSON({ x: 0, y: 0, w: 10, h: 10, kind: 'rect', fill: '#000' });
+    e.attachComponent(sc);
+    const scene = new StubScene();
+    scene.add(e);
+    const facade = new SceneFacade(scene, { registrations: [] }).getObjectById('s-1')!;
+    facade.setShape({ fill: '#0f0', radius: 4 });
+    expect(sc.state.fill).toBe('#0f0');
+    expect(sc.state.radius).toBe(4);
+  });
+
+  test('setBounds routes to whichever element component is present (rich/image/shape)', () => {
+    const e   = makeStickerEntity();
+    const sc  = new ShapeElement();
+    sc.fromJSON({ x: 0, y: 0, w: 10, h: 10, kind: 'rect' });
+    e.attachComponent(sc);
+    const scene = new StubScene();
+    scene.add(e);
+    const facade = new SceneFacade(scene, { registrations: [] }).getObjectById('s-1')!;
+    facade.setBounds(5, 6, 100, 50);
+    expect(sc.state.x).toBe(5);
+    expect(sc.state.y).toBe(6);
+    expect(sc.state.w).toBe(100);
+    expect(sc.state.h).toBe(50);
+  });
+
+  test('setHtml on an entity without rich-element warns and is a no-op', () => {
+    const e = makeStickerEntity();
+    const sc = new ShapeElement();
+    sc.fromJSON({ x: 0, y: 0, w: 1, h: 1, kind: 'rect' });
+    e.attachComponent(sc);
+    const scene = new StubScene();
+    scene.add(e);
+    const warns: string[] = [];
+    const facade = new SceneFacade(scene, { registrations: [], warn: (m) => warns.push(m) }).getObjectById('s-1')!;
+    facade.setHtml('<i/>');
+    expect(warns[0]).toMatch(/no rich-element/);
+  });
+
+  test('setBounds on an entity without any element component warns and is a no-op', () => {
+    const e = makeStickerEntity();
+    const scene = new StubScene();
+    scene.add(e);
+    const warns: string[] = [];
+    const facade = new SceneFacade(scene, { registrations: [], warn: (m) => warns.push(m) }).getObjectById('s-1')!;
+    facade.setBounds(0, 0, 1, 1);
+    expect(warns[0]).toMatch(/no element component/);
+  });
+});
+
+describe('SceneFacade.attachSticker (#9 of issues--ui-surface.md)', () => {
+  test('routes parent.id + opts through ctx.attachSticker; wraps the returned id', () => {
+    const scene = new StubScene();
+    scene.add(makeEntity('p-1', { type: 'token' }));
+    scene.add(makeEntity('elem-1', { type: 'sticker-element' }));
+    const calls: Array<{ parentId: string; opts: unknown }> = [];
+    const facade = new SceneFacade(
+      scene,
+      { registrations: [] },
+      {
+        attachSticker: (parentId, opts) => {
+          calls.push({ parentId, opts });
+          return 'elem-1';
+        },
+      },
+    );
+    const parent = facade.getObjectById('p-1')!;
+    const elem = facade.attachSticker(parent, {
+      face:    'top',
+      content: { html: '<b>hi</b>' },
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0].parentId).toBe('p-1');
+    expect(elem).not.toBeNull();
+    expect(elem!.id).toBe('elem-1');
+    // Cached on subsequent lookup (per-Run identity).
+    expect(facade.getObjectById('elem-1')).toBe(elem);
+  });
+
+  test('returns null and warns when ctx.attachSticker is not wired (guest / unit context)', () => {
+    const scene = new StubScene();
+    scene.add(makeEntity('p-1', { type: 'token' }));
+    const warns: string[] = [];
+    const facade = new SceneFacade(scene, { registrations: [], warn: (m) => warns.push(m) });
+    const parent = facade.getObjectById('p-1')!;
+    const elem = facade.attachSticker(parent, {
+      face:    'top',
+      content: { html: '<b>hi</b>' },
+    });
+    expect(elem).toBeNull();
+    expect(warns[0]).toMatch(/host-only/);
+  });
+
+  test('returns null when ctx.attachSticker reports failure (e.g. parent has no mesh)', () => {
+    const scene = new StubScene();
+    scene.add(makeEntity('p-1', { type: 'token' }));
+    const facade = new SceneFacade(
+      scene,
+      { registrations: [] },
+      { attachSticker: () => null },
+    );
+    const parent = facade.getObjectById('p-1')!;
+    const elem = facade.attachSticker(parent, {
+      face:    'front',
+      content: { shape: { kind: 'rect' } },
+    });
+    expect(elem).toBeNull();
+  });
+
+  test('returned element facade can attach a click listener that fires on the underlying entity', () => {
+    const scene = new StubScene();
+    scene.add(makeEntity('p-1', { type: 'token' }));
+    const elementEntity = makeEntity('elem-1', { type: 'shape-element' });
+    scene.add(elementEntity);
+    const facade = new SceneFacade(
+      scene,
+      { registrations: [] },
+      { attachSticker: () => 'elem-1' },
+    );
+    const parent = facade.getObjectById('p-1')!;
+    const elem = facade.attachSticker(parent, {
+      face:    'top',
+      content: { shape: { kind: 'rect' } },
+    })!;
+    let received: unknown = null;
+    elem.addEventListener('click', (e) => { received = e; });
+    elementEntity.dispatchEvent('click', { seat: 0 });
+    expect(received).toEqual({ seat: 0 });
   });
 });

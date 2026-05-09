@@ -26,6 +26,43 @@ declare class AssetsApi {
   list(opts?: { type?: AssetType }): ReadonlyArray<AssetEntry>;
 }
 
+type ShapeKind = 'rect' | 'circle';
+
+type ImageFit = 'fit' | 'cover' | 'stretch' | 'none';
+
+interface ShapeOpts {
+    kind?: ShapeKind;
+    fill?: string;
+    stroke?: string;
+    strokeWidth?: number;
+    radius?: number;
+}
+
+type StickerFace = 'top' | 'bottom' | 'front' | 'back' | 'left' | 'right';
+
+interface StickerOpts {
+    face: StickerFace;
+    size?: [
+        number,
+        number
+    ];
+    offset?: number;
+    canvasSize?: [
+        number,
+        number
+    ];
+    content: {
+        shape: ShapeOpts & {
+            kind: ShapeKind;
+        };
+    } | {
+        image: string;
+        fit?: ImageFit;
+    } | {
+        html: string;
+    };
+}
+
 declare class EntityFacade {
   readonly id: string;
   readonly type: string;
@@ -39,6 +76,10 @@ declare class EntityFacade {
   setData(key: string, value: string): void;
   getData(key: string): string | undefined;
   deleteData(key: string): boolean;
+  setHtml(html: string): void;
+  setImageRef(ref: string): void;
+  setShape(opts: ShapeOpts): void;
+  setBounds(x: number, y: number, w: number, h: number): void;
 }
 
 declare class SceneFacade {
@@ -47,6 +88,7 @@ declare class SceneFacade {
   getTable(): EntityFacade | undefined;
   getObjectsByTag(tag: string): EntityFacade[];
   playSound(slug: string): void;
+  attachSticker(parent: EntityFacade, opts: StickerOpts): EntityFacade | null;
 }
 
 declare class Game {

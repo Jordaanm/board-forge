@@ -29,6 +29,7 @@ import { type ScriptRunContext } from './EntityFacade';
 import { ScriptErrorLog } from './ScriptErrorLog';
 import { type EntityScene } from '../entity/EntityComponent';
 import { type AssetEntry, type AssetType } from '../assets/Manifest';
+import { type StickerOpts } from '../entity/components/attachSticker';
 
 export interface ScriptHostOptions {
   // The scene this host queries. Optional so unit tests that don't exercise
@@ -48,6 +49,10 @@ export interface ScriptHostOptions {
   lookupSlug?: (slug: string) => AssetEntry | undefined;
   // Optional manifest lister backing `scene.assets.list({ type })`.
   listAssets?: (opts?: { type?: AssetType }) => AssetEntry[];
+  // Host-only sticker compositor backing `scene.attachSticker` (issue #9
+  // of issues--ui-surface.md). Returns the new element entity's id, or null
+  // when the host can't honour the request. Absent on guest contexts.
+  attachSticker?: (parentId: string, opts: StickerOpts) => string | null;
 }
 
 export type RunResult =
@@ -63,11 +68,12 @@ export interface ScriptState {
 }
 
 export class ScriptHost {
-  private readonly console_:    ScriptHostOptions['console'];
-  private readonly scene_:      EntityScene | null;
-  private readonly playSound_:  ScriptHostOptions['playSound'];
-  private readonly lookupSlug_: ScriptHostOptions['lookupSlug'];
-  private readonly listAssets_: ScriptHostOptions['listAssets'];
+  private readonly console_:        ScriptHostOptions['console'];
+  private readonly scene_:          EntityScene | null;
+  private readonly playSound_:      ScriptHostOptions['playSound'];
+  private readonly lookupSlug_:     ScriptHostOptions['lookupSlug'];
+  private readonly listAssets_:     ScriptHostOptions['listAssets'];
+  private readonly attachSticker_:  ScriptHostOptions['attachSticker'];
   // Bounded ring buffer of script errors surfaced to the script panel
   // (issue #7). Hook errors, listener errors, AND startup-failure errors
   // (compile, module-load, structural, constructor) all funnel here so the
@@ -85,11 +91,12 @@ export class ScriptHost {
   private currentRunCtx: ScriptRunContext = { registrations: [] };
 
   constructor(opts: ScriptHostOptions = {}) {
-    this.console_    = opts.console ?? console;
-    this.scene_      = opts.scene   ?? null;
-    this.playSound_  = opts.playSound;
-    this.lookupSlug_ = opts.lookupSlug;
-    this.listAssets_ = opts.listAssets;
+    this.console_       = opts.console ?? console;
+    this.scene_         = opts.scene   ?? null;
+    this.playSound_     = opts.playSound;
+    this.lookupSlug_    = opts.lookupSlug;
+    this.listAssets_    = opts.listAssets;
+    this.attachSticker_ = opts.attachSticker;
   }
 
   // Bounded ring of runtime errors (hook + listener). Subscribe via
@@ -147,8 +154,9 @@ export class ScriptHost {
     };
     const scene = this.scene_
       ? new SceneFacade(this.scene_, ctx, {
-          lookupSlug: this.lookupSlug_,
-          listAssets: this.listAssets_,
+          lookupSlug:    this.lookupSlug_,
+          listAssets:    this.listAssets_,
+          attachSticker: this.attachSticker_,
         })
       : {};
 

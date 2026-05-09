@@ -13,6 +13,9 @@ import { type Entity } from '../entity/Entity';
 import { type Listener } from '../entity/EntityEventBus';
 import { type SeatIndex } from '../seats/SeatLayout';
 import { ValueComponent } from '../entity/components/ValueComponent';
+import { RichElement } from '../entity/components/RichElement';
+import { ImageElement, type ImageFit } from '../entity/components/ImageElement';
+import { ShapeElement, type ShapeKind } from '../entity/components/ShapeElement';
 import { type ScriptErrorLog } from './ScriptErrorLog';
 
 export interface ReadOnlyComponentView {
@@ -133,5 +136,47 @@ export class EntityFacade {
 
   deleteData(key: string): boolean {
     return this.entity_.deleteCustomData(key);
+  }
+
+  // Element-component mutators (issue #9 of issues--ui-surface.md). Each
+  // routes to whichever element component this entity carries; calls on
+  // entities without the relevant component no-op + warn so a typo in a
+  // script surfaces audibly rather than silently mis-targeting.
+
+  setHtml(html: string): void {
+    const comp = this.entity_.getComponent(RichElement);
+    if (!comp) { this.warn('setHtml: entity has no rich-element component'); return; }
+    comp.setState({ html });
+  }
+
+  setImageRef(ref: string): void {
+    const comp = this.entity_.getComponent(ImageElement);
+    if (!comp) { this.warn('setImageRef: entity has no image-element component'); return; }
+    comp.setState({ textureRef: ref });
+  }
+
+  setShape(opts: {
+    kind?:        ShapeKind;
+    fill?:        string;
+    stroke?:      string;
+    strokeWidth?: number;
+    radius?:      number;
+  }): void {
+    const comp = this.entity_.getComponent(ShapeElement);
+    if (!comp) { this.warn('setShape: entity has no shape-element component'); return; }
+    comp.setState(opts);
+  }
+
+  setBounds(x: number, y: number, w: number, h: number): void {
+    const target = this.entity_.getComponent(RichElement)
+                ?? this.entity_.getComponent(ImageElement)
+                ?? this.entity_.getComponent(ShapeElement);
+    if (!target) { this.warn('setBounds: entity has no element component'); return; }
+    target.setState({ x, y, w, h });
+  }
+
+  private warn(message: string): void {
+    const sink = this.ctx.warn ?? ((m: string) => { if (typeof console !== 'undefined') console.warn('[script]', m); });
+    sink(message);
   }
 }

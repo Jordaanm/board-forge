@@ -47,6 +47,30 @@ export class EditorAssetsApi {
   list(opts?: { type?: EditorAssetType }): ReadonlyArray<EditorAssetEntry> { void opts; return []; }
 }
 
+export type EditorShapeKind = 'rect' | 'circle';
+export type EditorImageFit  = 'fit' | 'cover' | 'stretch' | 'none';
+
+export interface EditorShapeOpts {
+  kind?:        EditorShapeKind;
+  fill?:        string;
+  stroke?:      string;
+  strokeWidth?: number;
+  radius?:      number;
+}
+
+export type EditorStickerFace = 'top' | 'bottom' | 'front' | 'back' | 'left' | 'right';
+
+export interface EditorStickerOpts {
+  face:        EditorStickerFace;
+  size?:       [number, number];
+  offset?:     number;
+  canvasSize?: [number, number];
+  content:
+    | { shape: EditorShapeOpts & { kind: EditorShapeKind } }
+    | { image: string; fit?: EditorImageFit }
+    | { html:  string };
+}
+
 export class EditorEntityFacade {
   declare readonly id:    string;
   declare readonly type:  string;
@@ -61,6 +85,10 @@ export class EditorEntityFacade {
   setData(key: string, value: string): void { void key; void value; }
   getData(key: string): string | undefined { void key; return undefined; }
   deleteData(key: string): boolean { void key; return false; }
+  setHtml(html: string): void { void html; }
+  setImageRef(ref: string): void { void ref; }
+  setShape(opts: EditorShapeOpts): void { void opts; }
+  setBounds(x: number, y: number, w: number, h: number): void { void x; void y; void w; void h; }
 }
 
 export class EditorSceneFacade {
@@ -69,6 +97,9 @@ export class EditorSceneFacade {
   getTable(): EditorEntityFacade | undefined { return undefined; }
   getObjectsByTag(tag: string): EditorEntityFacade[] { void tag; return []; }
   playSound(slug: string): void { void slug; }
+  attachSticker(parent: EditorEntityFacade, opts: EditorStickerOpts): EditorEntityFacade | null {
+    void parent; void opts; return null;
+  }
 }
 
 export class EditorGame {

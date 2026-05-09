@@ -46,6 +46,7 @@ import { canManipulate } from '../../seats/OwnershipPolicy';
 import { EntityHandleImpl, type HandleRouter } from './EntityHandle';
 import { ScriptHost } from '../../scripting/ScriptHost';
 import { assetService } from '../../assets/AssetService';
+import { attachSticker, type StickerOpts } from '../components/attachSticker';
 import {
   type World,
   type WorldOptions,
@@ -159,10 +160,11 @@ class WorldImpl implements World, HandleRouter {
       );
       this.hostInput.setHistoryService(this.history_);
       this.scripting_ = new ScriptHost({
-        scene:      this.scene,
-        playSound:  (slug) => this.broadcastPlaySound(slug),
-        lookupSlug: (slug) => assetService.lookupSlug(slug),
-        listAssets: (opts) => assetService.listAssets(opts),
+        scene:         this.scene,
+        playSound:     (slug) => this.broadcastPlaySound(slug),
+        lookupSlug:    (slug) => assetService.lookupSlug(slug),
+        listAssets:    (opts) => assetService.listAssets(opts),
+        attachSticker: (parentId, opts) => this.attachStickerOnHost(parentId, opts),
       });
       this.installBeginContactHandler();
       // Boot the singleton Table entity. Guests receive it through the
@@ -226,6 +228,29 @@ class WorldImpl implements World, HandleRouter {
 
   private spawnEntityAt(type: string, position: [number, number, number]): Entity {
     return this.spawnEntity(type, { position });
+  }
+
+  // Backs `scene.attachSticker` (issue #9 of issues--ui-surface.md). Builds
+  // the surface + element entity tree, enqueues spawns for both so guests
+  // see them, and returns the element id to the script. Returns null when
+  // the request can't be honoured (unknown parent, parent has no mesh).
+  private attachStickerOnHost(parentId: string, opts: StickerOpts): string | null {
+    const parent = this.scene.getEntity(parentId);
+    if (!parent) return null;
+    if (!parent.getComponent(MeshComponent)) return null;
+    const ctx: SpawnContext = { scene: this.threeScene, physics: this.physics, entityScene: this.scene };
+    try {
+      const { surface, element } = attachSticker(this.scene, ctx, parent, opts);
+      if (this.replicator) {
+        this.replicator.enqueueEntitySpawn(entityToSerialized(surface));
+        this.replicator.enqueueEntitySpawn(entityToSerialized(element));
+      }
+      this.notify();
+      return element.id;
+    } catch (e) {
+      this.scripting_?.errorLog.push('attachSticker', e);
+      return null;
+    }
   }
 
   // Mirrors SceneSystemV2.spawn's random table-surface placement so existing
