@@ -87,10 +87,10 @@ export interface World {
   // tool. Defaults to the parent's +Y face sized to its mesh footprint.
   attachSurface(parentId: string, opts?: import('../components/attachSticker').SurfaceChildOpts): string | null;
 
-  // Host-only — spawn an element entity (Rich / Image / Shape) parented to
-  // an existing surface entity. Backs the Surface component's editor-panel
-  // "Add … Element" buttons.
-  attachElement(surfaceId: string, kind: import('../components/attachSticker').SurfaceElementKind): string | null;
+  // Host-only — append one element (Rich / Image / Shape) to a surface's
+  // `state.elements` array. Backs the Surface component's editor-panel
+  // "Add … Element" buttons. Returns the new element id.
+  attachElement(surfaceId: string, kind: import('../components/SurfaceElement').EditorElementKind): string | null;
 
   // Per-frame driver. Host: physics step, bounds, syncFromPhysics, replicator
   // flush. Guest: no-op (inbound state arrives via transport.onMessage).

@@ -15,6 +15,8 @@ import { EntityFacade, type ScriptRunContext } from './EntityFacade';
 import { type AssetEntry, type AssetType } from '../assets/Manifest';
 import { TABLE_ENTITY_ID } from '../entity/tableEntity';
 import { type StickerOpts } from '../entity/components/attachSticker';
+import { ElementHandle, entitySceneLookup } from '../entity/components/ElementHandle';
+import { SurfaceComponent } from '../entity/components/SurfaceComponent';
 
 export interface SceneFacadeOptions {
   // Optional asset-slug lookup used to validate `playSound` slugs against
@@ -28,11 +30,13 @@ export interface SceneFacadeOptions {
   // running without a wired AssetService see an empty catalog rather than
   // crashing.
   listAssets?: (opts?: { type?: AssetType }) => AssetEntry[];
-  // Host-only sticker compositor (issue #9). Returns the new element
-  // entity's id, or null if the host can't honour the request (unknown
-  // parent, missing mesh, no-op contexts). When absent (e.g. guest, unit
-  // tests), `scene.attachSticker` warns and no-ops.
-  attachSticker?: (parentId: string, opts: StickerOpts) => string | null;
+  // Host-only sticker compositor (issue #9, refactored for issue #2 of
+  // issues--ui-surface-refactor.md). Returns `{ surfaceId, elementId }` —
+  // the surface entity id and the new element id appended to its
+  // `state.elements` array — or null if the host can't honour the request
+  // (unknown parent, missing mesh, no-op contexts). When absent (e.g.
+  // guest, unit tests), `scene.attachSticker` warns and no-ops.
+  attachSticker?: (parentId: string, opts: StickerOpts) => { surfaceId: string; elementId: string } | null;
 }
 
 // Read-only catalog surface exposed as `scene.assets`. Returns deeply frozen
@@ -111,11 +115,12 @@ export class SceneFacade {
   }
 
   // Composes a child surface entity (prim:plane mesh + SurfaceComponent)
-  // and one element entity (Shape | Image | Rich) onto `parent`'s requested
-  // face. Returns the element's facade so the script can attach event
-  // listeners. Host-only — when not wired (guest, unit tests without a
-  // configured callback) the call warns and returns null.
-  attachSticker(parent: EntityFacade | null | undefined, opts: StickerOpts): EntityFacade | null {
+  // and appends one element to that surface's `state.elements` array on
+  // `parent`'s requested face. Returns an `ElementHandle` so the script can
+  // attach event listeners and mutate the element's data. Host-only — when
+  // not wired (guest, unit tests without a configured callback) the call
+  // warns and returns null.
+  attachSticker(parent: EntityFacade | null | undefined, opts: StickerOpts): ElementHandle | null {
     if (!parent) {
       this.warn('scene.attachSticker: parent is required');
       return null;
@@ -124,9 +129,25 @@ export class SceneFacade {
       this.warn('scene.attachSticker: no-op (host-only API; not running on host)');
       return null;
     }
-    const id = this.opts.attachSticker(parent.id, opts);
-    if (!id) return null;
-    return this.facadeFor(id);
+    const result = this.opts.attachSticker(parent.id, opts);
+    if (!result) return null;
+    return new ElementHandle(result.surfaceId, result.elementId, entitySceneLookup(this.scene), this.ctx);
+  }
+
+  // Look up an existing element on a surface by id and wrap as an
+  // ElementHandle. Returns null when the surface entity is gone, has no
+  // SurfaceComponent, or has no element with that id. Used by scripts that
+  // persist element ids across Runs — the ElementHandle returned from
+  // `attachSticker` is per-Run (its listener registrations live on the
+  // active Run's context), so a script that wants to re-attach listeners
+  // after a Run swap calls `getElement` to obtain a fresh handle.
+  getElement(surfaceId: string, elementId: string): ElementHandle | null {
+    const e = this.scene.getEntity(surfaceId);
+    if (!e) return null;
+    const surface = e.getComponent(SurfaceComponent);
+    if (!surface) return null;
+    if (!surface.getElement(elementId)) return null;
+    return new ElementHandle(surfaceId, elementId, entitySceneLookup(this.scene), this.ctx);
   }
 
   // Trigger a sound effect on every peer (including the host). Host-only —

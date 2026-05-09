@@ -49,15 +49,17 @@ function tagItem(item: EditorToolItem, componentTypeId: string): EditorToolItem 
 // dispatcher routes these to host-local callbacks rather than `comp.onAction`,
 // since components don't get a clean path to spawn child entities. Mirrors
 // how `dispatchMenuAction` handles `__delete` and the deck verbs.
+import { type EditorElementKind } from './components/SurfaceElement';
+
 export interface EditorToolDeps {
   entity:    Entity | undefined;
   hostLocal: {
     attachSurface: (parentId: string) => void;
-    attachElement: (surfaceId: string, kind: 'rich' | 'image' | 'shape-rect' | 'shape-circle') => void;
+    attachElement: (surfaceId: string, kind: EditorElementKind) => void;
   };
 }
 
-const SURFACE_ELEMENT_ACTIONS: Record<string, 'rich' | 'image' | 'shape-rect' | 'shape-circle'> = {
+const SURFACE_ELEMENT_ACTIONS: Record<string, EditorElementKind> = {
   'add-rich':         'rich',
   'add-image':        'image',
   'add-shape-rect':   'shape-rect',

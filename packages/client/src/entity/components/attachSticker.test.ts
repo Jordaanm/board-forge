@@ -8,18 +8,14 @@ import { PhysicsWorld } from '../../physics/PhysicsWorld';
 import { TransformComponent } from './TransformComponent';
 import { MeshComponent } from './MeshComponent';
 import { SurfaceComponent } from './SurfaceComponent';
-import { ShapeElement } from './ShapeElement';
-import { ImageElement } from './ImageElement';
-import { RichElement } from './RichElement';
 import { surfaceRenderQueue } from './SurfaceRenderQueue';
 import { elementBitmapCache } from './ElementBitmapCache';
-import { attachSticker, createSurfaceChild, createSurfaceElement } from './attachSticker';
+import { attachSticker, createSurfaceChild, appendDefaultElement } from './attachSticker';
 
 let originalGetContext: typeof HTMLCanvasElement.prototype.getContext;
 
 beforeEach(() => {
   originalGetContext = HTMLCanvasElement.prototype.getContext;
-  // Stub canvas 2d for SurfaceComponent.onSpawn.
   HTMLCanvasElement.prototype.getContext = function (type: string) {
     if (type === '2d') {
       return {
@@ -65,52 +61,56 @@ function makeCtx(scene: SceneImpl): SpawnContext {
   return { scene: new THREE.Scene(), physics: new PhysicsWorld(), entityScene: scene };
 }
 
-describe('attachSticker — entity tree shape', () => {
-  test('creates surface entity (transform + mesh + surface) and element entity, parented correctly', () => {
+describe('attachSticker — return shape (issue #2 of refactor)', () => {
+  test('returns { surfaceEntity, elementHandle } and appends one element to the surface', () => {
     const scene = new SceneImpl();
     const ctx = makeCtx(scene);
     const parent = makeParent(scene, ctx);
 
-    const { surface, element } = attachSticker(scene, ctx, parent, {
+    const { surfaceEntity, elementHandle } = attachSticker(scene, ctx, parent, {
       face:    'top',
       content: { shape: { kind: 'rect', fill: '#f00' } },
     });
 
-    expect(surface.parentId).toBe(parent.id);
-    expect(parent.children).toContain(surface.id);
-    expect(surface.getComponent(TransformComponent)).toBeDefined();
-    expect(surface.getComponent(MeshComponent)).toBeDefined();
-    expect(surface.getComponent(SurfaceComponent)).toBeDefined();
-    expect(surface.getComponent(MeshComponent)!.state.meshRef).toBe('prim:plane');
+    expect(surfaceEntity.parentId).toBe(parent.id);
+    expect(parent.children).toContain(surfaceEntity.id);
+    const surface = surfaceEntity.getComponent(SurfaceComponent)!;
+    expect(surface.state.elements).toHaveLength(1);
+    expect(surface.state.elements[0].kind).toBe('shape');
 
-    expect(element.parentId).toBe(surface.id);
-    expect(surface.children).toContain(element.id);
-    expect(element.getComponent(ShapeElement)).toBeDefined();
+    expect(elementHandle.surfaceId).toBe(surfaceEntity.id);
+    expect(elementHandle.elementId).toBe(surface.state.elements[0].id);
   });
 
-  test('html opt creates a RichElement', () => {
+  test('html content produces a kind-rich element with the supplied html', () => {
     const scene = new SceneImpl();
     const ctx = makeCtx(scene);
     const parent = makeParent(scene, ctx);
-    const { element } = attachSticker(scene, ctx, parent, {
+    const { surfaceEntity } = attachSticker(scene, ctx, parent, {
       face:    'top',
       content: { html: '<div>hi</div>' },
     });
-    expect(element.getComponent(RichElement)).toBeDefined();
-    expect(element.getComponent(RichElement)!.state.html).toBe('<div>hi</div>');
+    const surface = surfaceEntity.getComponent(SurfaceComponent)!;
+    const el = surface.state.elements[0];
+    expect(el.kind).toBe('rich');
+    if (el.kind === 'rich') expect(el.html).toBe('<div>hi</div>');
   });
 
-  test('image opt creates an ImageElement carrying the textureRef + fit', () => {
+  test('image content produces a kind-image element with textureRef + fit', () => {
     const scene = new SceneImpl();
     const ctx = makeCtx(scene);
     const parent = makeParent(scene, ctx);
-    const { element } = attachSticker(scene, ctx, parent, {
+    const { surfaceEntity } = attachSticker(scene, ctx, parent, {
       face:    'front',
       content: { image: 'base:tex/portrait', fit: 'cover' },
     });
-    const img = element.getComponent(ImageElement)!;
-    expect(img.state.textureRef).toBe('base:tex/portrait');
-    expect(img.state.fit).toBe('cover');
+    const surface = surfaceEntity.getComponent(SurfaceComponent)!;
+    const el = surface.state.elements[0];
+    expect(el.kind).toBe('image');
+    if (el.kind === 'image') {
+      expect(el.textureRef).toBe('base:tex/portrait');
+      expect(el.fit).toBe('cover');
+    }
   });
 
   test('throws when parent has no MeshComponent', () => {
@@ -130,14 +130,13 @@ describe('attachSticker — face math', () => {
     const scene = new SceneImpl();
     const ctx = makeCtx(scene);
     const parent = makeParent(scene, ctx, [1, 0.5, 1.5]);
-    const { surface } = attachSticker(scene, ctx, parent, {
+    const { surfaceEntity } = attachSticker(scene, ctx, parent, {
       face:    'top',
       offset:  0,
       content: { shape: { kind: 'rect' } },
     });
-    const t = surface.getComponent(TransformComponent)!;
+    const t = surfaceEntity.getComponent(TransformComponent)!;
     expect(t.state.position[1]).toBeCloseTo(0.5, 5);
-    // Rotate (0,0,1) by the quaternion → expect (0,1,0).
     const v = new THREE.Vector3(0, 0, 1).applyQuaternion(new THREE.Quaternion(...t.state.rotation));
     expect(v.x).toBeCloseTo(0, 5);
     expect(v.y).toBeCloseTo(1, 5);
@@ -148,12 +147,12 @@ describe('attachSticker — face math', () => {
     const scene = new SceneImpl();
     const ctx = makeCtx(scene);
     const parent = makeParent(scene, ctx, [1, 0.5, 1.5]);
-    const { surface } = attachSticker(scene, ctx, parent, {
+    const { surfaceEntity } = attachSticker(scene, ctx, parent, {
       face:    'front',
       offset:  0,
       content: { shape: { kind: 'rect' } },
     });
-    const t = surface.getComponent(TransformComponent)!;
+    const t = surfaceEntity.getComponent(TransformComponent)!;
     expect(t.state.position[2]).toBeCloseTo(1.5, 5);
     const v = new THREE.Vector3(0, 0, 1).applyQuaternion(new THREE.Quaternion(...t.state.rotation));
     expect(v.z).toBeCloseTo(1, 5);
@@ -163,12 +162,12 @@ describe('attachSticker — face math', () => {
     const scene = new SceneImpl();
     const ctx = makeCtx(scene);
     const parent = makeParent(scene, ctx, [2, 0.5, 1]);
-    const { surface } = attachSticker(scene, ctx, parent, {
+    const { surfaceEntity } = attachSticker(scene, ctx, parent, {
       face:    'right',
       offset:  0,
       content: { shape: { kind: 'rect' } },
     });
-    const t = surface.getComponent(TransformComponent)!;
+    const t = surfaceEntity.getComponent(TransformComponent)!;
     expect(t.state.position[0]).toBeCloseTo(2, 5);
     const v = new THREE.Vector3(0, 0, 1).applyQuaternion(new THREE.Quaternion(...t.state.rotation));
     expect(v.x).toBeCloseTo(1, 5);
@@ -180,18 +179,18 @@ describe('attachSticker — face math', () => {
     const scene = new SceneImpl();
     const ctx = makeCtx(scene);
     const parent = makeParent(scene, ctx, [1, 0.5, 1]);
-    const { surface } = attachSticker(scene, ctx, parent, {
+    const { surfaceEntity } = attachSticker(scene, ctx, parent, {
       face:    'top',
       content: { shape: { kind: 'rect' } },
     });
-    const y = surface.getComponent(TransformComponent)!.state.position[1];
+    const y = surfaceEntity.getComponent(TransformComponent)!.state.position[1];
     expect(y).toBeGreaterThan(0.5);
     expect(y - 0.5).toBeLessThan(0.01);
   });
 });
 
 describe('createSurfaceChild', () => {
-  test('creates a surface entity (transform + plane mesh + surface) parented to the parent, no element child', () => {
+  test('creates a surface entity (transform + plane mesh + surface) parented to the parent, no elements', () => {
     const scene = new SceneImpl();
     const ctx = makeCtx(scene);
     const parent = makeParent(scene, ctx);
@@ -203,7 +202,7 @@ describe('createSurfaceChild', () => {
     expect(surface.getComponent(TransformComponent)).toBeDefined();
     expect(surface.getComponent(MeshComponent)!.state.meshRef).toBe('prim:plane');
     expect(surface.getComponent(SurfaceComponent)).toBeDefined();
-    expect(surface.children).toEqual([]);
+    expect(surface.getComponent(SurfaceComponent)!.state.elements).toEqual([]);
   });
 
   test('default size covers the parent face (top → [hx*2, hz*2])', () => {
@@ -236,61 +235,66 @@ describe('createSurfaceChild', () => {
   });
 });
 
-describe('createSurfaceElement', () => {
-  test('shape-rect kind spawns a ShapeElement child of the surface, sized to canvas', () => {
+describe('appendDefaultElement', () => {
+  test('shape-rect appends a kind-shape element with shape=rect, sized to canvas', () => {
     const scene = new SceneImpl();
     const ctx = makeCtx(scene);
     const parent = makeParent(scene, ctx);
     const surface = createSurfaceChild(scene, ctx, parent, { face: 'top', canvasSize: [256, 128] });
 
-    const element = createSurfaceElement(scene, ctx, surface, 'shape-rect');
+    const elementId = appendDefaultElement(surface, 'shape-rect');
 
-    expect(element.parentId).toBe(surface.id);
-    expect(surface.children).toContain(element.id);
-    const shape = element.getComponent(ShapeElement)!;
-    expect(shape).toBeDefined();
-    expect(shape.state.kind).toBe('rect');
-    expect(shape.state.w).toBe(256);
-    expect(shape.state.h).toBe(128);
+    const surfaceComp = surface.getComponent(SurfaceComponent)!;
+    expect(surfaceComp.state.elements).toHaveLength(1);
+    const el = surfaceComp.state.elements[0];
+    expect(el.id).toBe(elementId);
+    expect(el.kind).toBe('shape');
+    if (el.kind === 'shape') expect(el.shape).toBe('rect');
+    expect(el.w).toBe(256);
+    expect(el.h).toBe(128);
   });
 
-  test('shape-circle kind sets ShapeKind to circle', () => {
+  test('shape-circle appends a kind-shape element with shape=circle', () => {
     const scene = new SceneImpl();
     const ctx = makeCtx(scene);
     const parent = makeParent(scene, ctx);
     const surface = createSurfaceChild(scene, ctx, parent, { face: 'top' });
-    const element = createSurfaceElement(scene, ctx, surface, 'shape-circle');
-    expect(element.getComponent(ShapeElement)!.state.kind).toBe('circle');
+    appendDefaultElement(surface, 'shape-circle');
+    const el = surface.getComponent(SurfaceComponent)!.state.elements[0];
+    expect(el.kind).toBe('shape');
+    if (el.kind === 'shape') expect(el.shape).toBe('circle');
   });
 
-  test('image kind spawns an ImageElement with empty textureRef + fit=fit', () => {
+  test('image appends a kind-image element with empty textureRef + fit=fit', () => {
     const scene = new SceneImpl();
     const ctx = makeCtx(scene);
     const parent = makeParent(scene, ctx);
     const surface = createSurfaceChild(scene, ctx, parent, { face: 'top' });
-    const element = createSurfaceElement(scene, ctx, surface, 'image');
-    const img = element.getComponent(ImageElement)!;
-    expect(img.state.textureRef).toBe('');
-    expect(img.state.fit).toBe('fit');
+    appendDefaultElement(surface, 'image');
+    const el = surface.getComponent(SurfaceComponent)!.state.elements[0];
+    expect(el.kind).toBe('image');
+    if (el.kind === 'image') {
+      expect(el.textureRef).toBe('');
+      expect(el.fit).toBe('fit');
+    }
   });
 
-  test('rich kind spawns a RichElement carrying placeholder html', () => {
+  test('rich appends a kind-rich element carrying placeholder html', () => {
     const scene = new SceneImpl();
     const ctx = makeCtx(scene);
     const parent = makeParent(scene, ctx);
     const surface = createSurfaceChild(scene, ctx, parent, { face: 'top' });
-    const element = createSurfaceElement(scene, ctx, surface, 'rich');
-    const rich = element.getComponent(RichElement)!;
-    expect(rich).toBeDefined();
-    expect(rich.state.html.length).toBeGreaterThan(0);
+    appendDefaultElement(surface, 'rich');
+    const el = surface.getComponent(SurfaceComponent)!.state.elements[0];
+    expect(el.kind).toBe('rich');
+    if (el.kind === 'rich') expect(el.html.length).toBeGreaterThan(0);
   });
 
   test('throws when target entity has no SurfaceComponent', () => {
     const scene = new SceneImpl();
-    const ctx = makeCtx(scene);
     const naked = new Entity({ id: 'no-surface', type: 't', name: 'no' });
     scene.add(naked);
-    expect(() => createSurfaceElement(scene, ctx, naked, 'shape-rect')).toThrow();
+    expect(() => appendDefaultElement(naked, 'shape-rect')).toThrow();
   });
 });
 
@@ -342,13 +346,13 @@ describe('attachSticker — parent pose composition (issue #1 of refactor)', () 
     const parentRot: [number, number, number, number] = [q.x, q.y, q.z, q.w];
     const parent = makeParentAt(scene, ctx, parentPos, parentRot);
 
-    const { surface } = attachSticker(scene, ctx, parent, {
+    const { surfaceEntity } = attachSticker(scene, ctx, parent, {
       face:    'top',
       offset:  0,
       content: { shape: { kind: 'rect' } },
     });
 
-    const t = surface.getComponent(TransformComponent)!;
+    const t = surfaceEntity.getComponent(TransformComponent)!;
     t.object3d.updateWorldMatrix(true, false);
 
     const expected = new THREE.Matrix4()
@@ -362,12 +366,12 @@ describe('attachSticker — parent pose composition (issue #1 of refactor)', () 
         new THREE.Quaternion(...t.state.rotation),
         new THREE.Vector3(1, 1, 1),
       ));
-    const expPos   = new THREE.Vector3();
-    const expQuat  = new THREE.Quaternion();
+    const expPos = new THREE.Vector3();
+    const expQuat = new THREE.Quaternion();
     const expScale = new THREE.Vector3();
     expected.decompose(expPos, expQuat, expScale);
 
-    const actualPos  = new THREE.Vector3();
+    const actualPos = new THREE.Vector3();
     const actualQuat = new THREE.Quaternion();
     t.object3d.getWorldPosition(actualPos);
     t.object3d.getWorldQuaternion(actualQuat);
@@ -376,27 +380,18 @@ describe('attachSticker — parent pose composition (issue #1 of refactor)', () 
     expect(actualPos.y).toBeCloseTo(expPos.y, 5);
     expect(actualPos.z).toBeCloseTo(expPos.z, 5);
     expect(Math.abs(actualQuat.dot(expQuat))).toBeCloseTo(1, 5);
-
-    // Sticker face (+Z in surface-local) points outward from the parent's top
-    // face (+Y in parent-local). Apply parent rotation to that to get the
-    // expected world-space outward normal.
-    const outward = new THREE.Vector3(0, 0, 1).applyQuaternion(actualQuat);
-    const expectedOutwardWorld = new THREE.Vector3(0, 1, 0).applyQuaternion(new THREE.Quaternion(...parentRot));
-    expect(outward.x).toBeCloseTo(expectedOutwardWorld.x, 5);
-    expect(outward.y).toBeCloseTo(expectedOutwardWorld.y, 5);
-    expect(outward.z).toBeCloseTo(expectedOutwardWorld.z, 5);
   });
 
   test('parent moves after spawn: sticker follows without setState on the surface transform', () => {
     const scene = new SceneImpl();
     const ctx = makeCtx(scene);
     const parent = makeParentAt(scene, ctx, [0, 0, 0], [0, 0, 0, 1]);
-    const { surface } = attachSticker(scene, ctx, parent, {
+    const { surfaceEntity } = attachSticker(scene, ctx, parent, {
       face:    'top',
       offset:  0,
       content: { shape: { kind: 'rect' } },
     });
-    const surfaceT = surface.getComponent(TransformComponent)!;
+    const surfaceT = surfaceEntity.getComponent(TransformComponent)!;
     const stickerLocal: [number, number, number] = [...surfaceT.state.position];
 
     const parentT = parent.getComponent(TransformComponent)!;
@@ -408,9 +403,6 @@ describe('attachSticker — parent pose composition (issue #1 of refactor)', () 
     expect(worldPos.x).toBeCloseTo(10 + stickerLocal[0], 5);
     expect(worldPos.y).toBeCloseTo(2  + stickerLocal[1], 5);
     expect(worldPos.z).toBeCloseTo(-3 + stickerLocal[2], 5);
-
-    // Sticker's data state is unchanged — the follow happens through the
-    // THREE scene-graph parent link, not via a setState.
     expect(surfaceT.state.position).toEqual(stickerLocal);
   });
 
@@ -418,32 +410,69 @@ describe('attachSticker — parent pose composition (issue #1 of refactor)', () 
     const scene = new SceneImpl();
     const ctx = makeCtx(scene);
     const parent = makeParentAt(scene, ctx, [0, 0, 0], [0, 0, 0, 1]);
-    const { surface } = attachSticker(scene, ctx, parent, {
+    const { surfaceEntity } = attachSticker(scene, ctx, parent, {
       face:    'top',
       content: { shape: { kind: 'rect' } },
     });
-    const parentObj  = parent .getComponent(TransformComponent)!.object3d;
-    const surfaceObj = surface.getComponent(TransformComponent)!.object3d;
+    const parentObj  = parent       .getComponent(TransformComponent)!.object3d;
+    const surfaceObj = surfaceEntity.getComponent(TransformComponent)!.object3d;
     expect(parentObj.children).toContain(surfaceObj);
 
-    surface.getComponent(SurfaceComponent)!.onDespawn(ctx);
+    surfaceEntity.getComponent(SurfaceComponent)!.onDespawn(ctx);
     expect(parentObj.children).not.toContain(surfaceObj);
   });
 });
 
-describe('attachSticker — element response to mutations', () => {
-  test('returned element responds to ShapeElement.setState (parent surface dirty flips)', () => {
+describe('attachSticker — element handle round-trips through SurfaceComponent state', () => {
+  test('elementHandle.setBounds mutates the underlying element entry and flips dirty', () => {
     const scene = new SceneImpl();
     const ctx = makeCtx(scene);
     const parent = makeParent(scene, ctx);
-    const { element } = attachSticker(scene, ctx, parent, {
+    const { surfaceEntity, elementHandle } = attachSticker(scene, ctx, parent, {
       face:    'top',
       content: { shape: { kind: 'rect', fill: '#f00' } },
     });
+    const surface = surfaceEntity.getComponent(SurfaceComponent)!;
     surfaceRenderQueue.drain();
 
-    const shape = element.getComponent(ShapeElement)!;
-    shape.setState({ fill: '#0f0' });
+    elementHandle.setBounds(10, 20, 30, 40);
+
     expect(surfaceRenderQueue.size()).toBe(1);
+    const el = surface.state.elements[0];
+    expect(el.x).toBe(10);
+    expect(el.y).toBe(20);
+    expect(el.w).toBe(30);
+    expect(el.h).toBe(40);
+  });
+
+  test('elementHandle.addEventListener fires when the surface dispatches to the element id', () => {
+    const scene = new SceneImpl();
+    const ctx = makeCtx(scene);
+    const parent = makeParent(scene, ctx);
+    const { surfaceEntity, elementHandle } = attachSticker(scene, ctx, parent, {
+      face:    'top',
+      content: { shape: { kind: 'rect' } },
+    });
+    let received: unknown = null;
+    elementHandle.addEventListener('click', (p) => { received = p; });
+
+    const surface = surfaceEntity.getComponent(SurfaceComponent)!;
+    // Dispatch a click via UV → pixel; default sticker covers full canvas.
+    surface.onClick({ seat: 0, shiftKey: false, ctrlKey: false, altKey: false, surfaceUV: { u: 0.5, v: 0.5 } });
+    expect(received).not.toBeNull();
+  });
+
+  test('elementHandle.setHtml on a shape-kind element warns and no-ops', () => {
+    const scene = new SceneImpl();
+    const ctx = makeCtx(scene);
+    const parent = makeParent(scene, ctx);
+    const { surfaceEntity, elementHandle } = attachSticker(scene, ctx, parent, {
+      face:    'top',
+      content: { shape: { kind: 'rect', fill: '#f00' } },
+    });
+    const surface = surfaceEntity.getComponent(SurfaceComponent)!;
+    elementHandle.setHtml('<i>nope</i>');
+    const el = surface.state.elements[0];
+    expect(el.kind).toBe('shape');
   });
 });

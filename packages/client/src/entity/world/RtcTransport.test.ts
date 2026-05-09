@@ -85,7 +85,7 @@ describe('RtcTransport — privacy scrubbing fan-out', () => {
 
   test('component-patches: ancestor-private parent → child patches dropped for non-owner', () => {
     const parent = privateEntity('parent', 1);
-    const child  = new Entity({ id: 'child', type: 'shape-element', name: 'shape' });
+    const child  = new Entity({ id: 'child', type: 'sticker-surface', name: 'surf' });
     child.parentId = 'parent';
     const targets: ReplicationTarget[] = [
       { peerId: 'p-owner', peerSeat: 1, isHost: false },
@@ -96,7 +96,7 @@ describe('RtcTransport — privacy scrubbing fan-out', () => {
 
     const msg: SceneMessage = {
       type: 'component-patches', channel: 'reliable',
-      patches: [{ entityId: 'child', typeId: 'shape-element', partial: { x: 5 } }],
+      patches: [{ entityId: 'child', typeId: 'surface', partial: { elements: [] } }],
     };
     transport.send(msg, { reliable: true });
 
@@ -106,7 +106,7 @@ describe('RtcTransport — privacy scrubbing fan-out', () => {
 
   test('entity-spawn: child of a private parent is filtered entirely on non-owner fan-out', () => {
     const parent = privateEntity('parent', 1);
-    const child  = new Entity({ id: 'child', type: 'shape-element', name: 'shape' });
+    const child  = new Entity({ id: 'child', type: 'sticker-surface', name: 'surf' });
     child.parentId = 'parent';
     const targets: ReplicationTarget[] = [
       { peerId: 'p-owner', peerSeat: 1, isHost: false },
@@ -118,9 +118,9 @@ describe('RtcTransport — privacy scrubbing fan-out', () => {
     const msg: SceneMessage = {
       type: 'entity-spawn',
       entity: {
-        id: 'child', type: 'shape-element', name: 'shape', tags: [],
+        id: 'child', type: 'sticker-surface', name: 'surf', tags: [],
         owner: null, privateToSeat: null, parentId: 'parent', children: [],
-        components: { 'shape-element': { x: 0, y: 0, w: 10, h: 10, kind: 'rect' } },
+        components: { surface: { canvasSize: [10, 10], elements: [] } },
       },
     };
     transport.send(msg, { reliable: true });

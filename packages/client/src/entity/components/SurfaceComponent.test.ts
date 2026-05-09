@@ -8,14 +8,11 @@ import { PhysicsWorld } from '../../physics/PhysicsWorld';
 import { TransformComponent } from './TransformComponent';
 import { MeshComponent } from './MeshComponent';
 import { SurfaceComponent } from './SurfaceComponent';
-import { ShapeElement } from './ShapeElement';
+import { type SurfaceElement, newElementId } from './SurfaceElement';
 import { surfaceRenderQueue } from './SurfaceRenderQueue';
 import { elementBitmapCache } from './ElementBitmapCache';
 import type { InputEventPayload } from '../../input/inputEvents';
 
-// jsdom does not ship a 2D rasteriser. We install a recording stub on the
-// canvas prototype so SurfaceComponent.onSpawn gets a non-null ctx and we
-// can verify drawImage calls.
 let originalGetContext: typeof HTMLCanvasElement.prototype.getContext;
 let lastRecording: ReturnType<typeof makeRecordingCtx> | null = null;
 
@@ -58,15 +55,37 @@ afterEach(() => {
   elementBitmapCache.clear();
 });
 
-function spawnSurfaceTree(opts: {
+interface ShapeSeed {
+  id?:         string;
+  x?:          number;
+  y?:          number;
+  w?:          number;
+  h?:          number;
+  shape?:      'rect' | 'circle';
+  fill?:       string;
+}
+
+function shapeSeed(seed: ShapeSeed = {}): SurfaceElement {
+  return {
+    id:    seed.id    ?? newElementId(),
+    kind:  'shape',
+    shape: seed.shape ?? 'rect',
+    x:     seed.x     ?? 0,
+    y:     seed.y     ?? 0,
+    w:     seed.w     ?? 10,
+    h:     seed.h     ?? 10,
+    fill:  seed.fill  ?? '#f00',
+  };
+}
+
+function spawnSurface(opts: {
   canvasSize?: [number, number];
-  shapes?: Array<{ id: string; state: any }>;
+  elements?:   SurfaceElement[];
 } = {}): {
-  scene:    SceneImpl;
-  ctx:      SpawnContext;
-  parent:   Entity;
-  surface:  SurfaceComponent;
-  elements: ShapeElement[];
+  scene:   SceneImpl;
+  ctx:     SpawnContext;
+  entity:  Entity;
+  surface: SurfaceComponent;
 } {
   const scene = new SceneImpl();
   const ctx: SpawnContext = {
@@ -75,37 +94,28 @@ function spawnSurfaceTree(opts: {
     entityScene: scene,
   };
 
-  const parent = new Entity({ id: 'parent-1', type: 'sticker', name: 'Sticker' });
+  const entity = new Entity({ id: 'parent-1', type: 'sticker', name: 'Sticker' });
   const transform = new TransformComponent();
   transform.fromJSON({ position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] });
-  parent.attachComponent(transform);
+  entity.attachComponent(transform);
 
   const mesh = new MeshComponent();
   mesh.fromJSON({ meshRef: 'prim:plane', textureRefs: { default: '' }, tint: '#ffffff', size: [1, 0.01, 1] });
-  parent.attachComponent(mesh);
+  entity.attachComponent(mesh);
 
   const surface = new SurfaceComponent();
-  surface.fromJSON({ canvasSize: opts.canvasSize ?? [256, 256] });
-  parent.attachComponent(surface);
+  surface.fromJSON({
+    canvasSize: opts.canvasSize ?? [256, 256],
+    elements:   opts.elements   ?? [],
+  });
+  entity.attachComponent(surface);
 
-  scene.add(parent);
+  scene.add(entity);
   transform.onSpawn(ctx);
   mesh.onSpawn(ctx);
   surface.onSpawn(ctx);
 
-  const elements: ShapeElement[] = [];
-  for (const s of opts.shapes ?? []) {
-    const child = new Entity({ id: s.id, type: 'shape-element', name: 'Shape', parentId: parent.id });
-    parent.children.push(child.id);
-    const el = new ShapeElement();
-    el.fromJSON(s.state);
-    child.attachComponent(el);
-    scene.add(child);
-    el.onSpawn(ctx);
-    elements.push(el);
-  }
-
-  return { scene, ctx, parent, surface, elements };
+  return { scene, ctx, entity, surface };
 }
 
 describe('SurfaceComponent — registration', () => {
@@ -118,14 +128,14 @@ describe('SurfaceComponent — registration', () => {
 
 describe('SurfaceComponent — onSpawn / onDespawn', () => {
   test('onSpawn creates a canvas at canvasSize and a CanvasTexture, binds to mesh material map', () => {
-    const { surface, parent } = spawnSurfaceTree({ canvasSize: [512, 256] });
+    const { surface, entity } = spawnSurface({ canvasSize: [512, 256] });
 
     expect(surface.canvas).not.toBeNull();
     expect(surface.canvas!.width).toBe(512);
     expect(surface.canvas!.height).toBe(256);
     expect(surface.texture).toBeInstanceOf(THREE.CanvasTexture);
 
-    const mesh = parent.getComponent(MeshComponent)!;
+    const mesh = entity.getComponent(MeshComponent)!;
     const child = mesh.group.children[0] as THREE.Mesh;
     const mat = child.material as THREE.MeshLambertMaterial;
     expect(mat.map).toBe(surface.texture);
@@ -133,17 +143,24 @@ describe('SurfaceComponent — onSpawn / onDespawn', () => {
   });
 
   test('onSpawn marks the surface dirty so first compose runs on next drain', () => {
-    const { surface } = spawnSurfaceTree();
-    expect(surfaceRenderQueue.size()).toBe(1);
+    spawnSurface();
     expect(surfaceRenderQueue.size()).toBe(1);
     surfaceRenderQueue.drain();
     expect(surfaceRenderQueue.size()).toBe(0);
-    // sanity: surface still spawned
-    expect(surface.canvas).not.toBeNull();
+  });
+
+  test('onSpawn mounts pre-loaded elements', () => {
+    const { surface } = spawnSurface({
+      elements: [shapeSeed({ id: 'a' })],
+    });
+    expect(surface.state.elements).toHaveLength(1);
+    surface.compose();
+    const calls = lastRecording!.calls;
+    expect(calls.length).toBe(1);
   });
 
   test('onDespawn disposes texture, drops canvas, and unbinds from mesh material', () => {
-    const { surface, parent, ctx } = spawnSurfaceTree();
+    const { surface, entity, ctx } = spawnSurface();
     const tex = surface.texture!;
     const disposeSpy = vi.spyOn(tex, 'dispose');
 
@@ -152,7 +169,7 @@ describe('SurfaceComponent — onSpawn / onDespawn', () => {
     expect(surface.texture).toBeNull();
     expect(surface.canvas).toBeNull();
 
-    const mesh = parent.getComponent(MeshComponent)!;
+    const mesh = entity.getComponent(MeshComponent)!;
     const meshChild = mesh.group.children[0] as THREE.Mesh;
     const mat = meshChild.material as THREE.MeshLambertMaterial;
     expect(mat.map).toBeNull();
@@ -160,7 +177,7 @@ describe('SurfaceComponent — onSpawn / onDespawn', () => {
   });
 
   test('canvasSize change updates canvas dimensions and re-flips dirty', () => {
-    const { surface } = spawnSurfaceTree({ canvasSize: [128, 128] });
+    const { surface } = spawnSurface({ canvasSize: [128, 128] });
     surfaceRenderQueue.drain();
     expect(surfaceRenderQueue.size()).toBe(0);
 
@@ -171,17 +188,55 @@ describe('SurfaceComponent — onSpawn / onDespawn', () => {
   });
 });
 
-describe('SurfaceComponent — composition', () => {
-  test('compose walks entity.children in order and blits each element bitmap at its bounds', () => {
-    const { surface } = spawnSurfaceTree({
-      shapes: [
-        { id: 's1', state: { x: 10, y: 20, w: 50, h: 30, kind: 'rect',   fill: '#f00' } },
-        { id: 's2', state: { x: 60, y: 80, w: 40, h: 40, kind: 'circle', fill: '#0f0' } },
+describe('SurfaceComponent — element-array diff lifecycle', () => {
+  test('addElement appends and mounts; compose draws the new element', () => {
+    const { surface } = spawnSurface();
+    surfaceRenderQueue.drain();
+
+    surface.addElement(shapeSeed({ id: 'a', x: 5, y: 6, w: 20, h: 20 }));
+
+    expect(surface.state.elements).toHaveLength(1);
+    surface.compose();
+    const calls = lastRecording!.calls;
+    expect(calls.length).toBe(1);
+    expect(calls[0].x).toBe(5);
+    expect(calls[0].y).toBe(6);
+  });
+
+  test('mutateElement updates same-kind element, draws with new bounds', () => {
+    const { surface } = spawnSurface({ elements: [shapeSeed({ id: 'a' })] });
+    surfaceRenderQueue.drain();
+    lastRecording!.calls.length = 0;
+
+    surface.mutateElement('a', { x: 50, y: 60 });
+
+    expect(surfaceRenderQueue.size()).toBe(1);
+    surface.compose();
+    expect(lastRecording!.calls[0].x).toBe(50);
+    expect(lastRecording!.calls[0].y).toBe(60);
+  });
+
+  test('removeElement unmounts and removes from array', () => {
+    const { surface } = spawnSurface({ elements: [shapeSeed({ id: 'a' })] });
+    surfaceRenderQueue.drain();
+    lastRecording!.calls.length = 0;
+
+    surface.removeElement('a');
+
+    expect(surface.state.elements).toHaveLength(0);
+    expect(surfaceRenderQueue.size()).toBe(1);
+    surface.compose();
+    expect(lastRecording!.calls.length).toBe(0);
+  });
+
+  test('compose iterates state.elements in order', () => {
+    const { surface } = spawnSurface({
+      elements: [
+        shapeSeed({ id: 'a', x: 10, y: 20, w: 50, h: 30 }),
+        shapeSeed({ id: 'b', x: 60, y: 80, w: 40, h: 40, shape: 'circle' }),
       ],
     });
-
     surface.compose();
-
     const calls = lastRecording!.calls;
     expect(calls.length).toBe(2);
     expect(calls[0].x).toBe(10);
@@ -190,52 +245,58 @@ describe('SurfaceComponent — composition', () => {
     expect(calls[1].y).toBe(80);
   });
 
-  test('element setState flips parent surface dirty exactly once per change', () => {
-    const { elements } = spawnSurfaceTree({
-      shapes: [{ id: 's1', state: { x: 0, y: 0, w: 10, h: 10, kind: 'rect', fill: '#f00' } }],
-    });
-
-    surfaceRenderQueue.drain(); // clear initial dirty
-    expect(surfaceRenderQueue.size()).toBe(0);
-
-    elements[0].setState({ x: 5 });
-    expect(surfaceRenderQueue.size()).toBe(1);
-  });
-
-  test('60 Hz tween-style setState collapses to one composition per frame', () => {
+  test('60 Hz tween-style mutateElement collapses to one composition per frame', () => {
     const composeSpy = vi.spyOn(SurfaceComponent.prototype, 'compose');
-
-    const { elements } = spawnSurfaceTree({
-      shapes: [{ id: 's1', state: { x: 0, y: 0, w: 10, h: 10, kind: 'rect', fill: '#f00' } }],
-    });
-
-    surfaceRenderQueue.drain(); // initial dirty
+    const { surface } = spawnSurface({ elements: [shapeSeed({ id: 'a' })] });
+    surfaceRenderQueue.drain();
     composeSpy.mockClear();
 
-    // 60 mutations between drains → 1 compose call.
-    for (let i = 0; i < 60; i++) elements[0].setState({ x: i });
+    for (let i = 0; i < 60; i++) surface.mutateElement('a', { x: i });
     surfaceRenderQueue.drain();
     expect(composeSpy).toHaveBeenCalledTimes(1);
 
     composeSpy.mockRestore();
   });
 
-  test('despawned element flips parent surface dirty', () => {
-    const { elements, ctx } = spawnSurfaceTree({
-      shapes: [{ id: 's1', state: { x: 0, y: 0, w: 10, h: 10, kind: 'rect', fill: '#f00' } }],
-    });
-    surfaceRenderQueue.drain();
-    expect(surfaceRenderQueue.size()).toBe(0);
+  test('applyRemoteState({ elements }) runs the diff: add → mount, remove → unmount', () => {
+    const { surface } = spawnSurface({ elements: [shapeSeed({ id: 'a' })] });
+    surface.compose();
+    expect(lastRecording!.calls.length).toBe(1);
+    lastRecording!.calls.length = 0;
 
-    elements[0].onDespawn(ctx);
-    expect(surfaceRenderQueue.size()).toBe(1);
+    surface.applyRemoteState({ elements: [
+      shapeSeed({ id: 'b' }),
+      shapeSeed({ id: 'c' }),
+    ]});
+
+    surface.compose();
+    // Compose now runs against the new array — exactly two draws (the two new
+    // elements). 'a' was unmounted, no longer rendered.
+    expect(lastRecording!.calls.length).toBe(2);
+  });
+
+  test('mutating different-kind: unmount + mount fresh runtime', () => {
+    const { surface } = spawnSurface({ elements: [shapeSeed({ id: 'a' })] });
+    surface.compose();
+    expect(lastRecording!.calls.length).toBe(1);
+    lastRecording!.calls.length = 0;
+
+    // Replace 'a' with a rich-kind entry of the same id.
+    surface.applyRemoteState({ elements: [
+      { id: 'a', kind: 'rich', x: 0, y: 0, w: 10, h: 10, html: '<div/>' },
+    ]});
+    expect(surface.state.elements[0].kind).toBe('rich');
+    // RichRuntime returns null while async render pending — compose draws 0
+    // bitmaps, but the runtime swap happened.
+    surface.compose();
+    expect(lastRecording!.calls.length).toBe(0);
   });
 });
 
-describe('SurfaceComponent — press/click forwarding (issue #4)', () => {
-  function recordEvents(e: Entity, names: readonly string[] = ['pressed', 'released', 'click']) {
+describe('SurfaceComponent — press/click forwarding', () => {
+  function recordEventsOn(surface: SurfaceComponent, id: string, names: readonly string[] = ['pressed', 'released', 'click']): { name: string; payload: unknown }[] {
     const events: { name: string; payload: unknown }[] = [];
-    for (const n of names) e.addEventListener(n, (p) => events.push({ name: n, payload: p }));
+    for (const n of names) surface.addElementListener(id, n, (p) => events.push({ name: n, payload: p }));
     return events;
   }
   function mkPayload(uv?: { u: number; v: number }): InputEventPayload {
@@ -244,21 +305,18 @@ describe('SurfaceComponent — press/click forwarding (issue #4)', () => {
     return p;
   }
 
-  test('UV → pixel resolves to the correct child element; payload carries surfaceUV + pixel', () => {
-    const tree = spawnSurfaceTree({
+  test('UV → pixel resolves to the correct element id; payload carries surfaceUV + pixel', () => {
+    const { surface } = spawnSurface({
       canvasSize: [200, 100],
-      shapes: [
-        { id: 'a', state: { x: 0,   y: 0, w: 100, h: 100, kind: 'rect', fill: '#f00' } },
-        { id: 'b', state: { x: 100, y: 0, w: 100, h: 100, kind: 'rect', fill: '#0f0' } },
+      elements: [
+        shapeSeed({ id: 'a', x: 0,   y: 0, w: 100, h: 100 }),
+        shapeSeed({ id: 'b', x: 100, y: 0, w: 100, h: 100 }),
       ],
     });
-    const a = tree.scene.getEntity('a')!;
-    const b = tree.scene.getEntity('b')!;
-    const aEv = recordEvents(a);
-    const bEv = recordEvents(b);
+    const aEv = recordEventsOn(surface, 'a');
+    const bEv = recordEventsOn(surface, 'b');
 
-    // uv (0.25, 0.5) → pixel (50, 50) — inside element 'a'.
-    tree.surface.onClick(mkPayload({ u: 0.25, v: 0.5 }));
+    surface.onClick(mkPayload({ u: 0.25, v: 0.5 }));
     expect(aEv.map(e => e.name)).toEqual(['click']);
     expect(bEv).toEqual([]);
     const payload = aEv[0].payload as { surfaceUV: unknown; pixel: unknown; seat: number };
@@ -267,88 +325,59 @@ describe('SurfaceComponent — press/click forwarding (issue #4)', () => {
     expect(payload.seat).toBe(0);
   });
 
-  test('reverse z-order: later child wins when bounds overlap', () => {
-    const tree = spawnSurfaceTree({
+  test('reverse z-order: later element wins when bounds overlap', () => {
+    const { surface } = spawnSurface({
       canvasSize: [100, 100],
-      shapes: [
-        { id: 'bottom', state: { x: 0, y: 0, w: 100, h: 100, kind: 'rect', fill: '#f00' } },
-        { id: 'top',    state: { x: 0, y: 0, w: 100, h: 100, kind: 'rect', fill: '#0f0' } },
+      elements: [
+        shapeSeed({ id: 'bottom', x: 0, y: 0, w: 100, h: 100 }),
+        shapeSeed({ id: 'top',    x: 0, y: 0, w: 100, h: 100 }),
       ],
     });
-    const bottom = tree.scene.getEntity('bottom')!;
-    const top    = tree.scene.getEntity('top')!;
-    const bottomEv = recordEvents(bottom);
-    const topEv    = recordEvents(top);
+    const bottomEv = recordEventsOn(surface, 'bottom');
+    const topEv    = recordEventsOn(surface, 'top');
 
-    tree.surface.onClick(mkPayload({ u: 0.5, v: 0.5 }));
+    surface.onClick(mkPayload({ u: 0.5, v: 0.5 }));
     expect(topEv.map(e => e.name)).toEqual(['click']);
     expect(bottomEv).toEqual([]);
   });
 
   test('miss (UV outside every element) leaves the event on the surface', () => {
-    const tree = spawnSurfaceTree({
+    const { surface } = spawnSurface({
       canvasSize: [200, 200],
-      shapes: [
-        { id: 'a', state: { x: 0, y: 0, w: 50, h: 50, kind: 'rect', fill: '#f00' } },
-      ],
+      elements: [shapeSeed({ id: 'a', x: 0, y: 0, w: 50, h: 50 })],
     });
-    const a = tree.scene.getEntity('a')!;
-    const aEv = recordEvents(a);
+    const aEv = recordEventsOn(surface, 'a');
 
-    // uv (0.9, 0.9) → pixel (180, 180) — outside element 'a'.
-    tree.surface.onClick(mkPayload({ u: 0.9, v: 0.9 }));
+    surface.onClick(mkPayload({ u: 0.9, v: 0.9 }));
     expect(aEv).toEqual([]);
-    // Surface entity's own listeners (the dispatcher fired these before the
-    // forwarding hook ran) are unaffected — onClick simply did not forward.
   });
 
-  test('payload without surfaceUV is a no-op (no element dispatch)', () => {
-    const tree = spawnSurfaceTree({
-      shapes: [{ id: 'a', state: { x: 0, y: 0, w: 50, h: 50, kind: 'rect', fill: '#f00' } }],
+  test('payload without surfaceUV is a no-op', () => {
+    const { surface } = spawnSurface({
+      elements: [shapeSeed({ id: 'a', x: 0, y: 0, w: 50, h: 50 })],
     });
-    const a = tree.scene.getEntity('a')!;
-    const aEv = recordEvents(a);
-
-    tree.surface.onClick(mkPayload());
+    const aEv = recordEventsOn(surface, 'a');
+    surface.onClick(mkPayload());
     expect(aEv).toEqual([]);
   });
 
   test('press / released / click all forward identically', () => {
-    const tree = spawnSurfaceTree({
-      shapes: [{ id: 'a', state: { x: 0, y: 0, w: 200, h: 200, kind: 'rect', fill: '#f00' } }],
+    const { surface } = spawnSurface({
+      elements: [shapeSeed({ id: 'a', x: 0, y: 0, w: 200, h: 200 })],
     });
-    const a = tree.scene.getEntity('a')!;
-    const aEv = recordEvents(a);
-
+    const aEv = recordEventsOn(surface, 'a');
     const payload = mkPayload({ u: 0.5, v: 0.5 });
-    tree.surface.onPress(payload);
-    tree.surface.onReleased(payload);
-    tree.surface.onClick(payload);
+    surface.onPress   (payload);
+    surface.onReleased(payload);
+    surface.onClick   (payload);
     expect(aEv.map(e => e.name)).toEqual(['pressed', 'released', 'click']);
-  });
-
-  test('forward does NOT route through World.fireInputEvent (local-only re-fire)', () => {
-    // The element entity's bus must have received exactly one dispatch — if
-    // the surface re-routed through fireInputEvent (which on a guest also
-    // emits a guest-input-event RPC), that would re-enter the bus once more
-    // via the host inbound path. Here we simply verify the re-fire goes
-    // through entity.dispatchEvent directly, not through any world hook.
-    const tree = spawnSurfaceTree({
-      canvasSize: [200, 200],
-      shapes: [{ id: 'a', state: { x: 0, y: 0, w: 200, h: 200, kind: 'rect', fill: '#f00' } }],
-    });
-    const a = tree.scene.getEntity('a')!;
-    let calls = 0;
-    a.addEventListener('click', () => calls++);
-    tree.surface.onClick(mkPayload({ u: 0.5, v: 0.5 }));
-    expect(calls).toBe(1);
   });
 });
 
-describe('SurfaceComponent — hover forwarding (issue #5)', () => {
-  function recordEvents(e: Entity, names: readonly string[] = ['hover-start', 'hover-move', 'hover-end']) {
+describe('SurfaceComponent — hover forwarding', () => {
+  function recordEventsOn(surface: SurfaceComponent, id: string, names: readonly string[] = ['hover-start', 'hover-move', 'hover-end']): { name: string; payload: unknown }[] {
     const events: { name: string; payload: unknown }[] = [];
-    for (const n of names) e.addEventListener(n, (p) => events.push({ name: n, payload: p }));
+    for (const n of names) surface.addElementListener(id, n, (p) => events.push({ name: n, payload: p }));
     return events;
   }
   function mkPayload(uv?: { u: number; v: number }): InputEventPayload {
@@ -357,100 +386,95 @@ describe('SurfaceComponent — hover forwarding (issue #5)', () => {
     return p;
   }
 
-  test('hover-start dispatches hover-start on the resolved element', () => {
-    const tree = spawnSurfaceTree({
+  test('hover-start dispatches hover-start on the resolved element id', () => {
+    const { surface } = spawnSurface({
       canvasSize: [200, 100],
-      shapes: [
-        { id: 'a', state: { x: 0,   y: 0, w: 100, h: 100, kind: 'rect', fill: '#f00' } },
-        { id: 'b', state: { x: 100, y: 0, w: 100, h: 100, kind: 'rect', fill: '#0f0' } },
+      elements: [
+        shapeSeed({ id: 'a', x: 0,   y: 0, w: 100, h: 100 }),
+        shapeSeed({ id: 'b', x: 100, y: 0, w: 100, h: 100 }),
       ],
     });
-    const a = tree.scene.getEntity('a')!;
-    const b = tree.scene.getEntity('b')!;
-    const aEv = recordEvents(a);
-    const bEv = recordEvents(b);
-
-    tree.surface.onHoverStart(mkPayload({ u: 0.25, v: 0.5 }));
+    const aEv = recordEventsOn(surface, 'a');
+    const bEv = recordEventsOn(surface, 'b');
+    surface.onHoverStart(mkPayload({ u: 0.25, v: 0.5 }));
     expect(aEv.map(e => e.name)).toEqual(['hover-start']);
     expect(bEv).toEqual([]);
   });
 
-  test('hover-move on same element dispatches hover-move on the element', () => {
-    const tree = spawnSurfaceTree({
-      shapes: [{ id: 'a', state: { x: 0, y: 0, w: 256, h: 256, kind: 'rect', fill: '#f00' } }],
+  test('hover-move on same element dispatches hover-move on the same id', () => {
+    const { surface } = spawnSurface({
+      elements: [shapeSeed({ id: 'a', x: 0, y: 0, w: 256, h: 256 })],
     });
-    const a  = tree.scene.getEntity('a')!;
-    const ev = recordEvents(a);
-
-    tree.surface.onHoverStart(mkPayload({ u: 0.25, v: 0.25 }));
-    tree.surface.onHoverMove (mkPayload({ u: 0.50, v: 0.50 }));
+    const ev = recordEventsOn(surface, 'a');
+    surface.onHoverStart(mkPayload({ u: 0.25, v: 0.25 }));
+    surface.onHoverMove (mkPayload({ u: 0.50, v: 0.50 }));
     expect(ev.map(e => e.name)).toEqual(['hover-start', 'hover-move']);
   });
 
-  test('crossing elements: hover-end on previous fires BEFORE hover-start on new', () => {
-    const tree = spawnSurfaceTree({
+  test('crossing elements: hover-end on previous BEFORE hover-start on new', () => {
+    const { surface } = spawnSurface({
       canvasSize: [200, 100],
-      shapes: [
-        { id: 'a', state: { x: 0,   y: 0, w: 100, h: 100, kind: 'rect', fill: '#f00' } },
-        { id: 'b', state: { x: 100, y: 0, w: 100, h: 100, kind: 'rect', fill: '#0f0' } },
+      elements: [
+        shapeSeed({ id: 'a', x: 0,   y: 0, w: 100, h: 100 }),
+        shapeSeed({ id: 'b', x: 100, y: 0, w: 100, h: 100 }),
       ],
     });
-    const a = tree.scene.getEntity('a')!;
-    const b = tree.scene.getEntity('b')!;
     const sequence: string[] = [];
-    a.addEventListener('hover-end',   () => sequence.push('a:hover-end'));
-    a.addEventListener('hover-start', () => sequence.push('a:hover-start'));
-    b.addEventListener('hover-end',   () => sequence.push('b:hover-end'));
-    b.addEventListener('hover-start', () => sequence.push('b:hover-start'));
+    surface.addElementListener('a', 'hover-end',   () => sequence.push('a:hover-end'));
+    surface.addElementListener('a', 'hover-start', () => sequence.push('a:hover-start'));
+    surface.addElementListener('b', 'hover-end',   () => sequence.push('b:hover-end'));
+    surface.addElementListener('b', 'hover-start', () => sequence.push('b:hover-start'));
 
-    tree.surface.onHoverStart(mkPayload({ u: 0.25, v: 0.5 })); // → 'a'
-    tree.surface.onHoverMove (mkPayload({ u: 0.75, v: 0.5 })); // → 'b'
+    surface.onHoverStart(mkPayload({ u: 0.25, v: 0.5 }));
+    surface.onHoverMove (mkPayload({ u: 0.75, v: 0.5 }));
     expect(sequence).toEqual(['a:hover-start', 'a:hover-end', 'b:hover-start']);
   });
 
-  test('surface hover-end fires hover-end on the last hovered element and clears tracking', () => {
-    const tree = spawnSurfaceTree({
-      shapes: [{ id: 'a', state: { x: 0, y: 0, w: 256, h: 256, kind: 'rect', fill: '#f00' } }],
+  test('surface hover-end fires hover-end on the last element id and clears tracking', () => {
+    const { surface } = spawnSurface({
+      elements: [shapeSeed({ id: 'a', x: 0, y: 0, w: 256, h: 256 })],
     });
-    const a  = tree.scene.getEntity('a')!;
-    const ev = recordEvents(a);
-
-    tree.surface.onHoverStart(mkPayload({ u: 0.5, v: 0.5 }));
-    tree.surface.onHoverEnd  (mkPayload());
+    const ev = recordEventsOn(surface, 'a');
+    surface.onHoverStart(mkPayload({ u: 0.5, v: 0.5 }));
+    surface.onHoverEnd  (mkPayload());
     expect(ev.map(e => e.name)).toEqual(['hover-start', 'hover-end']);
-
-    // Subsequent hover-end with no current element is a no-op.
-    tree.surface.onHoverEnd(mkPayload());
+    surface.onHoverEnd(mkPayload());
     expect(ev.map(e => e.name)).toEqual(['hover-start', 'hover-end']);
   });
 
   test('hover-move into element gap fires hover-end on previous, no hover-start', () => {
-    const tree = spawnSurfaceTree({
+    const { surface } = spawnSurface({
       canvasSize: [200, 100],
-      shapes: [
-        { id: 'a', state: { x: 0,   y: 0, w: 50, h: 50, kind: 'rect', fill: '#f00' } },
-        { id: 'b', state: { x: 100, y: 0, w: 50, h: 50, kind: 'rect', fill: '#0f0' } },
+      elements: [
+        shapeSeed({ id: 'a', x: 0,   y: 0, w: 50, h: 50 }),
+        shapeSeed({ id: 'b', x: 100, y: 0, w: 50, h: 50 }),
       ],
     });
-    const a = tree.scene.getEntity('a')!;
-    const b = tree.scene.getEntity('b')!;
-    const aEv = recordEvents(a);
-    const bEv = recordEvents(b);
-
-    tree.surface.onHoverStart(mkPayload({ u: 0.1,  v: 0.1 })); // (20, 10) → 'a'
-    tree.surface.onHoverMove (mkPayload({ u: 0.4,  v: 0.5 })); // (80, 50) → gap
+    const aEv = recordEventsOn(surface, 'a');
+    const bEv = recordEventsOn(surface, 'b');
+    surface.onHoverStart(mkPayload({ u: 0.1, v: 0.1 }));
+    surface.onHoverMove (mkPayload({ u: 0.4, v: 0.5 }));
     expect(aEv.map(e => e.name)).toEqual(['hover-start', 'hover-end']);
     expect(bEv).toEqual([]);
   });
 });
 
 describe('SurfaceComponent — save/load round-trip', () => {
-  test('toJSON → fromJSON preserves canvasSize', () => {
+  test('toJSON → fromJSON preserves canvasSize + elements', () => {
     const surface = new SurfaceComponent();
-    surface.fromJSON({ canvasSize: [320, 480] });
+    surface.fromJSON({
+      canvasSize: [320, 480],
+      elements: [
+        { id: 'a', kind: 'shape', shape: 'rect',   x: 0, y: 0, w: 10, h: 10, fill: '#f00' },
+        { id: 'b', kind: 'image', x: 5, y: 5, w: 20, h: 30, textureRef: 'base:tex/x', fit: 'cover' },
+        { id: 'c', kind: 'rich',  x: 1, y: 2, w: 99, h: 99, html: '<i/>' },
+      ],
+    });
     const json = surface.toJSON();
     const fresh = new SurfaceComponent();
     fresh.fromJSON(json);
-    expect(fresh.toJSON()).toEqual({ canvasSize: [320, 480] });
+    expect(fresh.toJSON()).toEqual(json);
+    expect((fresh.state.elements as SurfaceElement[])[0].id).toBe('a');
+    expect((fresh.state.elements as SurfaceElement[])[1].kind).toBe('image');
   });
 });

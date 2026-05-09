@@ -1,14 +1,13 @@
 // Single-call composition for the "one clickable element on a 3D object"
-// case (issue #9 of issues--ui-surface.md). Produces a child surface entity
-// (prim:plane mesh + SurfaceComponent) plus one element entity (Shape /
-// Image / Rich) parented to that surface, positioned on the requested face
-// of the parent's mesh.
+// case (issue #9 of issues--ui-surface.md, refactored for issue #2 of
+// issues--ui-surface-refactor.md). Produces a child surface entity (prim:
+// plane mesh + SurfaceComponent) plus one element appended to that surface's
+// `state.elements` array. The element is no longer a separate entity — it's
+// data on the surface, addressable through `ElementHandle`.
 //
-// V1 uses manual face math against the parent's `MeshComponent.halfExtents`
-// — the deferred `FaceAttachComponent` would compute this dynamically, but
-// the manual approach is enough for the script-author UX described in the
-// PRD. Surface is positioned in the parent's local frame and oriented so
-// its +Z normal points outward from the requested face.
+// V1 uses manual face math against the parent's `MeshComponent.halfExtents`.
+// Surface is positioned in the parent's local frame and oriented so its +Z
+// normal points outward from the requested face.
 
 import * as THREE from 'three';
 import { Entity } from '../Entity';
@@ -17,15 +16,22 @@ import { type SpawnContext } from '../EntityComponent';
 import { TransformComponent } from './TransformComponent';
 import { MeshComponent } from './MeshComponent';
 import { SurfaceComponent } from './SurfaceComponent';
-import { ShapeElement, type ShapeKind } from './ShapeElement';
-import { ImageElement, type ImageFit } from './ImageElement';
-import { RichElement } from './RichElement';
+import {
+  type SurfaceElement,
+  type EditorElementKind,
+  type ImageFit,
+  type ShapeShape,
+  newElementId,
+  makeDefaultElement,
+} from './SurfaceElement';
+import { ElementHandle, entitySceneLookup } from './ElementHandle';
+import { type ScriptRunContext } from '../../scripting/EntityFacade';
 
 export type StickerFace = 'top' | 'bottom' | 'front' | 'back' | 'left' | 'right';
 
 export interface ShapeContent {
   shape: {
-    kind:         ShapeKind;
+    kind:         ShapeShape;
     fill?:        string;
     stroke?:      string;
     strokeWidth?: number;
@@ -62,8 +68,8 @@ export interface StickerOpts {
 const DEFAULT_OFFSET = 0.001;
 
 export interface AttachStickerResult {
-  surface: Entity;
-  element: Entity;
+  surfaceEntity: Entity;
+  elementHandle: ElementHandle;
 }
 
 // Surface-only spawn options — the subset of StickerOpts that controls the
@@ -98,7 +104,7 @@ export function createSurfaceChild(
   const size        = opts.size ?? defaultSurfaceSize(face, halfExtents);
   const { position, rotation } = faceTransform(face, halfExtents, offset);
 
-  const surfaceId = newId();
+  const surfaceId = newElementId();
   const surfaceEntity = new Entity({
     id:       surfaceId,
     type:     'sticker-surface',
@@ -117,7 +123,7 @@ export function createSurfaceChild(
   });
   surfaceEntity.attachComponent(mesh);
   const surface = new SurfaceComponent();
-  surface.fromJSON({ canvasSize });
+  surface.fromJSON({ canvasSize, elements: [] });
   surfaceEntity.attachComponent(surface);
   parent.children.push(surfaceId);
   scene.add(surfaceEntity);
@@ -128,69 +134,69 @@ export function createSurfaceChild(
   return surfaceEntity;
 }
 
-// Element kinds the host editor panel knows how to spawn onto a surface.
-export type SurfaceElementKind = 'rich' | 'image' | 'shape-rect' | 'shape-circle';
-
-// Spawns one element entity (no TransformComponent) parented to `surface`,
-// runs onSpawn, and registers it in `scene`. State defaults size the element
-// to fully cover the surface canvas; the author resizes via Properties.
-// Replication is the caller's responsibility — see `World.attachElement`.
-export function createSurfaceElement(
-  scene:   SceneImpl,
-  ctx:     SpawnContext,
+// Appends one element to `surface`'s `state.elements` array using the editor-
+// kind defaults, replicates through the SurfaceComponent's standard patch
+// path, and returns the new element id. Backs `World.attachElement`.
+export function appendDefaultElement(
   surface: Entity,
-  kind:    SurfaceElementKind,
-): Entity {
+  kind:    EditorElementKind,
+): string {
   const surfaceComp = surface.getComponent(SurfaceComponent);
   if (!surfaceComp) {
-    throw new Error(`createSurfaceElement: entity ${surface.id} has no SurfaceComponent`);
+    throw new Error(`appendDefaultElement: entity ${surface.id} has no SurfaceComponent`);
   }
-  const [w, h] = surfaceComp.state.canvasSize;
-  const elementId = newId();
-  const elementEntity = new Entity({
-    id:       elementId,
-    type:     elementTypeForKind(kind),
-    name:     `${surface.name}/${kind}`,
-    parentId: surface.id,
-  });
-  const elementComp = createElementForKind(kind, w, h);
-  elementEntity.attachComponent(elementComp);
-  surface.children.push(elementId);
-  scene.add(elementEntity);
-  elementComp.onSpawn(ctx);
-  return elementEntity;
+  return surfaceComp.attachElement(kind);
 }
 
-function elementTypeForKind(kind: SurfaceElementKind): string {
-  if (kind === 'rich')  return 'rich-element';
-  if (kind === 'image') return 'image-element';
-  return 'shape-element';
+// Creates the surface child + appends one element matching `opts.content` and
+// returns both the surface entity and an ElementHandle wrapping the new
+// element. Optional ScriptRunContext threads through into the handle so
+// SceneFacade-side `addEventListener` calls can be torn down on Run swap.
+export function attachSticker(
+  scene:  SceneImpl,
+  ctx:    SpawnContext,
+  parent: Entity,
+  opts:   StickerOpts,
+  runCtx: ScriptRunContext | null = null,
+): AttachStickerResult {
+  const surfaceEntity = createSurfaceChild(scene, ctx, parent, opts);
+  const surfaceComp   = surfaceEntity.getComponent(SurfaceComponent)!;
+  const [w, h]        = surfaceComp.state.canvasSize;
+  const element       = makeElementFromContent(opts.content, w, h);
+  const elementId     = surfaceComp.addElement(element);
+  const elementHandle = new ElementHandle(
+    surfaceEntity.id,
+    elementId,
+    entitySceneLookup(scene),
+    runCtx,
+  );
+  return { surfaceEntity, elementHandle };
 }
 
-function createElementForKind(
-  kind: SurfaceElementKind,
-  w: number, h: number,
-): ShapeElement | ImageElement | RichElement {
-  if (kind === 'rich') {
-    const c = new RichElement();
-    c.fromJSON({
+function makeElementFromContent(content: StickerContent, w: number, h: number): SurfaceElement {
+  if ('html' in content) {
+    return { id: newElementId(), kind: 'rich', x: 0, y: 0, w, h, html: content.html };
+  }
+  if ('image' in content) {
+    return {
+      id:         newElementId(),
+      kind:       'image',
       x: 0, y: 0, w, h,
-      html: '<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%;font-size:32px;color:#fff;background:#1e293b;">Rich Text</div>',
-    });
-    return c;
+      textureRef: content.image,
+      fit:        content.fit ?? 'fit',
+    };
   }
-  if (kind === 'image') {
-    const c = new ImageElement();
-    c.fromJSON({ x: 0, y: 0, w, h, textureRef: '', fit: 'fit' });
-    return c;
-  }
-  const c = new ShapeElement();
-  c.fromJSON({
-    x: 0, y: 0, w, h,
-    kind: kind === 'shape-circle' ? 'circle' : 'rect',
-    fill: '#88c0ff',
-  });
-  return c;
+  // Shape — fall back to a sensible fill if the author didn't supply one;
+  // matches the existing `add-shape-rect` editor button default.
+  const base = makeDefaultElement(content.shape.kind === 'circle' ? 'shape-circle' : 'shape-rect', w, h);
+  if (base.kind !== 'shape') return base;  // narrow guard
+  return {
+    ...base,
+    fill:        content.shape.fill        ?? base.fill,
+    stroke:      content.shape.stroke,
+    strokeWidth: content.shape.strokeWidth,
+    radius:      content.shape.radius,
+  };
 }
 
 // Picks an in-plane size that covers the parent's face. Width / height
@@ -205,62 +211,6 @@ function defaultSurfaceSize(face: StickerFace, h: [number, number, number]): [nu
     case 'left':
     case 'right':  return [hz * 2, hy * 2];
   }
-}
-
-// Creates the surface + element entity tree under `parent`, runs onSpawn for
-// each, and registers them in `scene`. Returns both for inspection — callers
-// surface only the element to scripts (the element is what scripts attach
-// listeners to).
-export function attachSticker(
-  scene:  SceneImpl,
-  ctx:    SpawnContext,
-  parent: Entity,
-  opts:   StickerOpts,
-): AttachStickerResult {
-  const surfaceEntity = createSurfaceChild(scene, ctx, parent, opts);
-  const surfaceId     = surfaceEntity.id;
-  const canvasSize    = opts.canvasSize ?? [512, 512];
-
-  const elementId = newId();
-  const elementEntity = new Entity({
-    id:       elementId,
-    type:     elementTypeFor(opts.content),
-    name:     `${surfaceEntity.name}/element`,
-    parentId: surfaceId,
-  });
-  const elementComp = createElementComponent(opts.content, canvasSize);
-  elementEntity.attachComponent(elementComp);
-  surfaceEntity.children.push(elementId);
-  scene.add(elementEntity);
-  elementComp.onSpawn(ctx);
-
-  return { surface: surfaceEntity, element: elementEntity };
-}
-
-function elementTypeFor(content: StickerContent): string {
-  if ('html'  in content) return 'rich-element';
-  if ('image' in content) return 'image-element';
-  return 'shape-element';
-}
-
-function createElementComponent(
-  content: StickerContent,
-  canvasSize: [number, number],
-): ShapeElement | ImageElement | RichElement {
-  const [w, h] = canvasSize;
-  if ('html' in content) {
-    const c = new RichElement();
-    c.fromJSON({ x: 0, y: 0, w, h, html: content.html });
-    return c;
-  }
-  if ('image' in content) {
-    const c = new ImageElement();
-    c.fromJSON({ x: 0, y: 0, w, h, textureRef: content.image, fit: content.fit ?? 'fit' });
-    return c;
-  }
-  const c = new ShapeElement();
-  c.fromJSON({ x: 0, y: 0, w, h, ...content.shape });
-  return c;
 }
 
 // Maps a face to (position offset from parent center, quaternion that
@@ -305,15 +255,4 @@ function faceTransform(
     position,
     rotation: [q.x, q.y, q.z, q.w],
   };
-}
-
-function newId(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (ch) => {
-    const r = (Math.random() * 16) | 0;
-    const v = ch === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
 }

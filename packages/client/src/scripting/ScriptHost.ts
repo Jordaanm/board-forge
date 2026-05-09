@@ -50,9 +50,10 @@ export interface ScriptHostOptions {
   // Optional manifest lister backing `scene.assets.list({ type })`.
   listAssets?: (opts?: { type?: AssetType }) => AssetEntry[];
   // Host-only sticker compositor backing `scene.attachSticker` (issue #9
-  // of issues--ui-surface.md). Returns the new element entity's id, or null
-  // when the host can't honour the request. Absent on guest contexts.
-  attachSticker?: (parentId: string, opts: StickerOpts) => string | null;
+  // of issues--ui-surface.md, refactored for issue #2 of issues--ui-surface-
+  // refactor.md). Returns the new surface entity id + element id pair, or
+  // null when the host can't honour the request. Absent on guest contexts.
+  attachSticker?: (parentId: string, opts: StickerOpts) => { surfaceId: string; elementId: string } | null;
 }
 
 export type RunResult =
@@ -217,9 +218,7 @@ export class ScriptHost {
   // its underlying entity bus. Runs before the next Run's class instantiates
   // so the new class never observes the previous Run's listeners.
   private teardownPreviousRun(): void {
-    for (const r of this.currentRunCtx.registrations) {
-      r.entity.removeEventListener(r.event, r.cb);
-    }
+    for (const r of this.currentRunCtx.registrations) r.dispose();
     this.currentRunCtx.registrations.length = 0;
   }
 

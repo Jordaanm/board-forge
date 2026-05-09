@@ -329,7 +329,7 @@ describe('scrubSceneMessage — ancestor-private fan-out', () => {
     child.parentId = parent.id;
     const msg: SceneMessage = {
       type: 'component-patches', channel: 'reliable',
-      patches: [{ entityId: 'c', typeId: 'shape-element', partial: { x: 1 } }],
+      patches: [{ entityId: 'c', typeId: 'surface', partial: { elements: [] } }],
     };
     expect(scrubSceneMessage({ peerSeat: 5, isHost: false }, msg, EMPTY_PRIVATE_FIELD_REGISTRY, lookup)).toBeNull();
     expect(scrubSceneMessage({ peerSeat: 1, isHost: false }, msg, EMPTY_PRIVATE_FIELD_REGISTRY, lookup)).toEqual(msg);
@@ -357,9 +357,9 @@ describe('scrubSceneMessage — ancestor-private fan-out', () => {
     const msg: SceneMessage = {
       type: 'entity-spawn',
       entity: {
-        id: 'c', type: 'shape-element', name: 'shape', tags: [],
+        id: 'c', type: 'sticker-surface', name: 'surf', tags: [],
         owner: null, privateToSeat: null, parentId: 'p', children: [],
-        components: { 'shape-element': { x: 0, y: 0, w: 10, h: 10, kind: 'rect' } },
+        components: { surface: { canvasSize: [10, 10], elements: [] } },
       },
     };
     expect(scrubSceneMessage({ peerSeat: 5, isHost: false }, msg, EMPTY_PRIVATE_FIELD_REGISTRY, lookup)).toBeNull();

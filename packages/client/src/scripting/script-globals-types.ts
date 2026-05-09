@@ -51,7 +51,7 @@ export type EditorShapeKind = 'rect' | 'circle';
 export type EditorImageFit  = 'fit' | 'cover' | 'stretch' | 'none';
 
 export interface EditorShapeOpts {
-  kind?:        EditorShapeKind;
+  shape?:       EditorShapeKind;
   fill?:        string;
   stroke?:      string;
   strokeWidth?: number;
@@ -66,7 +66,7 @@ export interface EditorStickerOpts {
   offset?:     number;
   canvasSize?: [number, number];
   content:
-    | { shape: EditorShapeOpts & { kind: EditorShapeKind } }
+    | { shape: { kind: EditorShapeKind; fill?: string; stroke?: string; strokeWidth?: number; radius?: number } }
     | { image: string; fit?: EditorImageFit }
     | { html:  string };
 }
@@ -85,10 +85,22 @@ export class EditorEntityFacade {
   setData(key: string, value: string): void { void key; void value; }
   getData(key: string): string | undefined { void key; return undefined; }
   deleteData(key: string): boolean { void key; return false; }
+}
+
+// Handle for one element living inside a SurfaceComponent's `state.elements`
+// array. Returned by `scene.attachSticker` and `scene.getElement`. Replaces
+// the per-element entity facade — the element is data, not an entity.
+export class EditorElementHandle {
+  declare readonly surfaceId: string;
+  declare readonly elementId: string;
+
+  setBounds(x: number, y: number, w: number, h: number): void { void x; void y; void w; void h; }
   setHtml(html: string): void { void html; }
   setImageRef(ref: string): void { void ref; }
+  setImageFit(fit: EditorImageFit): void { void fit; }
   setShape(opts: EditorShapeOpts): void { void opts; }
-  setBounds(x: number, y: number, w: number, h: number): void { void x; void y; void w; void h; }
+  addEventListener(event: string, cb: EditorListener): void { void event; void cb; }
+  removeEventListener(event: string, cb: EditorListener): void { void event; void cb; }
 }
 
 export class EditorSceneFacade {
@@ -97,8 +109,11 @@ export class EditorSceneFacade {
   getTable(): EditorEntityFacade | undefined { return undefined; }
   getObjectsByTag(tag: string): EditorEntityFacade[] { void tag; return []; }
   playSound(slug: string): void { void slug; }
-  attachSticker(parent: EditorEntityFacade, opts: EditorStickerOpts): EditorEntityFacade | null {
+  attachSticker(parent: EditorEntityFacade, opts: EditorStickerOpts): EditorElementHandle | null {
     void parent; void opts; return null;
+  }
+  getElement(surfaceId: string, elementId: string): EditorElementHandle | null {
+    void surfaceId; void elementId; return null;
   }
 }
 

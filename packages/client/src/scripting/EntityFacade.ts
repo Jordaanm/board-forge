@@ -13,13 +13,24 @@ import { type Entity } from '../entity/Entity';
 import { type Listener } from '../entity/EntityEventBus';
 import { type SeatIndex } from '../seats/SeatLayout';
 import { ValueComponent } from '../entity/components/ValueComponent';
-import { RichElement } from '../entity/components/RichElement';
-import { ImageElement, type ImageFit } from '../entity/components/ImageElement';
-import { ShapeElement, type ShapeKind } from '../entity/components/ShapeElement';
 import { type ScriptErrorLog } from './ScriptErrorLog';
 
 export interface ReadOnlyComponentView {
   readonly state: Readonly<Record<string, unknown>>;
+}
+
+// One per-Run record per `addEventListener` call. `dispose` is the closure
+// that detaches the wrapped listener from whichever bus it was added to —
+// either an Entity bus (EntityFacade.addEventListener) or a SurfaceComponent's
+// per-element bus (ElementHandle.addEventListener). The optional identifiers
+// are used by the matching `removeEventListener` to find the right entry.
+export interface ScriptRegistration {
+  event:     string;
+  userCb:    Listener;
+  dispose:   () => void;
+  entity?:    Entity;
+  surfaceId?: string;
+  elementId?: string;
 }
 
 // Lifetime context for a single Run. ScriptHost constructs one per Run and
@@ -27,12 +38,8 @@ export interface ReadOnlyComponentView {
 // registrations get tracked centrally for teardown on the next Run.
 export interface ScriptRunContext {
   // Each addEventListener call appends one record so teardown can iterate
-  // and call removeListener against the underlying bus. Cleared after
-  // teardown. The recorded `cb` is the wrapped callback (so removal
-  // matches what was actually attached to the bus); `userCb` is the
-  // original passed by the script so `removeEventListener(name, cb)` can
-  // identify the right entry.
-  registrations: Array<{ entity: Entity; event: string; userCb: Listener; cb: Listener }>;
+  // and call `dispose()`. Cleared after teardown.
+  registrations: ScriptRegistration[];
   // Optional error sink — when present, listener exceptions funnel here
   // (issue #7 of issues--scripting-v1.md). Tests that don't care can omit.
   errorLog?:     ScriptErrorLog;
@@ -97,19 +104,23 @@ export class EntityFacade {
       }
     };
     this.entity_.addEventListener(event, wrapped);
-    this.ctx.registrations.push({ entity: this.entity_, event, userCb: cb, cb: wrapped });
+    this.ctx.registrations.push({
+      event,
+      userCb:  cb,
+      dispose: () => this.entity_.removeEventListener(event, wrapped),
+      entity:  this.entity_,
+    });
   }
 
   // Removes only the targeted callback. Looks up the wrapped function by
-  // matching the original user callback, then detaches that wrapped one
-  // from the bus and drops the registration entry.
+  // matching the original user callback, then disposes that registration.
   removeEventListener(event: string, cb: Listener): void {
     const idx = this.ctx.registrations.findIndex(
       r => r.entity === this.entity_ && r.event === event && r.userCb === cb,
     );
     if (idx < 0) return;
     const r = this.ctx.registrations[idx];
-    this.entity_.removeEventListener(event, r.cb);
+    r.dispose();
     this.ctx.registrations.splice(idx, 1);
   }
 
@@ -136,47 +147,5 @@ export class EntityFacade {
 
   deleteData(key: string): boolean {
     return this.entity_.deleteCustomData(key);
-  }
-
-  // Element-component mutators (issue #9 of issues--ui-surface.md). Each
-  // routes to whichever element component this entity carries; calls on
-  // entities without the relevant component no-op + warn so a typo in a
-  // script surfaces audibly rather than silently mis-targeting.
-
-  setHtml(html: string): void {
-    const comp = this.entity_.getComponent(RichElement);
-    if (!comp) { this.warn('setHtml: entity has no rich-element component'); return; }
-    comp.setState({ html });
-  }
-
-  setImageRef(ref: string): void {
-    const comp = this.entity_.getComponent(ImageElement);
-    if (!comp) { this.warn('setImageRef: entity has no image-element component'); return; }
-    comp.setState({ textureRef: ref });
-  }
-
-  setShape(opts: {
-    kind?:        ShapeKind;
-    fill?:        string;
-    stroke?:      string;
-    strokeWidth?: number;
-    radius?:      number;
-  }): void {
-    const comp = this.entity_.getComponent(ShapeElement);
-    if (!comp) { this.warn('setShape: entity has no shape-element component'); return; }
-    comp.setState(opts);
-  }
-
-  setBounds(x: number, y: number, w: number, h: number): void {
-    const target = this.entity_.getComponent(RichElement)
-                ?? this.entity_.getComponent(ImageElement)
-                ?? this.entity_.getComponent(ShapeElement);
-    if (!target) { this.warn('setBounds: entity has no element component'); return; }
-    target.setState({ x, y, w, h });
-  }
-
-  private warn(message: string): void {
-    const sink = this.ctx.warn ?? ((m: string) => { if (typeof console !== 'undefined') console.warn('[script]', m); });
-    sink(message);
   }
 }

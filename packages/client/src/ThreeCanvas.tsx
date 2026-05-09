@@ -15,7 +15,6 @@ import { ZoneComponent } from './entity/components/ZoneComponent';
 import { HandComponent } from './entity/components/HandComponent';
 import { FlatViewComponent } from './entity/components/FlatViewComponent';
 import { CardComponent } from './entity/components/CardComponent';
-import { ImageElement } from './entity/components/ImageElement';
 import { surfaceRenderQueue } from './entity/components/SurfaceRenderQueue';
 import { aggregateContextMenu } from './entity/contextMenu';
 import { encodeSaveFile, downloadSaveFile } from './entity/SaveFile';
@@ -673,9 +672,6 @@ function entityToObjectSummary(entity: Entity): ObjectSummary {
   } else if (entity.type === 'card' && card) {
     props.face = card.state.face;
     props.back = card.state.back;
-  } else if (entity.type === 'image-element') {
-    const img = entity.getComponent(ImageElement);
-    if (img) props.textureRef = img.state.textureRef;
   }
   if (zone) {
     const [hx, hy, hz] = zone.state.halfExtents;

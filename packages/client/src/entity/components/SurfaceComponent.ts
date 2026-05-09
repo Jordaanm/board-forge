@@ -1,34 +1,54 @@
-// Canvas-on-plane surface (issue #2 of issues--ui-surface.md).
+// Canvas-on-plane surface (issue #2 of issues--ui-surface.md, refactored
+// for issue #2 of issues--ui-surface-refactor.md).
 //
-// SurfaceComponent owns an offscreen `<canvas>` and a THREE.CanvasTexture.
-// On spawn it walks the parent MeshComponent's group and binds the texture
-// directly onto each `default`-slot material's `map`, marking those
-// materials with `userData.surfaceOwned = true` so MeshComponent's
-// applyMaterialAttributes flow does not overwrite or unsub them.
+// SurfaceComponent owns:
+//   - an offscreen `<canvas>` + THREE.CanvasTexture bound to the parent
+//     entity's MeshComponent material map;
+//   - an `elements: SurfaceElement[]` array on `state` — the replicated
+//     description of every surface element (shape / image / rich) — replacing
+//     the old child-entity model;
+//   - a `Map<elementId, ElementRuntime>` — per-element imperative runtime
+//     (asset subs, async render state) keyed by id;
+//   - a `Map<elementId, EntityEventBus>` — per-element event bus that
+//     ElementHandle's `addEventListener` writes into.
 //
-// Composition is driven by SurfaceRenderQueue: any setState on a child
-// element flips this surface's dirty bit, the queue collects flips per
-// frame, then drains by calling compose() once. Re-flips that occur while
-// compose() is running are queued for the next drain — collapses 60 Hz
-// tween-driven mutations on the same element to one composition per frame.
+// State apply (host-side `setState({ elements: ... })` or guest-side
+// `applyRemoteState`) walks `onPropertiesChanged`, which diffs the new array
+// against the live runtimes/buses and runs add → mount, remove → unmount,
+// mutated same-`kind` → update, mutated different-`kind` → unmount + mount.
+// Element-array replication is whole-array on the reliable channel — the
+// receiver runs the same diff and lifecycle locally.
 //
-// Element entities are children of the surface entity. compose() walks
-// `entity.children` in order, asks each child's element component for a
-// bitmap, and blits at the element's declared (x, y) bounds. Elements have
-// no TransformComponent — their layout is purely 2D in canvas pixels.
+// Composition: any runtime call to `markDirty` (or any state change) flips
+// this surface's dirty bit through `surfaceRenderQueue`. drain() calls
+// compose(), which iterates `state.elements` in order, asks each id's runtime
+// for a bitmap, and blits at the element's bounds.
 
 import * as THREE from 'three';
-import { EntityComponent, type SpawnContext, type MenuContext, type ReplicationChannel } from '../EntityComponent';
+import { EntityComponent, type SpawnContext, type MenuContext, type ReplicationChannel, type ComponentClass } from '../EntityComponent';
 import { MeshComponent } from './MeshComponent';
 import { TransformComponent } from './TransformComponent';
 import { surfaceRenderQueue } from './SurfaceRenderQueue';
-import type { ElementComponent, ElementBounds } from './ElementComponent';
+import { EntityEventBus, type Listener } from '../EntityEventBus';
+import {
+  type SurfaceElement,
+  type ShapeElement,
+  type ImageElement,
+  type RichElement,
+  type EditorElementKind,
+  newElementId,
+  makeDefaultElement,
+} from './SurfaceElement';
+import {
+  type ElementRuntime,
+  makeRuntime,
+} from './ElementRuntime';
 import type { InputEventPayload } from '../../input/inputEvents';
-import type { Entity } from '../Entity';
 import type { EditorToolItem } from '../editorTools';
 
 export interface SurfaceState {
   canvasSize: [number, number];
+  elements:   SurfaceElement[];
 }
 
 export class SurfaceComponent extends EntityComponent<SurfaceState> {
@@ -41,38 +61,303 @@ export class SurfaceComponent extends EntityComponent<SurfaceState> {
   private ctx: CanvasRenderingContext2D | null = null;
   private lastHoveredElementId: string | null = null;
 
+  // Per-element runtimes. Map order is irrelevant — render order comes from
+  // `state.elements`. Buses are owned per-id so ElementHandle subscribers
+  // survive same-id mutations and are torn down with the element.
+  private runtimes: Map<string, ElementRuntime> = new Map();
+  private buses:    Map<string, EntityEventBus> = new Map();
+  // Last applied snapshot per id — needed to drive `runtime.update(prev,
+  // next)` since `state.elements` has already been overwritten by the time
+  // `onPropertiesChanged` runs.
+  private snapshots: Map<string, SurfaceElement> = new Map();
+
   onSpawn(_ctx: SpawnContext): void {
-    if (!this.state) this.state = { canvasSize: [512, 512] };
+    if (!this.state) this.state = { canvasSize: [512, 512], elements: [] };
+    if (!this.state.elements) this.state.elements = [];
     this.attachToParentObject3D();
-    if (typeof document === 'undefined') return;
 
-    const [w, h] = this.state.canvasSize;
-    this.canvas = document.createElement('canvas');
-    this.canvas.width  = w;
-    this.canvas.height = h;
-    this.ctx = this.canvas.getContext('2d');
+    if (typeof document !== 'undefined') {
+      const [w, h] = this.state.canvasSize;
+      this.canvas = document.createElement('canvas');
+      this.canvas.width  = w;
+      this.canvas.height = h;
+      this.ctx = this.canvas.getContext('2d');
 
-    this.texture = new THREE.CanvasTexture(this.canvas);
-    this.texture.colorSpace = THREE.SRGBColorSpace;
+      this.texture = new THREE.CanvasTexture(this.canvas);
+      this.texture.colorSpace = THREE.SRGBColorSpace;
 
-    this.bindToMesh();
+      this.bindToMesh();
+    }
+
+    // Mount any pre-loaded elements (the save/load path land elements onto
+    // `state.elements` before onSpawn fires; spawn-time mount runs the same
+    // lifecycle a runtime add would).
+    this.diffAndApply();
     this.markDirty();
   }
 
   onDespawn(_ctx: SpawnContext): void {
     this.unbindFromMesh();
     this.detachFromParentObject3D();
+    for (const r of this.runtimes.values()) r.unmount();
+    this.runtimes.clear();
+    this.buses.clear();
+    this.snapshots.clear();
     this.texture?.dispose();
     this.texture = null;
     this.canvas  = null;
     this.ctx     = null;
   }
 
-  // Re-parent the surface entity's THREE object3d under the owning entity's
-  // object3d so the surface tracks the parent's pose without a per-frame
-  // setState. Uses `parent.add` (not `attach`) because the surface's
-  // TransformComponent state is already authored in the parent's local frame
-  // — we want that local pose preserved verbatim under the new parent.
+  onPropertiesChanged(changed: Partial<SurfaceState>): void {
+    if (changed.canvasSize !== undefined && this.canvas) {
+      const [w, h] = this.state.canvasSize;
+      this.canvas.width  = w;
+      this.canvas.height = h;
+      if (this.texture) this.texture.needsUpdate = true;
+    }
+    if (changed.elements !== undefined) this.diffAndApply();
+    this.markDirty();
+  }
+
+  // ── Element-array mutators (host-only paths) ────────────────────────────
+
+  // Append a new element with default state for the requested editor kind.
+  // Mutates the array in place, runs lifecycle locally, replicates the whole
+  // array. Returns the new element's id.
+  attachElement(kind: EditorElementKind): string {
+    const [w, h] = this.state.canvasSize;
+    const element = makeDefaultElement(kind, w, h);
+    return this.addElement(element);
+  }
+
+  // Append an explicitly-built SurfaceElement (used by attachSticker so the
+  // sticker's content shape is honoured directly). Returns the element id.
+  addElement(element: SurfaceElement): string {
+    this.state.elements = [...this.state.elements, element];
+    this.diffAndApply();
+    this.markDirty();
+    this.replicateElements();
+    return element.id;
+  }
+
+  // Delete an element by id. No-op if the id isn't in the array. Replicates.
+  removeElement(id: string): void {
+    const idx = this.state.elements.findIndex((e) => e.id === id);
+    if (idx < 0) return;
+    this.state.elements = this.state.elements.filter((_, i) => i !== idx);
+    this.diffAndApply();
+    this.markDirty();
+    this.replicateElements();
+  }
+
+  // Patch an element's data in place. Discriminator (`kind`) cannot be
+  // changed by mutation — pass-through callers (ElementHandle.setHtml etc.)
+  // already gate on kind. Replicates the whole array.
+  mutateElement<T extends SurfaceElement>(id: string, patch: Partial<T>): void {
+    const idx = this.state.elements.findIndex((e) => e.id === id);
+    if (idx < 0) return;
+    const prev = this.state.elements[idx];
+    const next = { ...prev, ...patch, id: prev.id, kind: prev.kind } as SurfaceElement;
+    this.state.elements = [
+      ...this.state.elements.slice(0, idx),
+      next,
+      ...this.state.elements.slice(idx + 1),
+    ];
+    this.diffAndApply();
+    this.markDirty();
+    this.replicateElements();
+  }
+
+  // Element-id → element data lookup. Read-only — callers must use
+  // mutateElement to change content. Returns null for unknown ids.
+  getElement(id: string): SurfaceElement | null {
+    return this.state.elements.find((e) => e.id === id) ?? null;
+  }
+
+  // ── Element event buses (per-id) ────────────────────────────────────────
+
+  addElementListener(id: string, event: string, cb: Listener): void {
+    const bus = this.busFor(id);
+    if (!bus) return;
+    bus.addListener(event, cb);
+  }
+
+  removeElementListener(id: string, event: string, cb: Listener): void {
+    const bus = this.buses.get(id);
+    if (!bus) return;
+    bus.removeListener(event, cb);
+  }
+
+  // ── Diff lifecycle ──────────────────────────────────────────────────────
+
+  private diffAndApply(): void {
+    const elements = this.state.elements ?? [];
+    const liveIds  = new Set<string>();
+    for (const el of elements) liveIds.add(el.id);
+
+    // Drop runtimes / buses / snapshots whose ids vanished.
+    for (const [id, runtime] of [...this.runtimes]) {
+      if (!liveIds.has(id)) {
+        runtime.unmount();
+        this.runtimes.delete(id);
+        this.buses.delete(id);
+        this.snapshots.delete(id);
+      }
+    }
+
+    // Mount/update for every element in the array, in order.
+    for (const el of elements) {
+      const existing = this.runtimes.get(el.id);
+      const prev     = this.snapshots.get(el.id);
+      if (!existing) {
+        const fresh = makeRuntime(el, { markDirty: () => this.markDirty() });
+        this.runtimes.set(el.id, fresh);
+        this.buses.set(el.id, this.buses.get(el.id) ?? new EntityEventBus());
+        fresh.mount(el);
+        this.snapshots.set(el.id, el);
+        continue;
+      }
+      if (!prev || prev.kind !== el.kind) {
+        existing.unmount();
+        const fresh = makeRuntime(el, { markDirty: () => this.markDirty() });
+        this.runtimes.set(el.id, fresh);
+        fresh.mount(el);
+        this.snapshots.set(el.id, el);
+        continue;
+      }
+      // Same kind — runtime.update on a typed element. The cast is safe
+      // because prev.kind === el.kind narrows the union to a single variant.
+      (existing as ElementRuntime<typeof el>).update(prev as typeof el, el);
+      this.snapshots.set(el.id, el);
+    }
+  }
+
+  private replicateElements(): void {
+    if (!this.world || !this.entity) return;
+    const ctor = this.constructor as ComponentClass;
+    this.world.enqueueComponentPatch({
+      entityId: this.entity.id,
+      typeId:   ctor.typeId,
+      partial:  { elements: this.state.elements } as Record<string, unknown>,
+    });
+  }
+
+  private busFor(id: string): EntityEventBus | null {
+    let bus = this.buses.get(id);
+    if (bus) return bus;
+    // Element id must be in the elements array — adding a listener for a
+    // stale id is a silent no-op (the ElementHandle warning is the visible
+    // path).
+    if (!this.state.elements.some((e) => e.id === id)) return null;
+    bus = new EntityEventBus();
+    this.buses.set(id, bus);
+    return bus;
+  }
+
+  markDirty(): void {
+    surfaceRenderQueue.markDirty(this);
+  }
+
+  onEditorTools(_ctx: MenuContext): EditorToolItem[] {
+    return [
+      { kind: 'button', id: 'add-rich',         label: 'Add Rich UI'        },
+      { kind: 'button', id: 'add-image',        label: 'Add Image'          },
+      { kind: 'button', id: 'add-shape-rect',   label: 'Add Rectangle'      },
+      { kind: 'button', id: 'add-shape-circle', label: 'Add Circle'         },
+    ];
+  }
+
+  // ── Input forwarding ────────────────────────────────────────────────────
+
+  onPress    (payload: InputEventPayload): void { this.forwardEvent('pressed',  payload); }
+  onReleased (payload: InputEventPayload): void { this.forwardEvent('released', payload); }
+  onClick    (payload: InputEventPayload): void { this.forwardEvent('click',    payload); }
+
+  onHoverStart(payload: InputEventPayload): void {
+    const uv = payload.surfaceUV;
+    if (!uv) return;
+    const hit = this.resolveElementAtUV(uv);
+    if (!hit) return;
+    this.lastHoveredElementId = hit.id;
+    this.dispatchTo(hit.id, 'hover-start', { ...payload, surfaceUV: { ...uv }, pixel: hit.pixel });
+  }
+
+  onHoverMove(payload: InputEventPayload): void {
+    const uv = payload.surfaceUV;
+    if (!uv) return;
+    const hit   = this.resolveElementAtUV(uv);
+    const newId = hit?.id ?? null;
+    if (newId === this.lastHoveredElementId) {
+      if (hit) this.dispatchTo(hit.id, 'hover-move', { ...payload, surfaceUV: { ...uv }, pixel: hit.pixel });
+      return;
+    }
+    if (this.lastHoveredElementId) {
+      this.dispatchTo(this.lastHoveredElementId, 'hover-end', { ...payload, surfaceUV: { ...uv } });
+    }
+    this.lastHoveredElementId = newId;
+    if (hit) this.dispatchTo(hit.id, 'hover-start', { ...payload, surfaceUV: { ...uv }, pixel: hit.pixel });
+  }
+
+  onHoverEnd(payload: InputEventPayload): void {
+    if (this.lastHoveredElementId) {
+      this.dispatchTo(this.lastHoveredElementId, 'hover-end', { ...payload });
+    }
+    this.lastHoveredElementId = null;
+  }
+
+  private forwardEvent(name: 'pressed' | 'released' | 'click', payload: InputEventPayload): string | null {
+    const uv = payload.surfaceUV;
+    if (!uv) return null;
+    const hit = this.resolveElementAtUV(uv);
+    if (!hit) return null;
+    const extended: InputEventPayload = { ...payload, surfaceUV: { ...uv }, pixel: hit.pixel };
+    this.dispatchTo(hit.id, name, extended);
+    return hit.id;
+  }
+
+  private dispatchTo(id: string, name: string, payload: InputEventPayload): void {
+    const bus = this.buses.get(id);
+    if (!bus) return;
+    bus.dispatch(name, payload);
+  }
+
+  // Reverse z-order: later array entries draw on top, so they win the hit.
+  resolveElementAtUV(uv: { u: number; v: number }): { id: string; pixel: { x: number; y: number } } | null {
+    const [w, h] = this.state.canvasSize;
+    const pixel  = { x: uv.u * w, y: uv.v * h };
+    for (let i = this.state.elements.length - 1; i >= 0; i--) {
+      const el = this.state.elements[i];
+      if (pixel.x < el.x || pixel.x >= el.x + el.w) continue;
+      if (pixel.y < el.y || pixel.y >= el.y + el.h) continue;
+      return { id: el.id, pixel };
+    }
+    return null;
+  }
+
+  // Drain entry — invoked by SurfaceRenderQueue. Iterates `state.elements`
+  // in order, asks each id's runtime for a bitmap, blits at the element
+  // bounds. No-op when no canvas backend is available.
+  compose(): void {
+    if (!this.canvas || !this.ctx) return;
+    const ctx    = this.ctx;
+    const [w, h] = this.state.canvasSize;
+    ctx.clearRect(0, 0, w, h);
+
+    for (const el of this.state.elements) {
+      const runtime = this.runtimes.get(el.id);
+      if (!runtime) continue;
+      const bitmap = runtime.produceBitmap();
+      if (!bitmap) continue;
+      if (el.w <= 0 || el.h <= 0) continue;
+      ctx.drawImage(bitmap, el.x, el.y);
+    }
+
+    if (this.texture) this.texture.needsUpdate = true;
+  }
+
+  // ── THREE scene-graph plumbing (issue #1 of refactor) ───────────────────
+
   private attachToParentObject3D(): void {
     const parent = this.findParentObject3D();
     const self   = this.entity.getComponent(TransformComponent)?.object3d;
@@ -97,140 +382,7 @@ export class SurfaceComponent extends EntityComponent<SurfaceState> {
     return parentEntity.getComponent(TransformComponent)?.object3d ?? null;
   }
 
-  onPropertiesChanged(changed: Partial<SurfaceState>): void {
-    if (changed.canvasSize !== undefined && this.canvas) {
-      const [w, h] = this.state.canvasSize;
-      this.canvas.width  = w;
-      this.canvas.height = h;
-      if (this.texture) this.texture.needsUpdate = true;
-      this.markDirty();
-    }
-  }
-
-  markDirty(): void {
-    surfaceRenderQueue.markDirty(this);
-  }
-
-  onEditorTools(_ctx: MenuContext): EditorToolItem[] {
-    return [
-      { kind: 'button', id: 'add-rich',         label: 'Add Rich UI'        },
-      { kind: 'button', id: 'add-image',        label: 'Add Image'          },
-      { kind: 'button', id: 'add-shape-rect',   label: 'Add Rectangle'      },
-      { kind: 'button', id: 'add-shape-circle', label: 'Add Circle'         },
-    ];
-  }
-
-  // Press / released / click forwarding (issue #4 of issues--ui-surface.md).
-  // The dispatcher fires the event on the surface entity bus with
-  // `payload.surfaceUV` populated from the THREE intersection. We resolve UV
-  // → pixel, walk children in reverse z-order, and re-fire the same event
-  // on the first element entity whose bounds contain the pixel. Re-fire is
-  // local-only (does NOT route through World.fireInputEvent — element-level
-  // dispatch is deterministic on every peer because element state is
-  // replicated). Misses leave the event on the surface.
-  onPress    (payload: InputEventPayload): void { this.forwardEvent('pressed',  payload); }
-  onReleased (payload: InputEventPayload): void { this.forwardEvent('released', payload); }
-  onClick    (payload: InputEventPayload): void { this.forwardEvent('click',    payload); }
-
-  // Hover forwarding (issue #5 of issues--ui-surface.md). Tracks
-  // lastHoveredElementId across frames; element transitions inside the same
-  // surface fire `hover-end` on the previous element BEFORE `hover-start` on
-  // the new one (no overlap). Element-level dispatches are local-only,
-  // matching the surface-level hover-move semantics.
-  onHoverStart(payload: InputEventPayload): void {
-    const uv = payload.surfaceUV;
-    if (!uv) return;
-    const hit = this.resolveElementAtUV(uv);
-    if (!hit) return;
-    this.lastHoveredElementId = hit.entity.id;
-    hit.entity.dispatchEvent('hover-start', { ...payload, surfaceUV: { ...uv }, pixel: hit.pixel });
-  }
-
-  onHoverMove(payload: InputEventPayload): void {
-    const uv = payload.surfaceUV;
-    if (!uv) return;
-    const hit   = this.resolveElementAtUV(uv);
-    const newId = hit?.entity.id ?? null;
-    if (newId === this.lastHoveredElementId) {
-      if (hit) {
-        hit.entity.dispatchEvent('hover-move', { ...payload, surfaceUV: { ...uv }, pixel: hit.pixel });
-      }
-      return;
-    }
-    if (this.lastHoveredElementId) {
-      const prev = this.entity.scene?.getEntity(this.lastHoveredElementId);
-      if (prev) prev.dispatchEvent('hover-end', { ...payload, surfaceUV: { ...uv } });
-    }
-    this.lastHoveredElementId = newId;
-    if (hit) {
-      hit.entity.dispatchEvent('hover-start', { ...payload, surfaceUV: { ...uv }, pixel: hit.pixel });
-    }
-  }
-
-  onHoverEnd(payload: InputEventPayload): void {
-    if (this.lastHoveredElementId) {
-      const prev = this.entity.scene?.getEntity(this.lastHoveredElementId);
-      if (prev) prev.dispatchEvent('hover-end', { ...payload });
-    }
-    this.lastHoveredElementId = null;
-  }
-
-  private forwardEvent(name: 'pressed' | 'released' | 'click', payload: InputEventPayload): Entity | null {
-    const uv = payload.surfaceUV;
-    if (!uv) return null;
-    const hit = this.resolveElementAtUV(uv);
-    if (!hit) return null;
-    const extended: InputEventPayload = { ...payload, surfaceUV: { ...uv }, pixel: hit.pixel };
-    hit.entity.dispatchEvent(name, extended);
-    return hit.entity;
-  }
-
-  // Exposed so #5 (hover forwarding) can share the resolution path.
-  resolveElementAtUV(uv: { u: number; v: number }): { entity: Entity; pixel: { x: number; y: number } } | null {
-    const [w, h] = this.state.canvasSize;
-    const pixel  = { x: uv.u * w, y: uv.v * h };
-    const scene  = this.entity.scene;
-    if (!scene) return null;
-    const childIds = this.entity.children;
-    for (let i = childIds.length - 1; i >= 0; i--) {
-      const child = scene.getEntity(childIds[i]);
-      if (!child) continue;
-      const el = findElementComponent(child);
-      if (!el) continue;
-      const b = el.getBounds();
-      if (pixel.x < b.x || pixel.x >= b.x + b.w) continue;
-      if (pixel.y < b.y || pixel.y >= b.y + b.h) continue;
-      return { entity: child, pixel };
-    }
-    return null;
-  }
-
-  // Drain entry point — invoked by SurfaceRenderQueue. Walks
-  // `entity.children` in order, asks each child's element component for a
-  // bitmap, and blits at the element's bounds. No-op when no canvas backend
-  // is available (test envs without canvas/2d context).
-  compose(): void {
-    if (!this.canvas || !this.ctx) return;
-    const ctx    = this.ctx;
-    const [w, h] = this.state.canvasSize;
-    ctx.clearRect(0, 0, w, h);
-
-    const scene = this.entity.scene;
-    if (!scene) return;
-    for (const childId of this.entity.children) {
-      const child = scene.getEntity(childId);
-      if (!child) continue;
-      const el = findElementComponent(child);
-      if (!el) continue;
-      const bitmap = el.produceBitmap();
-      if (!bitmap) continue;
-      const bounds = el.getBounds();
-      if (bounds.w <= 0 || bounds.h <= 0) continue;
-      ctx.drawImage(bitmap, bounds.x, bounds.y);
-    }
-
-    if (this.texture) this.texture.needsUpdate = true;
-  }
+  // ── Mesh material binding ───────────────────────────────────────────────
 
   private bindToMesh(): void {
     const tex = this.texture;
@@ -243,12 +395,7 @@ export class SurfaceComponent extends EntityComponent<SurfaceState> {
       const apply = (mat: THREE.Material) => {
         const lambert = mat as THREE.MeshLambertMaterial;
         lambert.map = tex;
-        // Surface keeps the canvas content authoritative — render with white
-        // base colour so tint never tints the composed bitmap.
         lambert.color?.set(0xffffff);
-        // Canvas pixels outside element bounds are clearRect'd to alpha=0;
-        // an opaque material would render those as black. Enable transparency
-        // so the surface is genuinely clear where no element draws.
         const prevTransparent = mat.transparent;
         mat.transparent = true;
         mat.userData = { ...(mat.userData ?? {}), surfaceOwned: true, prevTransparent };
@@ -291,16 +438,12 @@ export class SurfaceComponent extends EntityComponent<SurfaceState> {
   }
 }
 
-// Locate the first ElementComponent-shaped component on an entity. Children
-// of a surface are expected to carry exactly one element component; the
-// duck-type check (produceBitmap + getBounds) avoids hard-coding the typeId
-// list and naturally accommodates future element types.
-function findElementComponent(child: { components: Map<string, unknown> }): ElementComponent<ElementBounds> | null {
-  for (const comp of child.components.values()) {
-    const el = comp as Partial<ElementComponent<ElementBounds>>;
-    if (typeof el.produceBitmap === 'function' && typeof el.getBounds === 'function') {
-      return el as ElementComponent<ElementBounds>;
-    }
-  }
-  return null;
-}
+// Re-exports kept for callers that want the union shapes via a single import.
+export {
+  type SurfaceElement,
+  type ShapeElement,
+  type ImageElement,
+  type RichElement,
+  type EditorElementKind,
+  newElementId,
+};

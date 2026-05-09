@@ -47,11 +47,11 @@ import { EntityHandleImpl, type HandleRouter } from './EntityHandle';
 import { ScriptHost } from '../../scripting/ScriptHost';
 import { assetService } from '../../assets/AssetService';
 import {
-  attachSticker, createSurfaceChild, createSurfaceElement,
-  type StickerOpts, type SurfaceChildOpts, type SurfaceElementKind,
+  attachSticker, createSurfaceChild, appendDefaultElement,
+  type StickerOpts, type SurfaceChildOpts,
 } from '../components/attachSticker';
 import { SurfaceComponent } from '../components/SurfaceComponent';
-import { ImageElement } from '../components/ImageElement';
+import { type EditorElementKind } from '../components/SurfaceElement';
 import {
   type World,
   type WorldOptions,
@@ -257,22 +257,20 @@ class WorldImpl implements World, HandleRouter {
     }
   }
 
-  // Host-only — spawn one element entity (Rich / Image / Shape) parented to
-  // an existing surface entity. Backs the Surface component's per-kind editor
-  // tool buttons. Returns the new element entity's id, or null on a missing
-  // surface / surface without a SurfaceComponent.
-  attachElement(surfaceId: string, kind: SurfaceElementKind): string | null {
+  // Host-only — append one element (Rich / Image / Shape) to a surface's
+  // `state.elements` array. Backs the Surface component's per-kind editor
+  // tool buttons. Returns the new element id, or null on a missing surface
+  // / surface without a SurfaceComponent.
+  attachElement(surfaceId: string, kind: EditorElementKind): string | null {
     if (this.role !== 'host') throw new Error('World.attachElement is host-only');
     const surface = this.scene.getEntity(surfaceId);
     if (!surface) return null;
     if (!surface.getComponent(SurfaceComponent)) return null;
-    const ctx: SpawnContext = { scene: this.threeScene, physics: this.physics, entityScene: this.scene };
     try {
       this.history_?.push(`attach ${kind} element`);
-      const element = createSurfaceElement(this.scene, ctx, surface, kind);
-      if (this.replicator) this.replicator.enqueueEntitySpawn(entityToSerialized(element));
+      const elementId = appendDefaultElement(surface, kind);
       this.notify();
-      return element.id;
+      return elementId;
     } catch (e) {
       this.scripting_?.errorLog.push('attachElement', e);
       return null;
@@ -280,22 +278,21 @@ class WorldImpl implements World, HandleRouter {
   }
 
   // Backs `scene.attachSticker` (issue #9 of issues--ui-surface.md). Builds
-  // the surface + element entity tree, enqueues spawns for both so guests
-  // see them, and returns the element id to the script. Returns null when
-  // the request can't be honoured (unknown parent, parent has no mesh).
-  private attachStickerOnHost(parentId: string, opts: StickerOpts): string | null {
+  // the surface entity, appends one element to its state.elements array,
+  // enqueues the surface spawn so guests see it, and returns
+  // `{ surfaceId, elementId }` so the SceneFacade can wrap the element id
+  // in an ElementHandle. Returns null when the request can't be honoured
+  // (unknown parent, parent has no mesh).
+  private attachStickerOnHost(parentId: string, opts: StickerOpts): { surfaceId: string; elementId: string } | null {
     const parent = this.scene.getEntity(parentId);
     if (!parent) return null;
     if (!parent.getComponent(MeshComponent)) return null;
     const ctx: SpawnContext = { scene: this.threeScene, physics: this.physics, entityScene: this.scene };
     try {
-      const { surface, element } = attachSticker(this.scene, ctx, parent, opts);
-      if (this.replicator) {
-        this.replicator.enqueueEntitySpawn(entityToSerialized(surface));
-        this.replicator.enqueueEntitySpawn(entityToSerialized(element));
-      }
+      const { surfaceEntity, elementHandle } = attachSticker(this.scene, ctx, parent, opts);
+      if (this.replicator) this.replicator.enqueueEntitySpawn(entityToSerialized(surfaceEntity));
       this.notify();
-      return element.id;
+      return { surfaceId: surfaceEntity.id, elementId: elementHandle.elementId };
     } catch (e) {
       this.scripting_?.errorLog.push('attachSticker', e);
       return null;
@@ -415,11 +412,6 @@ class WorldImpl implements World, HandleRouter {
       else if (key === 'halfExtentsY') zone.setState({ halfExtents: [cur[0], Number(value), cur[2]] });
       else if (key === 'halfExtentsZ') zone.setState({ halfExtents: [cur[0], cur[1], Number(value)] });
       else if (key === 'isVisible')    zone.setState({ isVisible: Boolean(value) });
-    }
-
-    const image = entity.getComponent(ImageElement);
-    if (image && key === 'textureRef') {
-      image.setState({ textureRef: String(value ?? '') });
     }
 
     const mesh = entity.getComponent(MeshComponent);
