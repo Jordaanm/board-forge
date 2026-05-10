@@ -24,6 +24,7 @@ function renderPanel(objects: ObjectSummary[], selectedId: string | null) {
         onToolAction={noop}
         onMutateElement={noop}
         onRemoveElement={noop}
+        onDeleteEntity={noop}
       />
     </AnchorLayout>,
   );

@@ -473,6 +473,7 @@ export function Room({ roomId, isHost }: Props) {
               onToolAction={handleToolAction}
               onMutateElement={(sid, eid, patch) => mutateSurfaceElementRef.current(sid, eid, patch)}
               onRemoveElement={(sid, eid) => removeSurfaceElementRef.current(sid, eid)}
+              onDeleteEntity={(id) => deleteObjectRef.current(id)}
             />
           </UIPanel>
         )}

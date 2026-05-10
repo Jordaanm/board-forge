@@ -53,6 +53,7 @@ interface Props {
   onToolAction:         (item: EditorToolItem & { kind: 'button' }) => void;
   onMutateElement:      (surfaceId: string, elementId: string, patch: Record<string, unknown>) => void;
   onRemoveElement:      (surfaceId: string, elementId: string) => void;
+  onDeleteEntity:       (id: string) => void;
 }
 
 const PANEL: React.CSSProperties = {
@@ -169,6 +170,7 @@ export function EditorPanel({
   onUpdateEntityField, onUpdateComponentProp,
   onToggleFreeCamera, onToolAction,
   onMutateElement, onRemoveElement,
+  onDeleteEntity,
 }: Props) {
   const [open, setOpen]           = useState(true);
   const [collapsed, setCollapsed] = useState(false);
@@ -207,6 +209,7 @@ export function EditorPanel({
             manifestStore={manifestStore}
             onUpdateEntityField={onUpdateEntityField}
             onUpdateComponentProp={onUpdateComponentProp}
+            onDeleteEntity={onDeleteEntity}
           />
           {selected?.surface && (
             <SurfaceElementsSection
@@ -338,12 +341,13 @@ function SceneGraphNode({
 
 function PropertyEditor({
   selected, manifestStore,
-  onUpdateEntityField, onUpdateComponentProp,
+  onUpdateEntityField, onUpdateComponentProp, onDeleteEntity,
 }: {
   selected:              ObjectSummary | null;
   manifestStore:         ManifestStore | null;
   onUpdateEntityField:   (id: string, key: string, value: unknown) => void;
   onUpdateComponentProp: (id: string, typeId: string, key: string, value: unknown) => void;
+  onDeleteEntity:        (id: string) => void;
 }) {
   if (!selected) {
     return (
@@ -359,6 +363,7 @@ function PropertyEditor({
       <EntitySection
         selected={selected}
         onUpdateEntityField={onUpdateEntityField}
+        onDeleteEntity={onDeleteEntity}
       />
       {selected.sections.map(section => (
         <ComponentSection
@@ -374,11 +379,13 @@ function PropertyEditor({
 }
 
 function EntitySection({
-  selected, onUpdateEntityField,
+  selected, onUpdateEntityField, onDeleteEntity,
 }: {
   selected:            ObjectSummary;
   onUpdateEntityField: (id: string, key: string, value: unknown) => void;
+  onDeleteEntity:      (id: string) => void;
 }) {
+  const isTable = selected.id === TABLE_ENTITY_ID;
   return (
     <div style={SECTION}>
       <div style={SECTION_LABEL}>Entity — {selected.id}</div>
@@ -402,6 +409,23 @@ function EntitySection({
         tags={selected.tags}
         onChange={(next) => onUpdateEntityField(selected.id, 'tags', next)}
       />
+      <button
+        type="button"
+        style={{
+          ...SPAWN_BTN,
+          width:        '100%',
+          marginTop:    4,
+          background:   isTable ? 'rgba(255,255,255,0.05)' : 'rgba(180,40,40,0.25)',
+          borderColor:  isTable ? 'rgba(255,255,255,0.15)' : 'rgba(255,80,80,0.5)',
+          color:        isTable ? '#666' : '#ffb3b3',
+          cursor:       isTable ? 'not-allowed' : 'pointer',
+        }}
+        disabled={isTable}
+        title={isTable ? 'The Table cannot be deleted' : 'Delete this entity'}
+        onClick={() => onDeleteEntity(selected.id)}
+      >
+        Delete Entity
+      </button>
     </div>
   );
 }
