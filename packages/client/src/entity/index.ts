@@ -49,7 +49,7 @@ export { TransformComponent } from './components/TransformComponent';
 export type { TransformState } from './components/TransformComponent';
 
 export { MeshComponent } from './components/MeshComponent';
-export type { MeshState, MeshSize } from './components/MeshComponent';
+export type { MeshState } from './components/MeshComponent';
 
 export { PhysicsComponent } from './components/PhysicsComponent';
 export type { PhysicsState, Vec3Like } from './components/PhysicsComponent';

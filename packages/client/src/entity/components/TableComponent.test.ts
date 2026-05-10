@@ -65,7 +65,7 @@ describe('Scene.getTable / getTableBounds', () => {
   test('getTableBounds returns circle-table defaults when meshRef switched', () => {
     const e = scene.spawn('table', ctx, { id: TABLE_ENTITY_ID });
     const mesh = e.getComponent(MeshComponent)!;
-    mesh.setState({ meshRef: 'prim:table-circle', size: [8, 0.3, 8] });
+    mesh.setState({ meshRef: 'prim:table-circle', width: 8, height: 0.3, depth: 8 });
     const b = scene.getTableBounds();
     expect(b.halfWidth).toBeCloseTo(4, 5);
     expect(b.halfDepth).toBeCloseTo(4, 5);

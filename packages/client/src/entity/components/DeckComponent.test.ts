@@ -31,8 +31,8 @@ describe('DeckComponent — patches mesh on cards change', () => {
     spawnCard('b', 'face-B', 'back-B');
     const deck = scene.spawn('deck', ctx);
     deck.getComponent(DeckComponent)!.setState({ cards: ['a', 'b'], category: 'x' });
-    const size = deck.getComponent(MeshComponent)!.state.size as [number, number, number];
-    expect(size[1]).toBeCloseTo(CARD_SLAB_HEIGHT * 2);
+    const ms = deck.getComponent(MeshComponent)!.state;
+    expect(ms.height).toBeCloseTo(CARD_SLAB_HEIGHT * 2);
   });
 
   test('textureRefs.face = top card face, .back = bottom card back', () => {
@@ -58,10 +58,11 @@ describe('DeckComponent — patches mesh on cards change', () => {
 
   test('empty cards is a no-op (size unchanged)', () => {
     const deck = scene.spawn('deck', ctx);
-    const before = deck.getComponent(MeshComponent)!.state.size;
+    const s = deck.getComponent(MeshComponent)!.state;
+    const before = [s.width, s.height, s.depth];
     deck.getComponent(DeckComponent)!.setState({ cards: [], category: '' });
-    const after = deck.getComponent(MeshComponent)!.state.size;
-    expect(after).toEqual(before);
+    const a = deck.getComponent(MeshComponent)!.state;
+    expect([a.width, a.height, a.depth]).toEqual(before);
   });
 });
 

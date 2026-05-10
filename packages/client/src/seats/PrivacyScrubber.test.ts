@@ -266,7 +266,7 @@ describe('DEFAULT_PRIVATE_FIELDS — full filtering for self-private + deck reda
         components: {
           card:     { face: 'F.png', back: 'B.png', category: 'spades' },
           flatview: { textureRef: 'F.png' },
-          mesh:     { meshRef: 'prim:card', textureRefs: { face: 'F.png', back: 'B.png' }, color: '#fff', size: [0.63, 0.01, 0.88] },
+          mesh:     { meshRef: 'prim:card', textureRefs: { face: 'F.png', back: 'B.png' }, color: '#fff', width: 0.63, height: 0.01, depth: 0.88 },
         },
       },
     };

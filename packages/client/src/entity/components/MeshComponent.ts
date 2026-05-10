@@ -39,13 +39,17 @@ import {
   D20_BOUNDING_SPHERE_RADIUS,
 } from '../../dice/d20';
 
-export type MeshSize = number | [number, number, number];
-
 export interface MeshState {
   meshRef:     string;
   textureRefs: Record<string, string>;
   color:       string;
-  size:        MeshSize;
+  // Independent per-axis dimensions (issue #3 of property-schema-refactor).
+  // Pre-refactor `size` was a scalar OR `[w, h, d]` triple; the split exposes
+  // each axis as its own editable field. Scalar primitives (d6, d20) keep
+  // identical defaults across axes.
+  width:       number;
+  height:      number;
+  depth:       number;
 }
 
 export class MeshComponent extends EntityComponent<MeshState> {
@@ -64,6 +68,9 @@ export class MeshComponent extends EntityComponent<MeshState> {
         textureRefs: { ...s.textureRefs, default: String(v ?? '') },
       }),
     },
+    { key: 'width',  label: 'Width',  type: 'number' },
+    { key: 'height', label: 'Height', type: 'number' },
+    { key: 'depth',  label: 'Depth',  type: 'number' },
   ];
 
   group!: THREE.Group;
@@ -96,7 +103,12 @@ export class MeshComponent extends EntityComponent<MeshState> {
 
   onPropertiesChanged(changed: Partial<MeshState>): void {
     if (!this.group) return;
-    if (changed.meshRef !== undefined || changed.size !== undefined) {
+    if (
+      changed.meshRef !== undefined ||
+      changed.width   !== undefined ||
+      changed.height  !== undefined ||
+      changed.depth   !== undefined
+    ) {
       this.rebuild();
     } else if (changed.textureRefs !== undefined || changed.color !== undefined) {
       this.applyMaterialAttributes();
@@ -108,9 +120,13 @@ export class MeshComponent extends EntityComponent<MeshState> {
     this.group.visible = !isContained;
   }
 
+  private dims(): [number, number, number] {
+    return [this.state.width, this.state.height, this.state.depth];
+  }
+
   // Half-extents in world units, for PhysicsComponent to derive a hitbox.
   halfExtents(): [number, number, number] {
-    return halfExtentsFor(this.state.meshRef, this.state.size);
+    return halfExtentsFor(this.state.meshRef, this.dims());
   }
 
   // Local-space offset of the visible mesh from the entity origin. Most
@@ -119,8 +135,7 @@ export class MeshComponent extends EntityComponent<MeshState> {
   // downward shift to keep the hitbox flush with the visible top.
   meshOffset(): [number, number, number] {
     if (this.state.meshRef === 'prim:table-rect' || this.state.meshRef === 'prim:table-circle') {
-      const [, h] = sizeToBox(this.state.size);
-      return [0, -h / 2, 0];
+      return [0, -this.state.height / 2, 0];
     }
     return [0, 0, 0];
   }
@@ -161,7 +176,7 @@ export class MeshComponent extends EntityComponent<MeshState> {
 
     const ref = this.state.meshRef;
     if (isPrimRef(ref) || ref === '') {
-      const built = buildMesh(ref, this.state.size);
+      const built = buildMesh(ref, this.dims());
       this.group.add(built);
       this.applyMaterialAttributes();
       return;
@@ -226,9 +241,11 @@ function isPrimRef(ref: string): boolean {
   return ref.startsWith('prim:');
 }
 
-function buildMesh(meshRef: string, size: MeshSize): THREE.Object3D {
+type Dims = readonly [number, number, number];
+
+function buildMesh(meshRef: string, size: Dims): THREE.Object3D {
   if (meshRef === 'prim:cube') {
-    const [w, h, d] = sizeToBox(size);
+    const [w, h, d] = size;
     const mesh = new THREE.Mesh(
       new THREE.BoxGeometry(w, h, d),
       new THREE.MeshLambertMaterial({ color: 0xffffff }),
@@ -245,8 +262,8 @@ function buildMesh(meshRef: string, size: MeshSize): THREE.Object3D {
   if (meshRef === 'prim:table-rect')   return buildTableRect(size);
   if (meshRef === 'prim:table-circle') return buildTableCircle(size);
   if (meshRef === 'prim:meeple') {
-    const r = (typeof size === 'number' ? size : size[0]) * 0.5;
-    const totalH = (typeof size === 'number' ? size : size[1]);
+    const r = size[0] * 0.5;
+    const totalH = size[1];
     const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
     const group = new THREE.Group();
     const body  = new THREE.Mesh(new THREE.CapsuleGeometry(r, totalH * 0.47, 4, 8), mat);
@@ -262,11 +279,7 @@ function buildMesh(meshRef: string, size: MeshSize): THREE.Object3D {
   return new THREE.Group();
 }
 
-function sizeToBox(size: MeshSize): [number, number, number] {
-  return typeof size === 'number' ? [size, size, size] : size;
-}
-
-function halfExtentsFor(meshRef: string, size: MeshSize): [number, number, number] {
+function halfExtentsFor(meshRef: string, size: Dims): [number, number, number] {
   if (
     meshRef === 'prim:cube' ||
     meshRef === 'prim:d6'   ||
@@ -274,33 +287,33 @@ function halfExtentsFor(meshRef: string, size: MeshSize): [number, number, numbe
     meshRef === 'prim:deck' ||
     meshRef === 'prim:table-rect'
   ) {
-    const [w, h, d] = sizeToBox(size);
+    const [w, h, d] = size;
     return [w / 2, h / 2, d / 2];
   }
   if (meshRef === 'prim:d20') {
     // Bounding-sphere radius in each axis — overestimates the true AABB
     // (which is 0.851× this) but gives PhysicsComponent a single radius value
     // for the ConvexPolyhedron build, and is harmless for spawn placement.
-    const r = (typeof size === 'number' ? size : size[0]) / 2;
+    const r = size[0] / 2;
     return [r, r, r];
   }
   if (meshRef === 'prim:plane') {
     // Plane lies in local XY: x-extent w/2, y-extent d/2, z-extent 0.
-    const [w, , d] = sizeToBox(size);
+    const [w, , d] = size;
     return [w / 2, d / 2, 0];
   }
   if (meshRef === 'prim:table-circle') {
     // size = [diameter, height, diameter] for a cylinder authored to match
     // the rect's bounding box conventions.
-    const [w, h, d] = sizeToBox(size);
+    const [w, h, d] = size;
     return [w / 2, h / 2, d / 2];
   }
   if (meshRef === 'prim:meeple') {
-    const r = (typeof size === 'number' ? size : size[0]) * 0.5;
-    const h = (typeof size === 'number' ? size : size[1]);
+    const r = size[0] * 0.5;
+    const h = size[1];
     return [r, h / 2, r];
   }
-  const [w, h, d] = sizeToBox(size);
+  const [w, h, d] = size;
   return [w / 2, h / 2, d / 2];
 }
 
@@ -311,8 +324,8 @@ function halfExtentsFor(meshRef: string, size: MeshSize): [number, number, numbe
 // its top-left lands at the visual top-left when viewed from +Z. Single
 // 'default' material slot — applyMaterialAttributes routes textureRefs.default
 // to the material map.
-function buildPlane(size: MeshSize): THREE.Object3D {
-  const [w, , d] = sizeToBox(size);
+function buildPlane(size: Dims): THREE.Object3D {
+  const [w, , d] = size;
   const geometry = new THREE.PlaneGeometry(w, d);
   const mesh = new THREE.Mesh(
     geometry,
@@ -326,8 +339,8 @@ function buildPlane(size: MeshSize): THREE.Object3D {
 // prim:table-rect — flat box authored with its top surface at local y=0 so
 // the entity's locked-at-origin transform places the play surface at world
 // y=0 regardless of uniform scale.
-function buildTableRect(size: MeshSize): THREE.Object3D {
-  const [w, h, d] = sizeToBox(size);
+function buildTableRect(size: Dims): THREE.Object3D {
+  const [w, h, d] = size;
   const mesh = new THREE.Mesh(
     new THREE.BoxGeometry(w, h, d),
     new THREE.MeshLambertMaterial({ color: 0xffffff }),
@@ -340,8 +353,8 @@ function buildTableRect(size: MeshSize): THREE.Object3D {
 // prim:table-circle — flat cylinder authored with its top surface at local
 // y=0. `size` is consumed as [diameter, thickness, diameter] so the bounding
 // half-extents helper can treat all four flat primitives identically.
-function buildTableCircle(size: MeshSize): THREE.Object3D {
-  const [w, h, _d] = sizeToBox(size);
+function buildTableCircle(size: Dims): THREE.Object3D {
+  const [w, h, _d] = size;
   const radius = w / 2;
   const mesh = new THREE.Mesh(
     new THREE.CylinderGeometry(radius, radius, h, 64),
@@ -355,8 +368,8 @@ function buildTableCircle(size: MeshSize): THREE.Object3D {
 // D6 = chamfered cube body (RoundedBoxGeometry) plus six transparent pip
 // overlays. The body picks up tint via applyMaterialAttributes; pip planes
 // carry `userData.skipTint` so tint changes don't recolour the dots.
-function buildD6(size: MeshSize): THREE.Object3D {
-  const s      = typeof size === 'number' ? size : size[0];
+function buildD6(size: Dims): THREE.Object3D {
+  const s      = size[0];
   const radius = s * 0.08;
 
   const group = new THREE.Group();
@@ -401,8 +414,8 @@ function buildD6(size: MeshSize): THREE.Object3D {
 // from `state.textureRefs` to the correct side. Default size matches a
 // playing-card aspect (≈ 63mm × 88mm at 1 unit ≈ 1 dm); thickness is
 // exaggerated to 0.01 for physics stability — real cards (~0.3mm) tunnel.
-function buildCard(size: MeshSize): THREE.Object3D {
-  const [w, h, d] = sizeToBox(size);
+function buildCard(size: Dims): THREE.Object3D {
+  const [w, h, d] = size;
   const geometry = new THREE.BoxGeometry(w, h, d);
   // BoxGeometry creates one group per face in order +X, -X, +Y, -Y, +Z, -Z
   // with materialIndex 0..5. Remap so +Y/-Y bind to face/back materials, the
@@ -432,8 +445,8 @@ function buildCard(size: MeshSize): THREE.Object3D {
 // CARD_SLAB_HEIGHT)`. The side material carries `userData.skipTint` so
 // applyMaterialAttributes doesn't overwrite the procedural map with a null
 // when no `side` URL is set.
-function buildDeck(size: MeshSize): THREE.Object3D {
-  const [w, h, d] = sizeToBox(size);
+function buildDeck(size: Dims): THREE.Object3D {
+  const [w, h, d] = size;
   const geometry = new THREE.BoxGeometry(w, h, d);
   geometry.groups[0].materialIndex = 2; // +X side
   geometry.groups[1].materialIndex = 2; // -X side
@@ -491,8 +504,8 @@ function stripeTextureFor(stripeCount: number): THREE.Texture | null {
 // D20 = icosahedron body (single-material) plus 20 transparent triangular
 // overlays carrying numbered face textures. Geometry data is shared with
 // PhysicsComponent so the mesh and the ConvexPolyhedron hull line up exactly.
-function buildD20(size: MeshSize): THREE.Object3D {
-  const s     = typeof size === 'number' ? size : size[0];
+function buildD20(size: Dims): THREE.Object3D {
+  const s     = size[0];
   const scale = (s / 2) / D20_BOUNDING_SPHERE_RADIUS;
 
   const group = new THREE.Group();

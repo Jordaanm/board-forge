@@ -48,7 +48,9 @@ function makeParent(scene: SceneImpl, ctx: SpawnContext, halfExtents: [number, n
     meshRef:     'prim:cube',
     textureRefs: { default: '' },
     color:        '#888',
-    size:        [halfExtents[0] * 2, halfExtents[1] * 2, halfExtents[2] * 2],
+    width:       halfExtents[0] * 2,
+    height:      halfExtents[1] * 2,
+    depth:       halfExtents[2] * 2,
   });
   parent.attachComponent(mesh);
   scene.add(parent);
@@ -212,9 +214,9 @@ describe('createSurfaceChild', () => {
 
     const surface = createSurfaceChild(scene, ctx, parent, { face: 'top' });
 
-    const meshSize = surface.getComponent(MeshComponent)!.state.size as [number, number, number];
-    expect(meshSize[0]).toBeCloseTo(2, 5);
-    expect(meshSize[2]).toBeCloseTo(3, 5);
+    const ms = surface.getComponent(MeshComponent)!.state;
+    expect(ms.width).toBeCloseTo(2, 5);
+    expect(ms.depth).toBeCloseTo(3, 5);
   });
 
   test('throws when parent has no MeshComponent', () => {
@@ -329,7 +331,9 @@ describe('attachSticker — parent pose composition (issue #1 of refactor)', () 
       meshRef:     'prim:cube',
       textureRefs: { default: '' },
       color:        '#888',
-      size:        [halfExtents[0] * 2, halfExtents[1] * 2, halfExtents[2] * 2],
+      width:       halfExtents[0] * 2,
+      height:      halfExtents[1] * 2,
+      depth:       halfExtents[2] * 2,
     });
     parent.attachComponent(mesh);
     scene.add(parent);

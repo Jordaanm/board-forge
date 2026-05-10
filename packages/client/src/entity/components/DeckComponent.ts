@@ -85,9 +85,8 @@ export class DeckComponent extends EntityComponent<DeckState> {
     const n = this.state.cards.length;
     if (n === 0) return;
 
-    const cur = mesh.state.size;
-    const w = Array.isArray(cur) ? cur[0] : cur;
-    const d = Array.isArray(cur) ? cur[2] : cur;
+    const w = mesh.state.width;
+    const d = mesh.state.depth;
     const h = CARD_SLAB_HEIGHT * n;
 
     const topId    = this.state.cards[0];
@@ -96,7 +95,9 @@ export class DeckComponent extends EntityComponent<DeckState> {
     const bottomCard = this.entity.scene?.getEntity(bottomId)?.getComponent(CardComponent);
 
     mesh.setState({
-      size: [w, h, d],
+      width:  w,
+      height: h,
+      depth:  d,
       textureRefs: {
         ...mesh.state.textureRefs,
         face: topCard?.state.face ?? '',

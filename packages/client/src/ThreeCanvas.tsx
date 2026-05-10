@@ -677,9 +677,8 @@ function entityToObjectSummary(entity: Entity, isHost: boolean): ObjectSummary {
       props['light.intensity'] = lighting.state.keyIntensity;
     }
   } else if (entity.type === 'board' && mesh) {
-    const sz = mesh.state.size as [number, number, number];
-    props.width      = sz[0];
-    props.depth      = sz[2];
+    props.width      = mesh.state.width;
+    props.depth      = mesh.state.depth;
     props.textureUrl = mesh.state.textureRefs?.default ?? '';
   } else if (entity.type === 'token' && mesh) {
     props.color   = mesh.state.color;

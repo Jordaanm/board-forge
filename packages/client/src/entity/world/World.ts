@@ -445,12 +445,7 @@ class WorldImpl implements World, HandleRouter {
       return;
     }
 
-    if (entity.type === 'board') {
-      const cur = mesh.state.size as [number, number, number];
-      if      (key === 'width')      mesh.setState({ size: [Number(value), cur[1], cur[2]] });
-      else if (key === 'depth')      mesh.setState({ size: [cur[0], cur[1], Number(value)] });
-      else if (key === 'textureUrl') mesh.setState({ textureRefs: { ...mesh.state.textureRefs, default: String(value ?? '') } });
-    } else if (entity.type === 'card') {
+    if (entity.type === 'card') {
       const card = entity.getComponent(CardComponent);
       if (card && (key === 'face' || key === 'back')) {
         card.setState({ [key]: String(value ?? '') } as Partial<{ face: string; back: string }>);

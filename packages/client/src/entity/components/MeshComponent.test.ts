@@ -58,7 +58,7 @@ describe('MeshComponent — prim:plane', () => {
       meshRef:     'prim:plane',
       textureRefs: { default: '' },
       color:        '#ffffff',
-      size:        [2, 0.01, 3],
+      width: 2, height: 0.01, depth: 3,
       ...state,
     });
     entity.attachComponent(mesh);
@@ -79,7 +79,7 @@ describe('MeshComponent — prim:plane', () => {
   });
 
   test('halfExtents returns [w/2, d/2, 0]; size[1] (height) is ignored', () => {
-    const { mesh } = spawnPlane({ size: [4, 99, 6] });
+    const { mesh } = spawnPlane({ width: 4, height: 99, depth: 6 });
     expect(mesh.halfExtents()).toEqual([2, 3, 0]);
   });
 
@@ -160,7 +160,7 @@ describe('MeshComponent — propertySchema (issue #2 of property-schema-refactor
   test('declares static label and color/meshRef/textureUrl entries', () => {
     expect(MeshComponent.label).toBe('Mesh');
     const keys = MeshComponent.propertySchema.map(d => d.key);
-    expect(keys).toEqual(['color', 'meshRef', 'textureUrl']);
+    expect(keys).toEqual(['color', 'meshRef', 'textureUrl', 'width', 'height', 'depth']);
   });
 
   test('textureUrl adapter get returns the default ref', () => {
@@ -169,7 +169,7 @@ describe('MeshComponent — propertySchema (issue #2 of property-schema-refactor
       meshRef: 'prim:cube',
       textureRefs: { default: 'base:tex/foo', face: 'unrelated' },
       color: '#fff',
-      size: 1,
+      width: 1, height: 1, depth: 1,
     };
     expect(def.get!(state, undefined as never)).toBe('base:tex/foo');
   });
@@ -180,7 +180,7 @@ describe('MeshComponent — propertySchema (issue #2 of property-schema-refactor
       meshRef: 'prim:cube',
       textureRefs: {},
       color: '#fff',
-      size: 1,
+      width: 1, height: 1, depth: 1,
     };
     expect(def.get!(state, undefined as never)).toBe('');
   });
@@ -191,7 +191,7 @@ describe('MeshComponent — propertySchema (issue #2 of property-schema-refactor
       meshRef: 'prim:card',
       textureRefs: { default: 'old', face: 'F.png', back: 'B.png' },
       color: '#fff',
-      size: 1,
+      width: 1, height: 1, depth: 1,
     };
     const patch = def.set!('new.png', state, undefined as never);
     expect(patch).toEqual({

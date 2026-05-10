@@ -70,7 +70,7 @@ describe('CardComponent — initial FlatView from orientation', () => {
       children:      [],
       components: {
         transform: { position: [0, 0, 0], rotation: flippedQuat, scale: [1, 1, 1] },
-        mesh:      { meshRef: 'prim:card', textureRefs: { face: '', back: '' }, color: '#fafafa', size: [0.63, 0.01, 0.88] },
+        mesh:      { meshRef: 'prim:card', textureRefs: { face: '', back: '' }, color: '#fafafa', width: 0.63, height: 0.01, depth: 0.88 },
         physics:   { mass: 0.05, friction: 0.6, restitution: 0.1, isLocked: false },
         value:     { value: '', isNumeric: false },
         flatview:  { textureRef: '' },

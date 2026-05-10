@@ -119,7 +119,9 @@ export function createSurfaceChild(
     meshRef:     'prim:plane',
     textureRefs: { default: '' },
     color:       '#ffffff',
-    size:        [size[0], 0, size[1]],
+    width:       size[0],
+    height:      0,
+    depth:       size[1],
   });
   surfaceEntity.attachComponent(mesh);
   const surface = new SurfaceComponent();

@@ -59,7 +59,8 @@ describe('spawnables — board / die / token spawn', () => {
     expect(e.type).toBe('board');
     expect(e.tags).toEqual(['board']);
     expect(e.getComponent(ValueComponent)).toBeUndefined();
-    expect(e.getComponent(MeshComponent)!.state.size).toEqual([4, 0.05, 3]);
+    const ms = e.getComponent(MeshComponent)!.state;
+    expect([ms.width, ms.height, ms.depth]).toEqual([4, 0.05, 3]);
   });
 
   test('token spawns with meeple primitive + blue tint', () => {
@@ -105,7 +106,7 @@ describe('spawnables — replicate (state mutation)', () => {
     const e = scene.spawn('board', ctx);
     const m = e.getComponent(MeshComponent)!;
     const before = m.group.children[0];
-    m.setState({ size: [6, 0.05, 4] });
+    m.setState({ width: 6, height: 0.05, depth: 4 });
     const after = m.group.children[0];
     expect(after).not.toBe(before);  // rebuilt
   });
@@ -149,7 +150,7 @@ describe('MeshComponent — prim:card', () => {
   test('builds a 3-material mesh with face/back/side slots', () => {
     const e = scene.spawn('board', ctx);
     const m = e.getComponent(MeshComponent)!;
-    m.setState({ meshRef: 'prim:card', size: [0.63, 0.01, 0.88] });
+    m.setState({ meshRef: 'prim:card', width: 0.63, height: 0.01, depth: 0.88 });
 
     const cardMesh = m.group.children[0] as THREE.Mesh;
     expect(cardMesh).toBeInstanceOf(THREE.Mesh);
@@ -165,7 +166,7 @@ describe('MeshComponent — prim:card', () => {
   test('BoxGeometry groups remap +Y to face, -Y to back, sides shared', () => {
     const e = scene.spawn('board', ctx);
     const m = e.getComponent(MeshComponent)!;
-    m.setState({ meshRef: 'prim:card', size: [0.63, 0.01, 0.88] });
+    m.setState({ meshRef: 'prim:card', width: 0.63, height: 0.01, depth: 0.88 });
 
     const cardMesh = m.group.children[0] as THREE.Mesh;
     const groups = (cardMesh.geometry as THREE.BoxGeometry).groups;
@@ -181,7 +182,7 @@ describe('MeshComponent — prim:card', () => {
   test('halfExtents derives from card dimensions; meshKind reports cube', () => {
     const e = scene.spawn('board', ctx);
     const m = e.getComponent(MeshComponent)!;
-    m.setState({ meshRef: 'prim:card', size: [0.63, 0.01, 0.88] });
+    m.setState({ meshRef: 'prim:card', width: 0.63, height: 0.01, depth: 0.88 });
     expect(m.halfExtents()).toEqual([0.315, 0.005, 0.44]);
     expect(m.meshKind()).toBe('cube');
   });
@@ -191,7 +192,7 @@ describe('MeshComponent — prim:card', () => {
     const m = e.getComponent(MeshComponent)!;
     m.setState({
       meshRef: 'prim:card',
-      size: [0.63, 0.01, 0.88],
+      width: 0.63, height: 0.01, depth: 0.88,
       textureRefs: { face: 'face.png', back: 'back.png' },
       color: '#ff0000',
     });
@@ -222,7 +223,7 @@ describe('spawnables — serialised snapshot shape', () => {
     expect(Object.keys(snap.components).sort()).toEqual(['dice', 'mesh', 'physics', 'transform', 'tween', 'value']);
     expect(snap.components.value).toEqual({ value: '6', isNumeric: true });
     expect(snap.components.physics).toEqual({ mass: 0.2, friction: 0.5, restitution: 0.5, isLocked: false });
-    expect(snap.components.mesh).toMatchObject({ meshRef: 'prim:d6', size: 0.7 });
+    expect(snap.components.mesh).toMatchObject({ meshRef: 'prim:d6', width: 0.7, height: 0.7, depth: 0.7 });
     expect(snap.components.dice).toEqual({ maxValue: 6, faceMap: D6_FACE_MAP });
   });
 
