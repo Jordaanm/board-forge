@@ -1,5 +1,5 @@
 {
-  "name": "virtual-table",
+  "name": "board-together",
   "private": true,
   "workspaces": ["packages/*"],
   "scripts": {

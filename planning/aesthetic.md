@@ -2,7 +2,7 @@
 
 ## Identity
 
-- **Working name**: BoardForge
+- **Working name**: Board Together
 - **Tone**: Warm, cozy, modern — evokes physical materials (paper, wood) without skeuomorphism. Friendly and inviting, not digital or arcadey.
 - **Reference**: Dorfromantik
 

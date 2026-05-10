@@ -1,5 +1,5 @@
 {
-  "name": "@virtual-table/client",
+  "name": "@board-together/client",
   "private": true,
   "version": "0.0.0",
   "type": "module",

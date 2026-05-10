@@ -1,5 +1,5 @@
 {
-  "name": "@virtual-table/server",
+  "name": "@board-together/server",
   "private": true,
   "version": "0.0.0",
   "scripts": {
