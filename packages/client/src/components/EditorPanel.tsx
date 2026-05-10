@@ -56,14 +56,18 @@ interface Props {
 }
 
 const PANEL: React.CSSProperties = {
-  width:       280,
-  background:  'rgba(20,20,32,0.92)',
-  border:      '1px solid rgba(255,255,255,0.15)',
-  borderRadius: 8,
-  color:       '#e8e8e8',
-  fontFamily:  'sans-serif',
-  fontSize:    13,
-  boxShadow:   '0 4px 20px rgba(0,0,0,0.5)',
+  width:         280,
+  background:    'rgba(20,20,32,0.92)',
+  border:        '1px solid rgba(255,255,255,0.15)',
+  borderRadius:  8,
+  color:         '#e8e8e8',
+  fontFamily:    'sans-serif',
+  fontSize:      13,
+  boxShadow:     '0 4px 20px rgba(0,0,0,0.5)',
+  display:       'flex',
+  flexDirection: 'column',
+  maxHeight:     'calc(100vh - 24px)',
+  minHeight:     0,
 };
 
 const HEADER: React.CSSProperties = {
@@ -74,6 +78,23 @@ const HEADER: React.CSSProperties = {
   borderBottom:   '1px solid rgba(255,255,255,0.1)',
   cursor:         'pointer',
   userSelect:     'none',
+  flexShrink:     0,
+};
+
+const BODY: React.CSSProperties = {
+  flex:        '1 1 auto',
+  minHeight:   0,
+  overflowY:   'auto',
+  overflowX:   'hidden',
+};
+
+const SECTION_HEADER: React.CSSProperties = {
+  display:        'flex',
+  alignItems:     'center',
+  justifyContent: 'space-between',
+  cursor:         'pointer',
+  userSelect:     'none',
+  marginBottom:   6,
 };
 
 const SECTION: React.CSSProperties = {
@@ -179,7 +200,7 @@ export function EditorPanel({
       </div>
 
       {!collapsed && (
-        <>
+        <div style={BODY}>
           <SceneGraphList objects={objects} selectedId={selectedId} onSelect={onSelect} />
           <PropertyEditor
             selected={selected}
@@ -199,7 +220,7 @@ export function EditorPanel({
           <ToolsSection tools={selected ? selectedTools : []} onToolAction={onToolAction} />
           <RollSection onRollDice={onRollDice} />
           <CameraSection isFreeCamera={isFreeCamera} onToggleFreeCamera={onToggleFreeCamera} />
-        </>
+        </div>
       )}
     </div>
   );
@@ -393,21 +414,29 @@ function ComponentSection({
   manifestStore:         ManifestStore | null;
   onUpdateComponentProp: (id: string, typeId: string, key: string, value: unknown) => void;
 }) {
+  const [collapsed, setCollapsed] = useState(false);
   return (
     <div style={SECTION}>
-      <div style={SECTION_LABEL}>{section.label}</div>
-      {section.entries.length === 0 && (
-        <div style={{ color: '#666', fontSize: 12 }}>No editable properties.</div>
+      <div style={SECTION_HEADER} onClick={() => setCollapsed(c => !c)}>
+        <div style={{ ...SECTION_LABEL, marginBottom: 0 }}>{section.label}</div>
+        <span style={{ color: '#888', fontSize: 11, lineHeight: 1 }}>{collapsed ? '▸' : '▾'}</span>
+      </div>
+      {!collapsed && (
+        <>
+          {section.entries.length === 0 && (
+            <div style={{ color: '#666', fontSize: 12 }}>No editable properties.</div>
+          )}
+          {section.entries.map(def => (
+            <SchemaPropertyRow
+              key={def.key}
+              def={def}
+              value={readEntryValue(def, section.state)}
+              manifestStore={manifestStore}
+              onChange={(v) => onUpdateComponentProp(entityId, section.typeId, def.key, v)}
+            />
+          ))}
+        </>
       )}
-      {section.entries.map(def => (
-        <SchemaPropertyRow
-          key={def.key}
-          def={def}
-          value={readEntryValue(def, section.state)}
-          manifestStore={manifestStore}
-          onChange={(v) => onUpdateComponentProp(entityId, section.typeId, def.key, v)}
-        />
-      ))}
     </div>
   );
 }
