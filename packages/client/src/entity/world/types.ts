@@ -80,7 +80,6 @@ export interface World {
   // Lifecycle (host).
   spawn(type: string, opts?: SpawnOptions): EntityHandle;
   despawn(id: string): void;
-  updateProp(id: string, key: string, value: unknown): void;
 
   // Entity-level field write (name, tags, owner). Issue #1 of
   // issues--property-schema-refactor.md. Replicates via entity-patch.

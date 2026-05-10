@@ -18,7 +18,6 @@ function renderPanel(objects: ObjectSummary[], selectedId: string | null) {
         selectedTools={[]}
         onSelect={noop}
         onRollDice={noop}
-        onUpdateProp={noop}
         onUpdateEntityField={noop}
         onUpdateComponentProp={noop}
         onToggleFreeCamera={noop}
@@ -39,8 +38,6 @@ function makeSummary(overrides: Partial<ObjectSummary> = {}): ObjectSummary {
     name:       'Tok',
     owner:      null,
     tags:       [],
-    props:      {},
-    componentStates: {},
     sections:   [],
     parentId:   null,
     surface:    null,

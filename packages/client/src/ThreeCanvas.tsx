@@ -1,21 +1,16 @@
 import { useEffect, useRef, type MutableRefObject } from 'react';
 import * as THREE from 'three';
 import { PhysicsWorld } from './physics/PhysicsWorld';
-import { SkydomeComponent } from './entity/components/SkydomeComponent';
-import { LightingComponent } from './entity/components/LightingComponent';
 import { createWorld } from './entity/world';
 import { type World, type WorldInboundMessage } from './entity/world';
 import { RtcTransport } from './entity/world';
 import { type Entity } from './entity/Entity';
 import { TransformComponent } from './entity/components/TransformComponent';
-import { MeshComponent } from './entity/components/MeshComponent';
-import { ValueComponent } from './entity/components/ValueComponent';
 import { DiceComponent } from './entity/components/DiceComponent';
 import { ZoneComponent } from './entity/components/ZoneComponent';
 import { HandComponent } from './entity/components/HandComponent';
 import { SurfaceComponent } from './entity/components/SurfaceComponent';
 import { FlatViewComponent } from './entity/components/FlatViewComponent';
-import { CardComponent } from './entity/components/CardComponent';
 import { surfaceRenderQueue } from './entity/components/SurfaceRenderQueue';
 import { aggregateContextMenu } from './entity/contextMenu';
 import { encodeSaveFile, downloadSaveFile } from './entity/SaveFile';
@@ -72,7 +67,6 @@ interface Props {
   drawFromDeckRef:     MutableRefObject<(deckId: string, count: number, callerSeat: SeatIndex | null) => void>;
   shuffleDeckRef:      MutableRefObject<(deckId: string) => void>;
   dealFromDeckRef:     MutableRefObject<(deckId: string, count: number, callerSeat: SeatIndex | null) => void>;
-  updatePropRef:       MutableRefObject<(id: string, key: string, value: unknown) => void>;
   updateEntityFieldRef:   MutableRefObject<(id: string, key: string, value: unknown) => void>;
   updateComponentPropRef: MutableRefObject<(id: string, typeId: string, key: string, value: unknown) => void>;
   freeCameraRef:       MutableRefObject<(on: boolean) => void>;
@@ -110,7 +104,7 @@ export function ThreeCanvas({
   isHost, sendRef, sendToRef, getTargetsRef, getSelfSeatRef, getSelfPeerIdRef, getPeerSeatRef,
   onMsgRef, onPeerLeftRef, onPeerJoinedRef,
   spawnRef, rollRef, onContextMenuRef, deleteObjectRef, attachSurfaceRef, attachElementRef, mutateSurfaceElementRef, removeSurfaceElementRef, drawFromDeckRef, shuffleDeckRef, dealFromDeckRef,
-  updatePropRef, updateEntityFieldRef, updateComponentPropRef,
+  updateEntityFieldRef, updateComponentPropRef,
   freeCameraRef, onObjectsChangeRef,
   onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,
   setShowAllZonesRef,
@@ -432,7 +426,6 @@ export function ThreeCanvas({
       drawFromDeckRef.current = (deckId, count, seat) => world.drawFromDeck(deckId, count, seat);
       shuffleDeckRef.current  = (deckId) => world.shuffleDeck(deckId);
       dealFromDeckRef.current = (deckId, count, seat) => world.dealFromDeck(deckId, count, seat);
-      updatePropRef.current   = (id, key, value) => world.updateProp(id, key, value);
       updateEntityFieldRef.current   = (id, key, value) => world.updateEntityField(id, key, value);
       updateComponentPropRef.current = (id, typeId, key, value) =>
         world.updateComponentProp(id, typeId, key, value);
@@ -581,7 +574,6 @@ export function ThreeCanvas({
       fireTileInputEventRef.current = () => {};
       shuffleDeckRef.current  = () => {};
       dealFromDeckRef.current = () => {};
-      updatePropRef.current      = () => {};
       updateEntityFieldRef.current   = () => {};
       updateComponentPropRef.current = () => {};
       freeCameraRef.current      = () => {};
@@ -598,7 +590,7 @@ export function ThreeCanvas({
     isHost, sendRef, sendToRef, getTargetsRef, getSelfSeatRef, getSelfPeerIdRef, getPeerSeatRef,
     onMsgRef, onPeerLeftRef, onPeerJoinedRef,
     spawnRef, rollRef, onContextMenuRef, deleteObjectRef, attachSurfaceRef, attachElementRef, mutateSurfaceElementRef, removeSurfaceElementRef, drawFromDeckRef, shuffleDeckRef, dealFromDeckRef,
-    updatePropRef, updateEntityFieldRef, updateComponentPropRef,
+    updateEntityFieldRef, updateComponentPropRef,
     freeCameraRef, onObjectsChangeRef,
     onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,
     setShowAllZonesRef, setHandViewRef, requestHandTileMenuRef, playCardToTableRef,
@@ -650,67 +642,15 @@ function handViewKey(view: HandView | null): string {
   return view.handEntityId + '|' + view.cards.map(c => c.id + ':' + c.textureRef).join(',');
 }
 
-// Editor-panel view of an entity. Carries both the legacy flat `props` bag
-// (for OBJECT_META-driven entities) and a per-component state map keyed by
-// typeId (for components that have declared a `propertySchema`). The panel
-// chooses which path to render based on the aggregator's output.
+// Editor-panel view of an entity. Aggregates per-component schema sections
+// for the panel's Entity + per-component layout, plus the SurfaceSummary used
+// by the Surface elements list.
 function entityToObjectSummary(entity: Entity, isHost: boolean): ObjectSummary {
-  const mesh  = entity.getComponent(MeshComponent);
-  const value = entity.getComponent(ValueComponent);
-  const zone  = entity.getComponent(ZoneComponent);
-  const card  = entity.getComponent(CardComponent);
-  const props: Record<string, unknown> = { name: entity.name };
-  if (entity.type === 'table') {
-    if (mesh) {
-      props['mesh.meshRef'] = mesh.state.meshRef;
-    }
-    const transform = entity.getComponent(TransformComponent);
-    if (transform) {
-      // UI exposes a single uniform scale slider; storage keeps per-axis.
-      props['mesh.scale'] = transform.state.scale[0];
-    }
-    const sky = entity.getComponent(SkydomeComponent);
-    if (sky) props['sky.textureUrl'] = sky.state.textureUrl;
-    const lighting = entity.getComponent(LightingComponent);
-    if (lighting) {
-      props['light.color']     = lighting.state.color;
-      props['light.intensity'] = lighting.state.intensity;
-    }
-  } else if (entity.type === 'board' && mesh) {
-    props.width      = mesh.state.width;
-    props.depth      = mesh.state.depth;
-    props.textureUrl = mesh.state.textureRefs?.default ?? '';
-  } else if (entity.type === 'token' && mesh) {
-    props.color   = mesh.state.color;
-    props.meshRef = mesh.state.meshRef;
-  } else if (entity.type === 'die' && value) {
-    props.value = value.state.value;
-  } else if (entity.type === 'card' && card) {
-    props.face = card.state.face;
-    props.back = card.state.back;
-  }
-  if (zone) {
-    const [hx, hy, hz] = zone.state.halfExtents;
-    props.halfExtentsX = hx;
-    props.halfExtentsY = hy;
-    props.halfExtentsZ = hz;
-    props.isVisible    = zone.state.isVisible;
-  }
-  const hand = entity.getComponent(HandComponent);
-  if (hand) {
-    props.isMainHand = hand.state.isMainHand;
-    props.isPrivate  = hand.state.isPrivate;
-    props.owner      = entity.owner ?? -1;
-  }
   const surfaceComp = entity.getComponent(SurfaceComponent);
   const surface = surfaceComp ? {
     canvasSize: [...surfaceComp.state.canvasSize] as [number, number],
     elements:   surfaceComp.state.elements.map(el => ({ ...el })),
   } : null;
-  const componentStates: Record<string, Record<string, unknown>> = {};
-  for (const [typeId, comp] of entity.components) {
-    componentStates[typeId] = { ...(comp.state as Record<string, unknown>) };
-  }
   const sections = aggregatePropertySchema(entity, { isHost });
   return {
     id:         entity.id,
@@ -718,8 +658,6 @@ function entityToObjectSummary(entity: Entity, isHost: boolean): ObjectSummary {
     name:       entity.name,
     owner:      entity.owner,
     tags:       [...entity.tags],
-    props,
-    componentStates,
     sections,
     parentId:   entity.parentId,
     surface,

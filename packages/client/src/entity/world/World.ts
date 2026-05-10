@@ -27,12 +27,9 @@ import { type SceneMessage, type EntityFieldsPartial } from '../wire';
 import { TransformComponent } from '../components/TransformComponent';
 import { PhysicsComponent } from '../components/PhysicsComponent';
 import { MeshComponent } from '../components/MeshComponent';
-import { CardComponent } from '../components/CardComponent';
 import { ZoneComponent } from '../components/ZoneComponent';
 import { TweenComponent } from '../components/TweenComponent';
 import { HandComponent } from '../components/HandComponent';
-import { SkydomeComponent } from '../components/SkydomeComponent';
-import { LightingComponent } from '../components/LightingComponent';
 import { TableComponent } from '../components/TableComponent';
 import { registerCorePrimitives } from '../spawnables';
 import { getSpawnable } from '../SpawnableRegistry';
@@ -385,60 +382,6 @@ class WorldImpl implements World, HandleRouter {
     if (removed.length > 0) this.notify();
   }
 
-  // Routes EditorPanel prop edits into the appropriate entity-level field or
-  // component setter. Prefixed keys (e.g. `mesh.scale`, `sky.textureUrl`)
-  // disambiguate components on entities that surface props from more than
-  // one (currently the singleton Table — `mesh`, `sky`, `light`).
-  updateProp(id: string, key: string, value: unknown): void {
-    const entity = this.scene.getEntity(id);
-    if (!entity) return;
-    this.history_?.push(`update ${entity.name}.${key}`);
-
-    if (key === 'name') {
-      entity.name = String(value);
-      if (this.replicator) this.replicator.enqueueEntityPatch(entity.id, { name: entity.name });
-      this.notify();
-      return;
-    }
-    if (key === 'tags') {
-      entity.tags = normaliseTags(value);
-      if (this.replicator) this.replicator.enqueueEntityPatch(entity.id, { tags: [...entity.tags] });
-      this.notify();
-      return;
-    }
-    if (key === 'owner') {
-      const seat = Number(value);
-      const owner = Number.isFinite(seat) && seat >= 0 ? (seat as SeatIndex) : null;
-      entity.owner = owner;
-      if (this.replicator) this.replicator.enqueueEntityPatch(entity.id, { owner });
-      this.notify();
-      return;
-    }
-
-    // Prefixed keys route to the named component on the entity. Keeps the
-    // Table editor schema flat (no nested sections) while still letting the
-    // host disambiguate where each prop lives.
-    if (key.includes('.')) {
-      this.applyPrefixedProp(entity, key, value);
-      this.notify();
-      return;
-    }
-
-    const mesh = entity.getComponent(MeshComponent);
-    if (!mesh) {
-      this.notify();
-      return;
-    }
-
-    if (entity.type === 'card') {
-      const card = entity.getComponent(CardComponent);
-      if (card && (key === 'face' || key === 'back')) {
-        card.setState({ [key]: String(value ?? '') } as Partial<{ face: string; back: string }>);
-      }
-    }
-    this.notify();
-  }
-
   // Entity-level field write (issue #1 of property-schema-refactor). Writes
   // `name` / `tags` / `owner` directly on the Entity, replicates via
   // entity-patch, and pushes a history entry. Unknown keys no-op.
@@ -494,47 +437,6 @@ class WorldImpl implements World, HandleRouter {
       : ({ [key]: clamped } as Record<string, unknown>);
     comp.setState(patch);
     this.notify();
-  }
-
-  private applyPrefixedProp(entity: Entity, key: string, value: unknown): void {
-    const dot    = key.indexOf('.');
-    const prefix = key.slice(0, dot);
-    const tail   = key.slice(dot + 1);
-
-    if (prefix === 'mesh') {
-      if (tail === 'meshRef') {
-        entity.getComponent(MeshComponent)?.setState({ meshRef: String(value ?? '') });
-        return;
-      }
-      if (tail === 'scale') {
-        const transform = entity.getComponent(TransformComponent);
-        if (!transform) return;
-        const s = Number(value);
-        const safe = Number.isFinite(s) && s > 0 ? s : 1;
-        transform.setState({
-          position: transform.state.position,
-          rotation: transform.state.rotation,
-          scale:    [safe, safe, safe],
-        });
-        return;
-      }
-      return;
-    }
-
-    if (prefix === 'sky' && tail === 'textureUrl') {
-      entity.getComponent(SkydomeComponent)?.setState({ textureUrl: String(value ?? '') });
-      return;
-    }
-
-    if (prefix === 'light') {
-      const lighting = entity.getComponent(LightingComponent);
-      if (!lighting) return;
-      if (tail === 'color')     lighting.setState({ color:     String(value ?? '#ffffff') });
-      if (tail === 'intensity') {
-        const n = Number(value);
-        lighting.setState({ intensity: Number.isFinite(n) && n >= 0 ? n : 0 });
-      }
-    }
   }
 
   // ── Per-frame driver ─────────────────────────────────────────────────────
@@ -668,8 +570,9 @@ class WorldImpl implements World, HandleRouter {
 
   // ── Subscriptions ────────────────────────────────────────────────────────
   // Coalesced — fires once per state-affecting operation (spawn, despawn,
-  // updateProp, inbound message). Per-tick coalescing tightens further in
-  // issue #4 when EditorPanel becomes the primary consumer.
+  // updateEntityField, updateComponentProp, inbound message). Per-tick
+  // coalescing tightens further in issue #4 when EditorPanel becomes the
+  // primary consumer.
   subscribe(fn: () => void): () => void {
     this.listeners.push(fn);
     return () => { this.listeners = this.listeners.filter(l => l !== fn); };

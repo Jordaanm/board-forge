@@ -44,8 +44,7 @@ export interface AggregateContext {
 }
 
 // Resolves the schema entries declared on a component class. Returns an empty
-// array when the class hasn't declared one (the component is "unmigrated" —
-// the panel falls back to OBJECT_META for its rows).
+// array when the class hasn't declared one (no editable rows for that section).
 export function getPropertySchema(cls: ComponentClass): readonly PropertyDef[] {
   const declared = (cls as { propertySchema?: readonly PropertyDef[] }).propertySchema;
   return declared ?? [];
@@ -76,8 +75,8 @@ export function aggregatePropertySchema(
   for (const cls of ordered) {
     const schema = getPropertySchema(cls);
     if (schema.length === 0 && !(cls as { label?: string }).label) {
-      // Unmigrated component (no schema, no label). Skip — the panel falls
-      // back to OBJECT_META rows for entities composed entirely of these.
+      // Component declares neither label nor schema — skip silently so it
+      // doesn't surface as an empty section in the editor.
       continue;
     }
     const comp = entity.components.get(cls.typeId);

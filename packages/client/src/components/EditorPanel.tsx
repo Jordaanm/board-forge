@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { type SpawnableType } from '../net/SceneState';
-import { resolveObjectMeta, type PropertyDef as LegacyPropertyDef } from '../scene/objectMeta';
 import { type ComponentSchemaSection, type PropertyDef } from '../entity/propertySchema';
+import { getSpawnable } from '../entity/SpawnableRegistry';
 import { SEAT_COLOURS } from '../seats/SeatLayout';
 import { TABLE_ENTITY_ID } from '../entity/tableEntity';
 import { type ManifestStore } from '../assets/ManifestStore';
@@ -22,22 +22,13 @@ export interface SurfaceSummary {
 export interface ObjectSummary {
   id: string;
   objectType: SpawnableType;
-  // Entity-level fields lifted to top-level for the new Entity section.
+  // Entity-level fields lifted to top-level for the Entity section.
   name:  string;
   owner: number | null;
   tags: string[];
-  // Legacy flat property bag — used by the OBJECT_META fallback path for
-  // spawnables whose components don't yet declare a `propertySchema`. Empty
-  // for entities that render through the new aggregator.
-  props: Record<string, unknown>;
-  // Per-component state map keyed by typeId (issue #1 of
-  // issues--property-schema-refactor.md). The aggregator reads from this
-  // when rendering migrated component sections, so the panel doesn't need
-  // a live Entity reference.
-  componentStates: Record<string, Record<string, unknown>>;
-  // Aggregated schema sections for components that declare a `propertySchema`.
-  // Empty when the entity carries no migrated components — the panel falls
-  // back to the legacy OBJECT_META renderer in that case.
+  // Aggregated schema sections — one per component that declares a
+  // `propertySchema`. Each section carries its own state snapshot so the
+  // panel doesn't need a live Entity reference.
   sections: ComponentSchemaSection[];
   parentId: string | null;
   // Populated when the entity carries a SurfaceComponent. Drives the
@@ -53,14 +44,10 @@ interface Props {
   selectedTools:        EditorToolItem[];
   onSelect:             (id: string | null) => void;
   onRollDice:           () => void;
-  // Legacy single-key dispatcher (issue #1 of property-schema-refactor:
-  // retained for the OBJECT_META fallback path until the remaining
-  // components migrate). Routes through World.updateProp.
-  onUpdateProp:         (id: string, key: string, value: unknown) => void;
-  // New entity-level field write (name, tags, owner). Routes through
+  // Entity-level field write (name, tags, owner). Routes through
   // World.updateEntityField.
   onUpdateEntityField:  (id: string, key: string, value: unknown) => void;
-  // New component-prop write. Routes through World.updateComponentProp.
+  // Component-prop write. Routes through World.updateComponentProp.
   onUpdateComponentProp: (id: string, typeId: string, key: string, value: unknown) => void;
   onToggleFreeCamera:   (on: boolean) => void;
   onToolAction:         (item: EditorToolItem & { kind: 'button' }) => void;
@@ -157,7 +144,7 @@ const CHIP_X: React.CSSProperties = {
 export function EditorPanel({
   objects, selectedId, isFreeCamera,
   manifestStore, selectedTools,
-  onSelect, onRollDice, onUpdateProp,
+  onSelect, onRollDice,
   onUpdateEntityField, onUpdateComponentProp,
   onToggleFreeCamera, onToolAction,
   onMutateElement, onRemoveElement,
@@ -197,7 +184,6 @@ export function EditorPanel({
           <PropertyEditor
             selected={selected}
             manifestStore={manifestStore}
-            onUpdateProp={onUpdateProp}
             onUpdateEntityField={onUpdateEntityField}
             onUpdateComponentProp={onUpdateComponentProp}
           />
@@ -311,7 +297,7 @@ function SceneGraphNode({
           </span>
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{node.id}</span>
         </span>
-        <span style={{ color: '#888', flexShrink: 0, marginLeft: 6 }}>{resolveObjectMeta(node.objectType).label}</span>
+        <span style={{ color: '#888', flexShrink: 0, marginLeft: 6 }}>{getSpawnable(node.objectType)?.label ?? node.objectType}</span>
       </div>
       {hasKids && isOpen && kids.map(k => (
         <SceneGraphNode
@@ -331,11 +317,10 @@ function SceneGraphNode({
 
 function PropertyEditor({
   selected, manifestStore,
-  onUpdateProp, onUpdateEntityField, onUpdateComponentProp,
+  onUpdateEntityField, onUpdateComponentProp,
 }: {
   selected:              ObjectSummary | null;
   manifestStore:         ManifestStore | null;
-  onUpdateProp:          (id: string, key: string, value: unknown) => void;
   onUpdateEntityField:   (id: string, key: string, value: unknown) => void;
   onUpdateComponentProp: (id: string, typeId: string, key: string, value: unknown) => void;
 }) {
@@ -348,48 +333,22 @@ function PropertyEditor({
     );
   }
 
-  // Dual-path render (issue #1 of property-schema-refactor): if the entity has
-  // any migrated component sections, render the new Entity + per-component
-  // layout. Otherwise fall back to the legacy OBJECT_META flat list so
-  // unmigrated spawnables keep working untouched.
-  if (selected.sections.length > 0) {
-    return (
-      <>
-        <EntitySection
-          selected={selected}
-          onUpdateEntityField={onUpdateEntityField}
-        />
-        {selected.sections.map(section => (
-          <ComponentSection
-            key={section.typeId}
-            entityId={selected.id}
-            section={section}
-            manifestStore={manifestStore}
-            onUpdateComponentProp={onUpdateComponentProp}
-          />
-        ))}
-      </>
-    );
-  }
-
-  const def = resolveObjectMeta(selected.objectType);
   return (
-    <div style={SECTION}>
-      <div style={SECTION_LABEL}>Properties — {selected.id}</div>
-      {def.propertySchema.map(p => (
-        <LegacyPropertyRow
-          key={p.key}
-          def={p}
-          value={selected.props[p.key]}
+    <>
+      <EntitySection
+        selected={selected}
+        onUpdateEntityField={onUpdateEntityField}
+      />
+      {selected.sections.map(section => (
+        <ComponentSection
+          key={section.typeId}
+          entityId={selected.id}
+          section={section}
           manifestStore={manifestStore}
-          onChange={(v) => onUpdateProp(selected.id, p.key, v)}
+          onUpdateComponentProp={onUpdateComponentProp}
         />
       ))}
-      <TagsRow
-        tags={selected.tags}
-        onChange={(next) => onUpdateProp(selected.id, 'tags', next)}
-      />
-    </div>
+    </>
   );
 }
 
@@ -565,26 +524,6 @@ function SchemaPropertyRow({
         />
       )}
     </div>
-  );
-}
-
-// Legacy OBJECT_META rows reuse the schema renderer — the legacy type is a
-// strict subset of the new schema entry shape.
-function LegacyPropertyRow({
-  def, value, manifestStore, onChange,
-}: {
-  def:           LegacyPropertyDef;
-  value:         unknown;
-  manifestStore: ManifestStore | null;
-  onChange:      (v: unknown) => void;
-}) {
-  return (
-    <SchemaPropertyRow
-      def={def as PropertyDef}
-      value={value}
-      manifestStore={manifestStore}
-      onChange={onChange}
-    />
   );
 }
 

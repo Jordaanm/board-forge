@@ -125,15 +125,15 @@ describe('World — Table boot path (table-as-entity slice 1)', () => {
     expect(guestSky.state.textureUrl).toBe('custom:sky/some-slug');
   });
 
-  test('updateProp routes prefixed Table keys to the correct components (slice 4)', () => {
+  test('updateComponentProp routes Table component keys to the correct components (slice 4)', () => {
     pair = setup();
     pair.host.tick(0.016);  // replicate Table to guest
 
-    pair.host.updateProp(TABLE_ENTITY_ID, 'mesh.meshRef',    'prim:table-circle');
-    pair.host.updateProp(TABLE_ENTITY_ID, 'mesh.scale',      1.5);
-    pair.host.updateProp(TABLE_ENTITY_ID, 'sky.textureUrl',  'custom:sky/pretty');
-    pair.host.updateProp(TABLE_ENTITY_ID, 'light.color',     '#abcdef');
-    pair.host.updateProp(TABLE_ENTITY_ID, 'light.intensity', 0.5);
+    pair.host.updateComponentProp(TABLE_ENTITY_ID, 'mesh',      'meshRef',    'prim:table-circle');
+    pair.host.updateComponentProp(TABLE_ENTITY_ID, 'transform', 'scale',      1.5);
+    pair.host.updateComponentProp(TABLE_ENTITY_ID, 'skydome',   'textureUrl', 'custom:sky/pretty');
+    pair.host.updateComponentProp(TABLE_ENTITY_ID, 'lighting',  'color',      '#abcdef');
+    pair.host.updateComponentProp(TABLE_ENTITY_ID, 'lighting',  'intensity',  0.5);
 
     const hostTable = pair.host.get(TABLE_ENTITY_ID)!;
     expect(hostTable.get(MeshComponent)!.state.meshRef).toBe('prim:table-circle');
@@ -152,15 +152,17 @@ describe('World — Table boot path (table-as-entity slice 1)', () => {
     expect(guestTable.get(LightingComponent)!.state.intensity).toBeCloseTo(0.5, 5);
   });
 
-  test('updateProp clamps a non-positive scale to 1', () => {
+  test('updateComponentProp clamps a non-positive scale to the schema min', () => {
     pair = setup();
-    pair.host.updateProp(TABLE_ENTITY_ID, 'mesh.scale', 0);
-    expect(pair.host.get(TABLE_ENTITY_ID)!.get(TransformComponent)!.state.scale).toEqual([1, 1, 1]);
+    pair.host.updateComponentProp(TABLE_ENTITY_ID, 'transform', 'scale', 0);
+    // Schema declares min: 0.0001 on the scale entry; the dispatcher pre-
+    // clamps to that floor before the adapter writes the [x, y, z] triple.
+    expect(pair.host.get(TABLE_ENTITY_ID)!.get(TransformComponent)!.state.scale).toEqual([0.0001, 0.0001, 0.0001]);
   });
 
-  test('updateProp clamps a negative light intensity to 0', () => {
+  test('updateComponentProp clamps a negative light intensity to 0', () => {
     pair = setup();
-    pair.host.updateProp(TABLE_ENTITY_ID, 'light.intensity', -1);
+    pair.host.updateComponentProp(TABLE_ENTITY_ID, 'lighting', 'intensity', -1);
     expect(pair.host.get(TABLE_ENTITY_ID)!.get(LightingComponent)!.state.intensity).toBe(0);
   });
 
@@ -196,15 +198,15 @@ describe('World — Table boot path (table-as-entity slice 1)', () => {
   test('save → reload round-trip preserves all five Table props (slice 7)', () => {
     pair = setup();
     // Mutate every editable Table prop, then snapshot.
-    pair.host.updateProp(TABLE_ENTITY_ID, 'mesh.meshRef',    'prim:table-circle');
-    pair.host.updateProp(TABLE_ENTITY_ID, 'mesh.scale',      1.5);
-    pair.host.updateProp(TABLE_ENTITY_ID, 'sky.textureUrl',  'custom:sky/abc');
-    pair.host.updateProp(TABLE_ENTITY_ID, 'light.color',     '#abcdef');
-    pair.host.updateProp(TABLE_ENTITY_ID, 'light.intensity', 0.42);
+    pair.host.updateComponentProp(TABLE_ENTITY_ID, 'mesh',      'meshRef',    'prim:table-circle');
+    pair.host.updateComponentProp(TABLE_ENTITY_ID, 'transform', 'scale',      1.5);
+    pair.host.updateComponentProp(TABLE_ENTITY_ID, 'skydome',   'textureUrl', 'custom:sky/abc');
+    pair.host.updateComponentProp(TABLE_ENTITY_ID, 'lighting',  'color',      '#abcdef');
+    pair.host.updateComponentProp(TABLE_ENTITY_ID, 'lighting',  'intensity',  0.42);
     const snap = pair.host.snapshot();
 
     // Mutate further then revert via replaceScene.
-    pair.host.updateProp(TABLE_ENTITY_ID, 'mesh.scale', 9);
+    pair.host.updateComponentProp(TABLE_ENTITY_ID, 'transform', 'scale', 9);
     pair.host.replaceScene(snap);
 
     const table = pair.host.get(TABLE_ENTITY_ID)!;
@@ -232,11 +234,11 @@ describe('World — Table boot path (table-as-entity slice 1)', () => {
     pair = setup();
     pair.host.tick(0.016);  // initial Table replicates to guest
 
-    pair.host.updateProp(TABLE_ENTITY_ID, 'sky.textureUrl', 'custom:sky/saved');
+    pair.host.updateComponentProp(TABLE_ENTITY_ID, 'skydome', 'textureUrl', 'custom:sky/saved');
     const snap = pair.host.snapshot();
 
     // Drift the host's state, then reload from the saved snap.
-    pair.host.updateProp(TABLE_ENTITY_ID, 'sky.textureUrl', 'custom:sky/drift');
+    pair.host.updateComponentProp(TABLE_ENTITY_ID, 'skydome', 'textureUrl', 'custom:sky/drift');
     pair.host.replaceScene(snap);
     pair.host.tick(0.016);
 
@@ -1057,11 +1059,11 @@ describe('World — history push hooks (issue #5)', () => {
     expect(pair.host.history!.entries().length).toBe(before + 1);
   });
 
-  test('updateProp pushes an entry', () => {
+  test('updateEntityField pushes an entry', () => {
     pair = setup();
     pair.host.spawn('token', { id: 't-1' });
     const before = pair.host.history!.entries().length;
-    pair.host.updateProp('t-1', 'name', 'Renamed');
+    pair.host.updateEntityField('t-1', 'name', 'Renamed');
     expect(pair.host.history!.entries().length).toBe(before + 1);
   });
 
