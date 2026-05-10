@@ -13,6 +13,7 @@ import {
   type SpawnContext,
   type EntityScene,
 } from '../EntityComponent';
+import { type PropertyDef } from '../propertySchema';
 import { type Entity } from '../Entity';
 import { TransformComponent } from './TransformComponent';
 import { PhysicsComponent } from './PhysicsComponent';
@@ -34,7 +35,41 @@ interface ContactEvent {
 
 export class ZoneComponent extends EntityComponent<ZoneState> {
   static typeId   = 'zone';
+  static label    = 'Zone';
   static requires = ['transform'] as const;
+  // halfExtents stays as a Vec3 in state (load-bearing for the physics body
+  // shape). Each axis is exposed via a small adapter so the editor surfaces
+  // three independent rows over the packed triple.
+  static propertySchema: readonly PropertyDef<ZoneState>[] = [
+    {
+      key:   'halfExtentsX',
+      label: 'Half-extent X',
+      type:  'number',
+      get:   (s) => s.halfExtents[0],
+      set:   (v, s) => ({
+        halfExtents: [Number(v), s.halfExtents[1], s.halfExtents[2]] as [number, number, number],
+      }),
+    },
+    {
+      key:   'halfExtentsY',
+      label: 'Half-extent Y',
+      type:  'number',
+      get:   (s) => s.halfExtents[1],
+      set:   (v, s) => ({
+        halfExtents: [s.halfExtents[0], Number(v), s.halfExtents[2]] as [number, number, number],
+      }),
+    },
+    {
+      key:   'halfExtentsZ',
+      label: 'Half-extent Z',
+      type:  'number',
+      get:   (s) => s.halfExtents[2],
+      set:   (v, s) => ({
+        halfExtents: [s.halfExtents[0], s.halfExtents[1], Number(v)] as [number, number, number],
+      }),
+    },
+    { key: 'isVisible', label: 'Show debug box', type: 'boolean' },
+  ];
 
   // Process-global UI flags read by updateDebugVisibility(). The canvas writes
   // to these from the editor surface (Show All Zones toggle, selected entity).

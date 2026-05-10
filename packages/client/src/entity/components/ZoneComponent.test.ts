@@ -321,3 +321,39 @@ function getDebugMesh(entity: Entity): THREE.Mesh {
   if (!mesh) throw new Error('zone debug mesh not found');
   return mesh as THREE.Mesh;
 }
+
+describe('ZoneComponent — propertySchema (issue #5 of property-schema-refactor)', () => {
+  function makeState(extents: [number, number, number]): import('./ZoneComponent').ZoneState {
+    return { halfExtents: extents, containedIds: [], isVisible: false };
+  }
+
+  test('declares static label and the four expected entries', () => {
+    expect(ZoneComponent.label).toBe('Zone');
+    const keys = ZoneComponent.propertySchema.map(d => d.key);
+    expect(keys).toEqual(['halfExtentsX', 'halfExtentsY', 'halfExtentsZ', 'isVisible']);
+  });
+
+  test('halfExtentsX adapter isolates the X axis on read and merges on write', () => {
+    const def = ZoneComponent.propertySchema.find(d => d.key === 'halfExtentsX')!;
+    const state = makeState([1, 2, 3]);
+    expect(def.get!(state, undefined as never)).toBe(1);
+    const patch = def.set!(7, state, undefined as never);
+    expect(patch).toEqual({ halfExtents: [7, 2, 3] });
+  });
+
+  test('halfExtentsY adapter isolates the Y axis on read and merges on write', () => {
+    const def = ZoneComponent.propertySchema.find(d => d.key === 'halfExtentsY')!;
+    const state = makeState([1, 2, 3]);
+    expect(def.get!(state, undefined as never)).toBe(2);
+    const patch = def.set!(7, state, undefined as never);
+    expect(patch).toEqual({ halfExtents: [1, 7, 3] });
+  });
+
+  test('halfExtentsZ adapter isolates the Z axis on read and merges on write', () => {
+    const def = ZoneComponent.propertySchema.find(d => d.key === 'halfExtentsZ')!;
+    const state = makeState([1, 2, 3]);
+    expect(def.get!(state, undefined as never)).toBe(3);
+    const patch = def.set!(7, state, undefined as never);
+    expect(patch).toEqual({ halfExtents: [1, 2, 7] });
+  });
+});

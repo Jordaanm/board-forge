@@ -430,15 +430,6 @@ class WorldImpl implements World, HandleRouter {
       else if (key === 'isPrivate')  hand.setState({ isPrivate:  Boolean(value) });
     }
 
-    const zone = entity.getComponent(ZoneComponent);
-    if (zone) {
-      const cur = zone.state.halfExtents;
-      if      (key === 'halfExtentsX') zone.setState({ halfExtents: [Number(value), cur[1], cur[2]] });
-      else if (key === 'halfExtentsY') zone.setState({ halfExtents: [cur[0], Number(value), cur[2]] });
-      else if (key === 'halfExtentsZ') zone.setState({ halfExtents: [cur[0], cur[1], Number(value)] });
-      else if (key === 'isVisible')    zone.setState({ isVisible: Boolean(value) });
-    }
-
     const mesh = entity.getComponent(MeshComponent);
     if (!mesh) {
       this.notify();
