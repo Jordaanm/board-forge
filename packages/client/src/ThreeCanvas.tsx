@@ -13,7 +13,7 @@ import { SurfaceComponent } from './entity/components/SurfaceComponent';
 import { FlatViewComponent } from './entity/components/FlatViewComponent';
 import { surfaceRenderQueue } from './entity/components/SurfaceRenderQueue';
 import { aggregateContextMenu } from './entity/contextMenu';
-import { encodeSaveFile, downloadSaveFile } from './entity/SaveFile';
+import { downloadSceneFile } from './entity/downloadSceneFile';
 import { captureCanvasThumbnail } from './entity/thumbnail';
 import { type SceneHistoryService, type LastLoaded } from './entity/SceneHistoryService';
 import { type RunResult, type ScriptState } from './scripting/ScriptHost';
@@ -378,13 +378,12 @@ export function ThreeCanvas({
         // animation-loop frame even if Save is clicked between frames.
         renderer.render(scene, camera);
         const thumbnail = captureCanvasThumbnail(renderer.domElement, { width: 480, height: 270 });
-        const envelope = encodeSaveFile({
-          scene:     world.snapshot(),
+        downloadSceneFile(
+          world.snapshot(),
           thumbnail,
-          script:    world.scripting?.getScriptState(),
-          manifest:  getManifestRef.current(),
-        });
-        downloadSaveFile(envelope);
+          getManifestRef.current(),
+          world.scripting?.getScriptState(),
+        );
       };
 
       replaceSceneRef.current = (snaps) => {
