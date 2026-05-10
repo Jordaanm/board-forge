@@ -48,7 +48,7 @@ export function registerCorePrimitives(): void {
     hidden:      true,
     components: [
       { typeId: 'transform', state: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } },
-      { typeId: 'mesh',      state: { meshRef: 'prim:table-rect', textureRefs: { default: '' }, color: '#4a3728', width: 12, height: 0.3, depth: 8 } },
+      { typeId: 'mesh',      state: { meshRef: 'prim:table-rect', textureRefs: { default: 'base:table/default' }, color: '#ffffff', width: 12, height: 0.3, depth: 8 } },
       { typeId: 'physics',   state: { mass: 0, friction: 0.5, restitution: 0.3, isLocked: true } },
       { typeId: 'table',     state: {} },
       { typeId: 'skydome',   state: { textureUrl: 'base:sky/default' } },

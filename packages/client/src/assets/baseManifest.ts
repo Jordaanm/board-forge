@@ -12,14 +12,17 @@
 
 import { Manifest, type AssetEntry } from './Manifest';
 import skydomeDefaultUrl from './skydome.png';
+import tableDefaultUrl from './wood.jpg';
 
 export const DEFAULT_SKY_SLUG = 'base:sky/default';
+export const DEFAULT_TABLE_SLUG = 'base:table/default';
 
 export const BASE_MANIFEST_ENTRIES: AssetEntry[] = [
   { slug: 'base:placeholder/image', name: 'Image placeholder', type: 'image', url: 'placeholder://image', preload: false },
   { slug: 'base:placeholder/model', name: 'Model placeholder', type: 'model', url: 'placeholder://model', preload: false },
   { slug: 'base:placeholder/sound', name: 'Sound placeholder', type: 'sound', url: 'placeholder://sound', preload: false },
   { slug: DEFAULT_SKY_SLUG,         name: 'Default sky',       type: 'image', url: skydomeDefaultUrl,     preload: true  },
+  { slug: DEFAULT_TABLE_SLUG,       name: 'Default table',     type: 'image', url: tableDefaultUrl,       preload: true  },
 ];
 
 export const PRIMITIVE_MANIFEST_ENTRIES: AssetEntry[] = [
