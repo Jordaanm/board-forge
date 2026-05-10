@@ -15,8 +15,11 @@ export interface SkydomeState {
 export class SkydomeComponent extends EntityComponent<SkydomeState> {
   static typeId = 'skydome';
   static label  = 'Sky';
+  // Sky texture is a room-level appearance setting, so only the host edits it
+  // (issue #7 of property-schema-refactor). Guest aggregator output omits the
+  // row entirely — the editor never renders a DOM node for it.
   static propertySchema: readonly PropertyDef<SkydomeState>[] = [
-    { key: 'textureUrl', label: 'Texture', type: 'asset:image' },
+    { key: 'textureUrl', label: 'Texture', type: 'asset:image', hostOnly: true },
   ];
 
   mesh!:        THREE.Mesh;

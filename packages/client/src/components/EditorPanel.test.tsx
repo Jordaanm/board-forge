@@ -121,6 +121,41 @@ describe('EditorPanel — Mesh section rendering (issue #2 of property-schema-re
     expect(container.textContent).toContain('Intensity');
   });
 
+  test('host-only row is absent from the DOM in guest context (issue #7 of property-schema-refactor)', () => {
+    // Mirrors what aggregatePropertySchema returns for a guest viewing the
+    // Table singleton: the Sky section's textureUrl entry is hostOnly, so the
+    // aggregator strips it from `entries` and the panel never renders the row.
+    const hostSection: ComponentSchemaSection = {
+      typeId: 'skydome',
+      label:  'Sky',
+      state:  { textureUrl: 'base:sky/default' },
+      entries: [
+        { key: 'textureUrl', label: 'Texture', type: 'asset:image', hostOnly: true },
+      ],
+    };
+    const guestSection: ComponentSchemaSection = {
+      typeId: 'skydome',
+      label:  'Sky',
+      state:  { textureUrl: 'base:sky/default' },
+      entries: [],  // hostOnly entry already filtered by aggregator
+    };
+
+    const hostRender = renderPanel(
+      [makeSummary({ id: 't-1', sections: [hostSection] })], 't-1',
+    );
+    expect(hostRender.container.textContent).toContain('Texture');
+    cleanup();
+
+    const guestRender = renderPanel(
+      [makeSummary({ id: 't-1', sections: [guestSection] })], 't-1',
+    );
+    // The hostOnly row's label is absent from the DOM entirely — the
+    // aggregator strips the entry, so the panel renders an empty Sky section
+    // (placeholder text, not a hidden Texture row).
+    expect(guestRender.container.textContent).not.toContain('Texture');
+    expect(guestRender.container.textContent).toContain('Sky');
+  });
+
   test('Entity section renders above component sections with Name / Owner / Tags', () => {
     const meshSection: ComponentSchemaSection = {
       typeId: 'mesh',

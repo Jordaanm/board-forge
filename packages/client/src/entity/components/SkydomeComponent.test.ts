@@ -70,3 +70,10 @@ describe('SkydomeComponent — state changes', () => {
     expect(mat.map).toBeNull();
   });
 });
+
+describe('SkydomeComponent — propertySchema (issue #7 of property-schema-refactor)', () => {
+  test('textureUrl is host-only', () => {
+    const def = SkydomeComponent.propertySchema.find(d => d.key === 'textureUrl')!;
+    expect(def.hostOnly).toBe(true);
+  });
+});
