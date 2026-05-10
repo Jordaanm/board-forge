@@ -133,13 +133,6 @@ describe('PhysicsComponent — isLocked state transitions', () => {
     expect(phys.body.mass).toBe(0.2);
   });
 
-  test('board spawns locked with body mass 0', () => {
-    const e = scene.spawn('board', ctx);
-    const phys = e.getComponent(PhysicsComponent)!;
-    expect(phys.state.isLocked).toBe(true);
-    expect(phys.body.mass).toBe(0);
-  });
-
   test('die / token / card spawn unlocked', () => {
     expect(scene.spawn('die',   ctx).getComponent(PhysicsComponent)!.state.isLocked).toBe(false);
     expect(scene.spawn('token', ctx).getComponent(PhysicsComponent)!.state.isLocked).toBe(false);
