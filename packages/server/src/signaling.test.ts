@@ -119,8 +119,12 @@ describe('room join', () => {
 
     for (let i = 0; i < maxRoomPeers - 1; i++) {
       const g = await connect();
-      host.once('message', () => {});
+      // Await each peer-joined synchronously — `host.once(...)` would stack
+      // listeners across iterations and let in-flight peer-joineds leak past
+      // the loop, racing against the hostNotified assertion below.
+      const peerJoined = nextMsg(host);
       await joinRoom(g, 'room-cap', 'guest');
+      await peerJoined;
       guests.push(g);
     }
 
