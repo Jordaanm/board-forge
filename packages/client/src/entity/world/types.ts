@@ -82,6 +82,15 @@ export interface World {
   despawn(id: string): void;
   updateProp(id: string, key: string, value: unknown): void;
 
+  // Entity-level field write (name, tags, owner). Issue #1 of
+  // issues--property-schema-refactor.md. Replicates via entity-patch.
+  updateEntityField(id: string, key: string, value: unknown): void;
+
+  // Component-state field write. The dispatcher pre-clamps via the schema's
+  // min/max, invokes the entry's adapter `set` if present, then calls the
+  // component's `setState`. Issue #1 of issues--property-schema-refactor.md.
+  updateComponentProp(id: string, typeId: string, key: string, value: unknown): void;
+
   // Host-only — spawn a child surface entity (prim:plane + SurfaceComponent)
   // on the given parent. Backs the Mesh component's "Add Surface" editor-panel
   // tool. Defaults to the parent's +Y face sized to its mesh footprint.

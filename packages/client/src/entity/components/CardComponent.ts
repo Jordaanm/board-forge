@@ -8,6 +8,7 @@ import {
   EntityComponent,
   type SpawnContext,
 } from '../EntityComponent';
+import { type PropertyDef } from '../propertySchema';
 import { TransformComponent } from './TransformComponent';
 import { MeshComponent } from './MeshComponent';
 import { PhysicsComponent } from './PhysicsComponent';
@@ -22,7 +23,12 @@ export interface CardState {
 
 export class CardComponent extends EntityComponent<CardState> {
   static typeId   = 'card';
+  static label    = 'Card';
   static requires = ['transform', 'mesh', 'physics', 'flatview'] as const;
+  static propertySchema: readonly PropertyDef<CardState>[] = [
+    { key: 'face', label: 'Face', type: 'asset:image' },
+    { key: 'back', label: 'Back', type: 'asset:image' },
+  ];
 
   private unsubscribeStop: (() => void) | null = null;
 

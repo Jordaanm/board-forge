@@ -85,6 +85,8 @@ export function Room({ roomId, isHost }: Props) {
   const shuffleDeckRef     = useRef<(deckId: string) => void>(noop);
   const dealFromDeckRef    = useRef<(deckId: string, count: number, callerSeat: SeatIndex | null) => void>(noop);
   const updatePropRef      = useRef<(id: string, key: string, value: unknown) => void>(noop);
+  const updateEntityFieldRef   = useRef<(id: string, key: string, value: unknown) => void>(noop);
+  const updateComponentPropRef = useRef<(id: string, typeId: string, key: string, value: unknown) => void>(noop);
   const freeCameraRef      = useRef<(on: boolean) => void>(noop);
   const onObjectsChangeRef = useRef<(objs: ObjectSummary[]) => void>(noop);
   const onSelectRef        = useRef<(id: string | null) => void>(noop);
@@ -382,6 +384,8 @@ export function Room({ roomId, isHost }: Props) {
         shuffleDeckRef={shuffleDeckRef}
         dealFromDeckRef={dealFromDeckRef}
         updatePropRef={updatePropRef}
+        updateEntityFieldRef={updateEntityFieldRef}
+        updateComponentPropRef={updateComponentPropRef}
         freeCameraRef={freeCameraRef}
         onObjectsChangeRef={onObjectsChangeRef}
         onSelectRef={onSelectRef}
@@ -465,6 +469,9 @@ export function Room({ roomId, isHost }: Props) {
               onSelect={setSelectedId}
               onRollDice={() => rollRef.current()}
               onUpdateProp={(id, key, value) => updatePropRef.current(id, key, value)}
+              onUpdateEntityField={(id, key, value) => updateEntityFieldRef.current(id, key, value)}
+              onUpdateComponentProp={(id, typeId, key, value) =>
+                updateComponentPropRef.current(id, typeId, key, value)}
               onToggleFreeCamera={handleToggleFreeCamera}
               onToolAction={handleToolAction}
               onMutateElement={(sid, eid, patch) => mutateSurfaceElementRef.current(sid, eid, patch)}

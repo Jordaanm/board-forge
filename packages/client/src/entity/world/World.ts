@@ -62,6 +62,7 @@ import {
   type SpawnOptions,
   type ReplicationPolicy,
 } from './types';
+import { getPropertySchema, clampForSchema, type PropertyDef } from '../propertySchema';
 import { type HoldRelease, type ToolBroadcast, type PlayCardToTable, type ReorderHand, type TweenIntoHand, type PlaySoundMessage } from '../wire';
 import { type InputEventName, type InputEventPayload } from '../../input/inputEvents';
 import { type GuestInputEvent } from '../../net/SceneState';
@@ -458,6 +459,63 @@ class WorldImpl implements World, HandleRouter {
         card.setState({ [key]: String(value ?? '') } as Partial<{ face: string; back: string }>);
       }
     }
+    this.notify();
+  }
+
+  // Entity-level field write (issue #1 of property-schema-refactor). Writes
+  // `name` / `tags` / `owner` directly on the Entity, replicates via
+  // entity-patch, and pushes a history entry. Unknown keys no-op.
+  updateEntityField(id: string, key: string, value: unknown): void {
+    const entity = this.scene.getEntity(id);
+    if (!entity) return;
+    this.history_?.push(`update ${entity.name}.${key}`);
+
+    if (key === 'name') {
+      entity.name = String(value);
+      if (this.replicator) this.replicator.enqueueEntityPatch(entity.id, { name: entity.name });
+      this.notify();
+      return;
+    }
+    if (key === 'tags') {
+      entity.tags = normaliseTags(value);
+      if (this.replicator) this.replicator.enqueueEntityPatch(entity.id, { tags: [...entity.tags] });
+      this.notify();
+      return;
+    }
+    if (key === 'owner') {
+      const seat = Number(value);
+      const owner = Number.isFinite(seat) && seat >= 0 ? (seat as SeatIndex) : null;
+      entity.owner = owner;
+      if (this.replicator) this.replicator.enqueueEntityPatch(entity.id, { owner });
+      this.notify();
+      return;
+    }
+  }
+
+  // Component-state field write (issue #1 of property-schema-refactor). Looks
+  // up the schema entry on the named component class, pre-clamps via min/max,
+  // invokes the adapter `set` if present (else writes `{ [key]: value }`),
+  // and calls the component's `setState` so replication and onPropertiesChanged
+  // fire on the same path as any other state mutation. No-ops on unknown
+  // entity / component / schema entry.
+  updateComponentProp(id: string, typeId: string, key: string, value: unknown): void {
+    const entity = this.scene.getEntity(id);
+    if (!entity) return;
+    const comp = entity.components.get(typeId);
+    if (!comp) return;
+    const cls = componentRegistry.get(typeId);
+    if (!cls) return;
+    const schema = getPropertySchema(cls);
+    const def = schema.find(d => d.key === key) as PropertyDef | undefined;
+    if (!def) return;
+
+    this.history_?.push(`update ${entity.name}.${typeId}.${key}`);
+
+    const clamped = clampForSchema(def, value);
+    const patch = def.set
+      ? def.set(clamped, comp.state as object, entity)
+      : ({ [key]: clamped } as Record<string, unknown>);
+    comp.setState(patch);
     this.notify();
   }
 

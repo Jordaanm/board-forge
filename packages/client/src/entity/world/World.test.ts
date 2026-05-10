@@ -1091,3 +1091,161 @@ describe('World — history push hooks (issue #5)', () => {
     expect(guestIds).toEqual([]);
   });
 });
+
+describe('World — updateEntityField / updateComponentProp (issue #1 of property-schema-refactor)', () => {
+  let pair: Pair | null = null;
+
+  afterEach(() => {
+    pair?.host.dispose();
+    pair?.guest.dispose();
+    pair = null;
+  });
+
+  test('updateEntityField rewrites name and replicates via entity-patch', async () => {
+    const { CardComponent } = await import('../components/CardComponent');
+    void CardComponent;  // ensure module loaded
+    pair = setup();
+    pair.host.spawn('card', { id: 'c-1' });
+    pair.host.tick(0.016);
+
+    pair.host.updateEntityField('c-1', 'name', 'My Hand');
+    pair.host.tick(0.016);
+
+    expect(pair.host.get('c-1')!.entity.name).toBe('My Hand');
+    expect(pair.guest.get('c-1')!.entity.name).toBe('My Hand');
+  });
+
+  test('updateEntityField rewrites tags and owner', () => {
+    pair = setup();
+    pair.host.spawn('card', { id: 'c-2' });
+
+    pair.host.updateEntityField('c-2', 'tags', ['marker', 'zone']);
+    pair.host.updateEntityField('c-2', 'owner', 1);
+
+    const card = pair.host.get('c-2')!;
+    expect(card.entity.tags).toEqual(['marker', 'zone']);
+    expect(card.entity.owner).toBe(1);
+  });
+
+  test('updateEntityField for unknown id is a no-op', () => {
+    pair = setup();
+    expect(() => pair!.host.updateEntityField('nope', 'name', 'X')).not.toThrow();
+  });
+
+  test('updateComponentProp routes to the named component', async () => {
+    const { CardComponent } = await import('../components/CardComponent');
+    pair = setup();
+    pair.host.spawn('card', { id: 'c-3' });
+    pair.host.tick(0.016);
+
+    pair.host.updateComponentProp('c-3', 'card', 'face', 'face.png');
+    pair.host.updateComponentProp('c-3', 'card', 'back', 'back.png');
+    pair.host.tick(0.016);
+
+    const hostCard  = pair.host.get('c-3')!.get(CardComponent)!;
+    const guestCard = pair.guest.get('c-3')!.get(CardComponent)!;
+    expect(hostCard.state.face).toBe('face.png');
+    expect(hostCard.state.back).toBe('back.png');
+    expect(guestCard.state.face).toBe('face.png');
+    expect(guestCard.state.back).toBe('back.png');
+  });
+
+  test('updateComponentProp pre-clamps via schema min/max', async () => {
+    const { EntityComponent } = await import('../EntityComponent');
+    const { componentRegistry } = await import('../ComponentRegistry');
+    const { registerSpawnable, getSpawnable } = await import('../SpawnableRegistry');
+
+    class ClampComp extends EntityComponent<{ n: number }> {
+      static typeId = 'clamp';
+      static label  = 'Clamp';
+      static propertySchema = [
+        { key: 'n', label: 'N', type: 'number' as const, min: 0, max: 10 },
+      ];
+      onSpawn() {}
+      onPropertiesChanged() {}
+    }
+    if (!componentRegistry.has('clamp')) componentRegistry.register(ClampComp);
+    if (!getSpawnable('clampy')) registerSpawnable({
+      type: 'clampy',
+      label: 'Clampy',
+      category: 'Test',
+      defaultTags: [],
+      components: [{ typeId: 'clamp', state: { n: 5 } }],
+    });
+
+    pair = setup();
+    pair.host.spawn('clampy', { id: 'k-1' });
+
+    pair.host.updateComponentProp('k-1', 'clamp', 'n', 99);
+    expect(pair.host.get('k-1')!.get(ClampComp)!.state.n).toBe(10);
+
+    pair.host.updateComponentProp('k-1', 'clamp', 'n', -5);
+    expect(pair.host.get('k-1')!.get(ClampComp)!.state.n).toBe(0);
+  });
+
+  test('updateComponentProp invokes adapter set when present', async () => {
+    const { EntityComponent } = await import('../EntityComponent');
+    const { componentRegistry } = await import('../ComponentRegistry');
+    const { registerSpawnable, getSpawnable } = await import('../SpawnableRegistry');
+
+    class AdapterComp extends EntityComponent<{ vec: [number, number, number] }> {
+      static typeId = 'adapter';
+      static label  = 'Adapter';
+      static propertySchema = [
+        {
+          key:   'x',
+          label: 'X',
+          type:  'number' as const,
+          get:   (s: { vec: [number, number, number] }) => s.vec[0],
+          set:   (v: unknown, s: { vec: [number, number, number] }) =>
+                  ({ vec: [Number(v), s.vec[1], s.vec[2]] as [number, number, number] }),
+        },
+      ];
+      onSpawn() {}
+      onPropertiesChanged() {}
+    }
+    if (!componentRegistry.has('adapter')) componentRegistry.register(AdapterComp);
+    if (!getSpawnable('adapty')) registerSpawnable({
+      type: 'adapty',
+      label: 'Adapty',
+      category: 'Test',
+      defaultTags: [],
+      components: [{ typeId: 'adapter', state: { vec: [0, 1, 2] } }],
+    });
+
+    pair = setup();
+    pair.host.spawn('adapty', { id: 'a-1' });
+
+    pair.host.updateComponentProp('a-1', 'adapter', 'x', 7);
+    expect(pair.host.get('a-1')!.get(AdapterComp)!.state.vec).toEqual([7, 1, 2]);
+  });
+
+  test('updateComponentProp drops unknown component / unknown key', () => {
+    pair = setup();
+    pair.host.spawn('card', { id: 'c-4' });
+    expect(() => pair!.host.updateComponentProp('c-4', 'nosuch', 'k', 1)).not.toThrow();
+    expect(() => pair!.host.updateComponentProp('c-4', 'card', 'nosuch', 1)).not.toThrow();
+  });
+
+  test('replication patch shape: component-patches envelope carries the typed key', async () => {
+    const { CardComponent } = await import('../components/CardComponent');
+    void CardComponent;
+    pair = setup();
+    pair.host.spawn('card', { id: 'c-5' });
+    pair.host.tick(0.016);
+
+    let patchSeen: { typeId: string; key: string; value: unknown } | null = null;
+    const orig = pair.guest.get('c-5')!.get(CardComponent)!;
+    const subOrig = orig.applyRemoteState.bind(orig);
+    orig.applyRemoteState = function (patch: Partial<{ face: string; back: string; category: string }>) {
+      if (patch.face !== undefined) {
+        patchSeen = { typeId: 'card', key: 'face', value: patch.face };
+      }
+      subOrig(patch);
+    } as typeof orig.applyRemoteState;
+
+    pair.host.updateComponentProp('c-5', 'card', 'face', 'wire-test.png');
+    pair.host.tick(0.016);
+    expect(patchSeen).toEqual({ typeId: 'card', key: 'face', value: 'wire-test.png' });
+  });
+});

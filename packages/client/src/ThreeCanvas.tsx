@@ -42,6 +42,7 @@ import { CursorOverlay } from './cursor/CursorOverlay';
 import { PingOverlay } from './cursor/PingOverlay';
 import { TABLE_SURFACE_Y } from './scene/Table';
 import { type ObjectSummary } from './components/EditorPanel';
+import { aggregatePropertySchema } from './entity/propertySchema';
 
 export interface ReplicationTarget {
   peerId:   string;
@@ -72,6 +73,8 @@ interface Props {
   shuffleDeckRef:      MutableRefObject<(deckId: string) => void>;
   dealFromDeckRef:     MutableRefObject<(deckId: string, count: number, callerSeat: SeatIndex | null) => void>;
   updatePropRef:       MutableRefObject<(id: string, key: string, value: unknown) => void>;
+  updateEntityFieldRef:   MutableRefObject<(id: string, key: string, value: unknown) => void>;
+  updateComponentPropRef: MutableRefObject<(id: string, typeId: string, key: string, value: unknown) => void>;
   freeCameraRef:       MutableRefObject<(on: boolean) => void>;
   onObjectsChangeRef:  MutableRefObject<(objects: ObjectSummary[]) => void>;
   onSelectRef:         MutableRefObject<(id: string | null) => void>;
@@ -107,7 +110,7 @@ export function ThreeCanvas({
   isHost, sendRef, sendToRef, getTargetsRef, getSelfSeatRef, getSelfPeerIdRef, getPeerSeatRef,
   onMsgRef, onPeerLeftRef, onPeerJoinedRef,
   spawnRef, rollRef, onContextMenuRef, deleteObjectRef, attachSurfaceRef, attachElementRef, mutateSurfaceElementRef, removeSurfaceElementRef, drawFromDeckRef, shuffleDeckRef, dealFromDeckRef,
-  updatePropRef,
+  updatePropRef, updateEntityFieldRef, updateComponentPropRef,
   freeCameraRef, onObjectsChangeRef,
   onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,
   setShowAllZonesRef,
@@ -345,7 +348,7 @@ export function ThreeCanvas({
     };
 
     const pushObjects = () => {
-      onObjectsChangeRef.current(world.all().map(h => entityToObjectSummary(h.entity)));
+      onObjectsChangeRef.current(world.all().map(h => entityToObjectSummary(h.entity, isHost)));
     };
     // Initial push: the Table is spawned in the World constructor before
     // this subscribe runs, so a replay-on-subscribe is needed for React to
@@ -430,6 +433,9 @@ export function ThreeCanvas({
       shuffleDeckRef.current  = (deckId) => world.shuffleDeck(deckId);
       dealFromDeckRef.current = (deckId, count, seat) => world.dealFromDeck(deckId, count, seat);
       updatePropRef.current   = (id, key, value) => world.updateProp(id, key, value);
+      updateEntityFieldRef.current   = (id, key, value) => world.updateEntityField(id, key, value);
+      updateComponentPropRef.current = (id, typeId, key, value) =>
+        world.updateComponentProp(id, typeId, key, value);
 
       rollRef.current = () => {
         world.forEach((h) => h.entity.getComponent(DiceComponent)?.roll());
@@ -576,6 +582,8 @@ export function ThreeCanvas({
       shuffleDeckRef.current  = () => {};
       dealFromDeckRef.current = () => {};
       updatePropRef.current      = () => {};
+      updateEntityFieldRef.current   = () => {};
+      updateComponentPropRef.current = () => {};
       freeCameraRef.current      = () => {};
       setHighlightRef.current    = () => {};
       getEntityRef.current       = () => undefined;
@@ -590,7 +598,7 @@ export function ThreeCanvas({
     isHost, sendRef, sendToRef, getTargetsRef, getSelfSeatRef, getSelfPeerIdRef, getPeerSeatRef,
     onMsgRef, onPeerLeftRef, onPeerJoinedRef,
     spawnRef, rollRef, onContextMenuRef, deleteObjectRef, attachSurfaceRef, attachElementRef, mutateSurfaceElementRef, removeSurfaceElementRef, drawFromDeckRef, shuffleDeckRef, dealFromDeckRef,
-    updatePropRef,
+    updatePropRef, updateEntityFieldRef, updateComponentPropRef,
     freeCameraRef, onObjectsChangeRef,
     onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,
     setShowAllZonesRef, setHandViewRef, requestHandTileMenuRef, playCardToTableRef,
@@ -642,9 +650,11 @@ function handViewKey(view: HandView | null): string {
   return view.handEntityId + '|' + view.cards.map(c => c.id + ':' + c.textureRef).join(',');
 }
 
-// Editor-panel view of an entity. Mirrors SceneSystemV2.derivePropsView until
-// the editor migrates to read components directly.
-function entityToObjectSummary(entity: Entity): ObjectSummary {
+// Editor-panel view of an entity. Carries both the legacy flat `props` bag
+// (for OBJECT_META-driven entities) and a per-component state map keyed by
+// typeId (for components that have declared a `propertySchema`). The panel
+// chooses which path to render based on the aggregator's output.
+function entityToObjectSummary(entity: Entity, isHost: boolean): ObjectSummary {
   const mesh  = entity.getComponent(MeshComponent);
   const value = entity.getComponent(ValueComponent);
   const zone  = entity.getComponent(ZoneComponent);
@@ -698,11 +708,20 @@ function entityToObjectSummary(entity: Entity): ObjectSummary {
     canvasSize: [...surfaceComp.state.canvasSize] as [number, number],
     elements:   surfaceComp.state.elements.map(el => ({ ...el })),
   } : null;
+  const componentStates: Record<string, Record<string, unknown>> = {};
+  for (const [typeId, comp] of entity.components) {
+    componentStates[typeId] = { ...(comp.state as Record<string, unknown>) };
+  }
+  const sections = aggregatePropertySchema(entity, { isHost });
   return {
     id:         entity.id,
     objectType: entity.type as SpawnableType,
+    name:       entity.name,
+    owner:      entity.owner,
     tags:       [...entity.tags],
     props,
+    componentStates,
+    sections,
     parentId:   entity.parentId,
     surface,
   };
