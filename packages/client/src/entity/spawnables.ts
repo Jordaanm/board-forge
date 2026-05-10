@@ -64,7 +64,7 @@ export function registerCorePrimitives(): void {
     components: [
       { typeId: 'transform', state: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } },
       { typeId: 'mesh',      state: { meshRef: 'prim:cube', textureRefs: { default: '' }, color: '#2d5a27', width: 4, height: 0.05, depth: 3 } },
-      { typeId: 'physics',   state: { mass: 0.5, friction: 0.5, restitution: 0.3, isLocked: true } },
+      { typeId: 'physics',   state: { mass: 0.5, friction: 0.5, restitution: 0.3, isLocked: false } },
     ],
   });
 

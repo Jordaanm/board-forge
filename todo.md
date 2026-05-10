@@ -15,7 +15,6 @@
 ### Minor Features
 * Show all components + their editable properties in the scene editor panel.
 * Delete entities from the scene graph panel.
-* Board not locked by default
 * Drag to resize Zone/Hand
 * HiddenInfo Zone
 * Selecting an item in the scene highlights it in the scene graph panel.
