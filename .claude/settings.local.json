@@ -52,7 +52,13 @@
       "Bash(curl -s http://localhost:5174/ -o /dev/null -w \"%{http_code}\\\\n\")",
       "Bash(tail *)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5173/)",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3001/)"
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3001/)",
+      "Bash(bunx tsc *)",
+      "Bash(bunx vitest *)",
+      "Bash(perl -i -pe 's/\\\\bsize:\\\\s*\\\\[\\([^,\\\\]]+\\),\\\\s*\\([^,\\\\]]+\\),\\\\s*\\([^\\\\]]+\\)\\\\]/width: $1, height: $2, depth: $3/g; s/\\\\bsize:\\\\s*\\(\\\\d+\\(?:\\\\.\\\\d+\\)?\\)\\\\b/width: $1, height: $1, depth: $1/g' packages/client/src/entity/components/CardComponent.test.ts packages/client/src/entity/components/MeshComponent.test.ts packages/client/src/entity/components/PlayCardToTable.test.ts packages/client/src/entity/components/SurfaceComponent.test.ts packages/client/src/entity/components/TableComponent.test.ts packages/client/src/seats/PrivacyScrubber.test.ts packages/client/src/entity/components/attachSticker.test.ts)",
+      "Bash(perl -i -pe 's/\\\\bsize:\\\\s*\\\\[\\([^,\\\\]]+\\),\\\\s*\\([^,\\\\]]+\\),\\\\s*\\([^\\\\]]+\\)\\\\]/width: $1, height: $2, depth: $3/g' packages/client/src/entity/spawnables.test.ts packages/client/src/entity/components/TableComponent.test.ts)",
+      "Bash(perl -i -pe 's/\\\\bkeyColor\\\\b/color/g; s/\\\\bkeyIntensity\\\\b/intensity/g' packages/client/src/ThreeCanvas.tsx packages/client/src/entity/components/LightingComponent.test.ts packages/client/src/entity/spawnables.ts packages/client/src/entity/world/World.ts packages/client/src/entity/world/World.test.ts)",
+      "Bash(cmd *)"
     ]
   }
 }
