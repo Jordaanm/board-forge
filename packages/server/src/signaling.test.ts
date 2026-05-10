@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
+import { describe, test, expect, beforeAll, afterAll } from 'vitest';
 import { WebSocket } from 'ws';
 import { server } from './app';
 import { maxRoomPeers } from './config';
