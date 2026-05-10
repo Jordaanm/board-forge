@@ -14,6 +14,7 @@ import {
   type MenuItem,
   type ActionContext,
 } from '../EntityComponent';
+import { type PropertyDef } from '../propertySchema';
 import { type Entity } from '../Entity';
 import { type SeatIndex } from '../../seats/SeatLayout';
 import { TransformComponent } from './TransformComponent';
@@ -44,7 +45,22 @@ const _v = new THREE.Vector3();
 
 export class HandComponent extends EntityComponent<HandState> {
   static typeId   = 'hand';
+  static label    = 'Hand';
   static requires = ['zone'] as const;
+  // Hand state covers the seat-tagging and privacy flags. The half-extents
+  // and debug-box visibility live on the sibling ZoneComponent and surface
+  // automatically through Zone's own propertySchema section. The isMainHand
+  // toggle only makes sense once an owner is assigned, so it's gated by a
+  // condition predicate over the entity's owner.
+  static propertySchema: readonly PropertyDef<HandState>[] = [
+    {
+      key:       'isMainHand',
+      label:     'Main hand',
+      type:      'boolean',
+      condition: (_state, entity) => entity.owner !== null,
+    },
+    { key: 'isPrivate', label: 'Private', type: 'boolean' },
+  ];
 
   private unsubscribeEnter: (() => void) | null = null;
   private unsubscribeExit:  (() => void) | null = null;

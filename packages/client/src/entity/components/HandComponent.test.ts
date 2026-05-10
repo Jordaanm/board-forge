@@ -617,3 +617,27 @@ describe('HandComponent — guest gating', () => {
     expect(card.privateToSeat).toBeNull();
   });
 });
+
+describe('HandComponent — propertySchema (issue #6 of property-schema-refactor)', () => {
+  test('declares static label and isMainHand/isPrivate entries', () => {
+    expect(HandComponent.label).toBe('Hand');
+    const keys = HandComponent.propertySchema.map(d => d.key);
+    expect(keys).toEqual(['isMainHand', 'isPrivate']);
+  });
+
+  test('isMainHand condition hides the row when entity has no owner', () => {
+    const hand = scene.spawn('hand', ctx, { id: 'h-1' });
+    hand.owner = null;
+    const def = HandComponent.propertySchema.find(d => d.key === 'isMainHand')!;
+    const handComp = hand.getComponent(HandComponent)!;
+    expect(def.condition!(handComp.state, hand)).toBe(false);
+  });
+
+  test('isMainHand condition shows the row once an owner is assigned', () => {
+    const hand = scene.spawn('hand', ctx, { id: 'h-2' });
+    hand.owner = 0 as SeatIndex;
+    const def = HandComponent.propertySchema.find(d => d.key === 'isMainHand')!;
+    const handComp = hand.getComponent(HandComponent)!;
+    expect(def.condition!(handComp.state, hand)).toBe(true);
+  });
+});

@@ -424,12 +424,6 @@ class WorldImpl implements World, HandleRouter {
       return;
     }
 
-    const hand = entity.getComponent(HandComponent);
-    if (hand) {
-      if      (key === 'isMainHand') hand.setState({ isMainHand: Boolean(value) });
-      else if (key === 'isPrivate')  hand.setState({ isPrivate:  Boolean(value) });
-    }
-
     const mesh = entity.getComponent(MeshComponent);
     if (!mesh) {
       this.notify();
