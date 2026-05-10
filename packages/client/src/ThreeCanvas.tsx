@@ -2,24 +2,17 @@ import { useEffect, useRef, type MutableRefObject } from 'react';
 import * as THREE from 'three';
 import { PhysicsWorld } from './physics/PhysicsWorld';
 import { createWorld } from './entity/world';
-import { type World, type WorldInboundMessage } from './entity/world';
+import { type World, type WorldInboundMessage, type SceneHandle } from './entity/world';
 import { RtcTransport } from './entity/world';
 import { type Entity } from './entity/Entity';
 import { TransformComponent } from './entity/components/TransformComponent';
-import { DiceComponent } from './entity/components/DiceComponent';
 import { ZoneComponent } from './entity/components/ZoneComponent';
 import { HandComponent } from './entity/components/HandComponent';
-import { SurfaceComponent } from './entity/components/SurfaceComponent';
 import { FlatViewComponent } from './entity/components/FlatViewComponent';
 import { surfaceRenderQueue } from './entity/components/SurfaceRenderQueue';
-import { aggregateContextMenu } from './entity/contextMenu';
-import { downloadSceneFile } from './entity/downloadSceneFile';
 import { captureCanvasThumbnail } from './entity/thumbnail';
-import { type SceneHistoryService, type LastLoaded } from './entity/SceneHistoryService';
-import { type RunResult, type ScriptState } from './scripting/ScriptHost';
-import { type ScriptErrorLog } from './scripting/ScriptErrorLog';
+import { type ContextMenuRequest } from './input/ContextMenuController';
 import { type CardTile } from './components/HandPanel';
-import { type AssetEntry } from './assets/Manifest';
 import { assetService } from './assets/AssetService';
 import { SoundPlayer } from './assets/SoundPlayer';
 import { DEFAULT_PRIVATE_FIELDS } from './seats/PrivacyScrubber';
@@ -27,17 +20,14 @@ import { MoveGizmo } from './scene/MoveGizmo';
 import { CameraController } from './camera/CameraController';
 import { ToolDispatcher, TOOL_CATALOGUE, type Tool } from './input/tools';
 import { GrabTool } from './input/tools/GrabTool';
-import { ContextMenuController, type ContextMenuRequest } from './input/ContextMenuController';
+import { ContextMenuController } from './input/ContextMenuController';
 import { InputDispatcher } from './input/InputDispatcher';
-import { type InputEventName, type InputEventPayload } from './input/inputEvents';
-import { type ChannelMessage, type SpawnableType } from './net/SceneState';
-import { type SeatIndex } from './seats/SeatLayout';
 import { CursorTracker } from './cursor/CursorTracker';
 import { CursorOverlay } from './cursor/CursorOverlay';
 import { PingOverlay } from './cursor/PingOverlay';
 import { TABLE_SURFACE_Y } from './scene/Table';
-import { type ObjectSummary } from './components/EditorPanel';
-import { aggregatePropertySchema } from './entity/propertySchema';
+import { type ChannelMessage } from './net/SceneState';
+import { type SeatIndex } from './seats/SeatLayout';
 
 export interface ReplicationTarget {
   peerId:   string;
@@ -56,43 +46,18 @@ interface Props {
   onMsgRef:            MutableRefObject<(peerId: string, msg: ChannelMessage) => void>;
   onPeerLeftRef:       MutableRefObject<(peerId: string) => void>;
   onPeerJoinedRef:     MutableRefObject<(peerId: string) => void>;
-  spawnRef:            MutableRefObject<(type: SpawnableType) => void>;
-  rollRef:             MutableRefObject<() => void>;
   onContextMenuRef:    MutableRefObject<(req: ContextMenuRequest) => void>;
-  deleteObjectRef:     MutableRefObject<(id: string) => void>;
-  attachSurfaceRef:    MutableRefObject<(parentId: string) => void>;
-  attachElementRef:    MutableRefObject<(surfaceId: string, kind: 'rich' | 'image' | 'shape-rect' | 'shape-circle') => void>;
-  mutateSurfaceElementRef: MutableRefObject<(surfaceId: string, elementId: string, patch: Record<string, unknown>) => void>;
-  removeSurfaceElementRef: MutableRefObject<(surfaceId: string, elementId: string) => void>;
-  drawFromDeckRef:     MutableRefObject<(deckId: string, count: number, callerSeat: SeatIndex | null) => void>;
-  shuffleDeckRef:      MutableRefObject<(deckId: string) => void>;
-  dealFromDeckRef:     MutableRefObject<(deckId: string, count: number, callerSeat: SeatIndex | null) => void>;
-  updateEntityFieldRef:   MutableRefObject<(id: string, key: string, value: unknown) => void>;
-  updateComponentPropRef: MutableRefObject<(id: string, typeId: string, key: string, value: unknown) => void>;
   freeCameraRef:       MutableRefObject<(on: boolean) => void>;
-  onObjectsChangeRef:  MutableRefObject<(objects: ObjectSummary[]) => void>;
   onSelectRef:         MutableRefObject<(id: string | null) => void>;
   setHighlightRef:     MutableRefObject<(id: string | null) => void>;
-  getEntityRef:        MutableRefObject<(id: string) => Entity | undefined>;
   setActiveToolRef:    MutableRefObject<(toolId: string) => boolean>;
   getActiveToolRef:    MutableRefObject<() => string>;
   setShowAllZonesRef:  MutableRefObject<(on: boolean) => void>;
   setHandViewRef:      MutableRefObject<(view: HandView | null) => void>;
-  requestHandTileMenuRef: MutableRefObject<(entityId: string, x: number, y: number) => void>;
-  playCardToTableRef:  MutableRefObject<(entityId: string, clientX: number, clientY: number) => void>;
-  reorderHandRef:      MutableRefObject<(handEntityId: string, newOrder: string[]) => void>;
-  fireTileInputEventRef: MutableRefObject<(tileId: string, eventName: InputEventName, payload: InputEventPayload) => void>;
-  saveSceneRef:        MutableRefObject<() => void>;
-  replaceSceneRef:     MutableRefObject<(snaps: unknown[]) => void>;
-  sceneHistoryRef:     MutableRefObject<SceneHistoryService | null>;
-  onLastLoadedChangeRef: MutableRefObject<(loaded: LastLoaded | null) => void>;
-  onHistoryServiceChangeRef: MutableRefObject<(svc: SceneHistoryService | null) => void>;
-  runScriptRef:        MutableRefObject<(source: string) => Promise<RunResult>>;
-  saveScriptSourceRef: MutableRefObject<(source: string) => void>;
-  getSavedScriptSourceRef: MutableRefObject<() => string>;
-  loadScriptStateRef:  MutableRefObject<(state: ScriptState) => void>;
-  onErrorLogChangeRef: MutableRefObject<(log: ScriptErrorLog | null) => void>;
-  getManifestRef:      MutableRefObject<() => AssetEntry[]>;
+  // Fires after the World is constructed inside the canvas effect; null on
+  // cleanup. Replaces the ~30 scene-mutate refs that used to thread through
+  // ThreeCanvas. Issue #2 of issues--refactor-world-ref.md.
+  onSceneReady?:       (handle: SceneHandle | null) => void;
 }
 
 export interface HandView {
@@ -103,16 +68,12 @@ export interface HandView {
 export function ThreeCanvas({
   isHost, sendRef, sendToRef, getTargetsRef, getSelfSeatRef, getSelfPeerIdRef, getPeerSeatRef,
   onMsgRef, onPeerLeftRef, onPeerJoinedRef,
-  spawnRef, rollRef, onContextMenuRef, deleteObjectRef, attachSurfaceRef, attachElementRef, mutateSurfaceElementRef, removeSurfaceElementRef, drawFromDeckRef, shuffleDeckRef, dealFromDeckRef,
-  updateEntityFieldRef, updateComponentPropRef,
-  freeCameraRef, onObjectsChangeRef,
-  onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,
+  onContextMenuRef,
+  freeCameraRef,
+  onSelectRef, setHighlightRef, setActiveToolRef, getActiveToolRef,
   setShowAllZonesRef,
-  setHandViewRef, requestHandTileMenuRef, playCardToTableRef, reorderHandRef,
-  fireTileInputEventRef,
-  saveSceneRef, replaceSceneRef, sceneHistoryRef, onLastLoadedChangeRef,
-  onHistoryServiceChangeRef, runScriptRef, saveScriptSourceRef, getSavedScriptSourceRef, loadScriptStateRef,
-  onErrorLogChangeRef, getManifestRef,
+  setHandViewRef,
+  onSceneReady,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -286,75 +247,44 @@ export function ThreeCanvas({
 
     setShowAllZonesRef.current = (on) => { ZoneComponent.showAllZones = on; };
 
-    // Hand panel "play to table". Raycasts the screen pointer to the table
-    // surface and dispatches via the World facade — host runs the tween,
-    // guest fires the play-card-to-table RPC. Y is lifted just above the
-    // table so the card doesn't z-fight on landing; gravity settles it.
+    // ── SceneHandle for React ──────────────────────────────────────────
+    // Bundles the live World controller with renderer-bound helpers
+    // (thumbnail capture, screen-coord card drop). Panels receive this via
+    // Room's `onSceneReady` callback instead of threading 30+ refs.
     const playRay   = new THREE.Raycaster();
     const playNDC   = new THREE.Vector2();
     const playHit   = new THREE.Vector3();
     const tablePlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -TABLE_SURFACE_Y);
-    playCardToTableRef.current = (entityId, clientX, clientY) => {
-      const handle = world.get(entityId);
-      if (!handle) return;
-      const rect = renderer.domElement.getBoundingClientRect();
-      playNDC.set(
-         ((clientX - rect.left) / rect.width)  * 2 - 1,
-        -((clientY - rect.top)  / rect.height) * 2 + 1,
-      );
-      playRay.setFromCamera(playNDC, camera);
-      if (!playRay.ray.intersectPlane(tablePlane, playHit)) return;
-      world.playCardToTable(handle.entity, [playHit.x, playHit.y + 0.05, playHit.z]);
+    const handle: SceneHandle = {
+      controller: world,
+      captureThumbnail: () => {
+        // Same render-then-capture pattern as the host save path used to
+        // run inline. Returns null on guest (no captureThumb is wired and
+        // host-side panels gate on isHost before invoking).
+        renderer.render(scene, camera);
+        return captureCanvasThumbnail(renderer.domElement, { width: 480, height: 270 });
+      },
+      playCardToTableAtScreen: (entityId, clientX, clientY) => {
+        const target = world.get(entityId);
+        if (!target) return;
+        const rect = renderer.domElement.getBoundingClientRect();
+        playNDC.set(
+           ((clientX - rect.left) / rect.width)  * 2 - 1,
+          -((clientY - rect.top)  / rect.height) * 2 + 1,
+        );
+        playRay.setFromCamera(playNDC, camera);
+        if (!playRay.ray.intersectPlane(tablePlane, playHit)) return;
+        world.playCardToTable(target.entity, [playHit.x, playHit.y + 0.05, playHit.z]);
+      },
     };
+    onSceneReady?.(handle);
 
-    reorderHandRef.current = (handEntityId, newOrder) => {
-      world.reorderHand(handEntityId, newOrder);
-    };
-
-    // FlatView (HandPanel) input dispatch — issue #5 of issues--interaction.md.
-    // Resolves the tile id to its entity and fires through the same dual-fire
-    // entry point as 3D events. Drops silently when the entity is missing.
-    fireTileInputEventRef.current = (tileId, eventName, payload) => {
-      const handle = world.get(tileId);
-      if (!handle) return;
-      world.fireInputEvent(handle.entity, eventName, payload);
-    };
-
-    // Compose a ContextMenuRequest for a hand-panel tile right-click. Reuses
-    // the same aggregation pipeline as 3D right-clicks so component-contributed
-    // items (e.g. CardComponent flip) appear identically.
-    requestHandTileMenuRef.current = (entityId, x, y) => {
-      const handle = world.get(entityId);
-      if (!handle) return;
-      const entity = handle.entity;
-      const seat = getSelfSeatRef.current();
-      const items = aggregateContextMenu(entity, {
-        recipientSeat: seat, isHost, entity,
-      });
-      if (items.length === 0) return;
-      onContextMenuRef.current({
-        x, y,
-        entityId:   entity.id,
-        entityName: entity.name,
-        entityTags: [...entity.tags],
-        items,
-      });
-    };
-
-    const pushObjects = () => {
-      onObjectsChangeRef.current(world.all().map(h => entityToObjectSummary(h.entity, isHost)));
-    };
-    // Initial push: the Table is spawned in the World constructor before
-    // this subscribe runs, so a replay-on-subscribe is needed for React to
-    // see boot-time entities.
-    pushObjects();
     const unsubscribe = world.subscribe(() => {
       if (highlightId && !world.get(highlightId)) {
         highlightId = null;
         clearHighlightBox();
         grabTool.setSelection(null, dispatcher.getContext());
       }
-      pushObjects();
     });
 
     const contextCtrl = new ContextMenuController(
@@ -362,77 +292,6 @@ export function ThreeCanvas({
       () => getSelfSeatRef.current(),
       (req) => onContextMenuRef.current(req),
     );
-
-    getEntityRef.current = (id) => world.get(id)?.entity;
-
-    let unsubscribeHistory: () => void = () => {};
-    if (isHost) {
-      sceneHistoryRef.current = world.history;
-      onHistoryServiceChangeRef.current(world.history);
-      unsubscribeHistory = world.history?.subscribe(() => {
-        onLastLoadedChangeRef.current(world.history?.lastLoaded ?? null);
-      }) ?? (() => {});
-
-      saveSceneRef.current = () => {
-        // Render once before capture so the texture reflects the current
-        // animation-loop frame even if Save is clicked between frames.
-        renderer.render(scene, camera);
-        const thumbnail = captureCanvasThumbnail(renderer.domElement, { width: 480, height: 270 });
-        downloadSceneFile(
-          world.snapshot(),
-          thumbnail,
-          getManifestRef.current(),
-          world.scripting?.getScriptState(),
-        );
-      };
-
-      replaceSceneRef.current = (snaps) => {
-        world.replaceScene(snaps as Parameters<typeof world.replaceScene>[0]);
-      };
-
-      runScriptRef.current = (source) => {
-        const sh = world.scripting;
-        if (!sh) return Promise.resolve({ ok: false, error: 'Scripting unavailable.' });
-        return sh.runScript(source);
-      };
-
-      onErrorLogChangeRef.current(world.scripting?.errorLog ?? null);
-
-      saveScriptSourceRef.current = (source) => {
-        world.scripting?.setSource(source);
-      };
-
-      getSavedScriptSourceRef.current = () => {
-        return world.scripting?.getScriptState().source ?? '';
-      };
-
-      loadScriptStateRef.current = (state) => {
-        // `loadScript` overwrites the state slot then runs the script if a
-        // source is present, so the auto-Run on save-file load follows the
-        // same Run flow as a manual click. Returns a Promise we don't
-        // await — the panel doesn't need to block on hook execution.
-        const sh = world.scripting;
-        if (!sh) return;
-        void sh.loadScript(state);
-      };
-
-      spawnRef.current        = (type) => { world.spawn(type); };
-      deleteObjectRef.current = (id)   => world.despawn(id);
-      attachSurfaceRef.current = (parentId) => { world.attachSurface(parentId); };
-      attachElementRef.current = (surfaceId, kind) => { world.attachElement(surfaceId, kind); };
-      mutateSurfaceElementRef.current = (surfaceId, elementId, patch) => world.mutateSurfaceElement(surfaceId, elementId, patch);
-      removeSurfaceElementRef.current = (surfaceId, elementId) => world.removeSurfaceElement(surfaceId, elementId);
-      drawFromDeckRef.current = (deckId, count, seat) => world.drawFromDeck(deckId, count, seat);
-      shuffleDeckRef.current  = (deckId) => world.shuffleDeck(deckId);
-      dealFromDeckRef.current = (deckId, count, seat) => world.dealFromDeck(deckId, count, seat);
-      updateEntityFieldRef.current   = (id, key, value) => world.updateEntityField(id, key, value);
-      updateComponentPropRef.current = (id, typeId, key, value) =>
-        world.updateComponentProp(id, typeId, key, value);
-
-      rollRef.current = () => {
-        world.forEach((h) => h.entity.getComponent(DiceComponent)?.roll());
-      };
-    }
 
     // ── Inbound message router ──────────────────────────────────────────
     // Cursor traffic stays here (not a SceneMessage). Everything else is
@@ -455,8 +314,10 @@ export function ThreeCanvas({
       transport.deliver(peerId, msg as WorldInboundMessage);
     };
 
+    // World peer cleanup is now driven directly by Room via
+    // `handle.controller.releasePeer(peerId)`. This slot only handles the
+    // renderer-side cursor cleanup that has no controller equivalent.
     onPeerLeftRef.current = (peerId) => {
-      world.releasePeer(peerId);
       cursorTracker.remove(peerId);
     };
 
@@ -535,9 +396,9 @@ export function ThreeCanvas({
       cancelAnimationFrame(animId);
       window.removeEventListener('resize', onResize);
       renderer.domElement.removeEventListener('pointermove', onCursorMove);
+      onSceneReady?.(null);
       unsubscribePing();
       unsubscribeSnd();
-      unsubscribeHistory();
       pingOverlay?.dispose();
       pingOverlay = null;
       cursorOverlay.dispose();
@@ -553,31 +414,8 @@ export function ThreeCanvas({
       onMsgRef.current        = () => {};
       onPeerLeftRef.current   = () => {};
       onPeerJoinedRef.current = () => {};
-      spawnRef.current        = () => {};
-      rollRef.current         = () => {};
-      deleteObjectRef.current = () => {};
-      attachSurfaceRef.current = () => {};
-      attachElementRef.current = () => {};
-      mutateSurfaceElementRef.current = () => {};
-      removeSurfaceElementRef.current = () => {};
-      saveSceneRef.current    = () => {};
-      replaceSceneRef.current = () => {};
-      runScriptRef.current    = () => Promise.resolve({ ok: false, error: 'Canvas torn down.' });
-      saveScriptSourceRef.current = () => {};
-      getSavedScriptSourceRef.current = () => '';
-      loadScriptStateRef.current  = () => {};
-      onErrorLogChangeRef.current(null);
-      sceneHistoryRef.current = null;
-      onHistoryServiceChangeRef.current(null);
-      drawFromDeckRef.current = () => {};
-      fireTileInputEventRef.current = () => {};
-      shuffleDeckRef.current  = () => {};
-      dealFromDeckRef.current = () => {};
-      updateEntityFieldRef.current   = () => {};
-      updateComponentPropRef.current = () => {};
       freeCameraRef.current      = () => {};
       setHighlightRef.current    = () => {};
-      getEntityRef.current       = () => undefined;
       setActiveToolRef.current   = () => false;
       getActiveToolRef.current   = () => 'grab';
       renderer.dispose();
@@ -588,14 +426,11 @@ export function ThreeCanvas({
   }, [
     isHost, sendRef, sendToRef, getTargetsRef, getSelfSeatRef, getSelfPeerIdRef, getPeerSeatRef,
     onMsgRef, onPeerLeftRef, onPeerJoinedRef,
-    spawnRef, rollRef, onContextMenuRef, deleteObjectRef, attachSurfaceRef, attachElementRef, mutateSurfaceElementRef, removeSurfaceElementRef, drawFromDeckRef, shuffleDeckRef, dealFromDeckRef,
-    updateEntityFieldRef, updateComponentPropRef,
-    freeCameraRef, onObjectsChangeRef,
-    onSelectRef, setHighlightRef, getEntityRef, setActiveToolRef, getActiveToolRef,
-    setShowAllZonesRef, setHandViewRef, requestHandTileMenuRef, playCardToTableRef,
-    reorderHandRef, fireTileInputEventRef, saveSceneRef, replaceSceneRef, sceneHistoryRef, onLastLoadedChangeRef,
-    onHistoryServiceChangeRef, runScriptRef, saveScriptSourceRef, getSavedScriptSourceRef, loadScriptStateRef,
-    onErrorLogChangeRef,
+    onContextMenuRef,
+    freeCameraRef,
+    onSelectRef, setHighlightRef, setActiveToolRef, getActiveToolRef,
+    setShowAllZonesRef, setHandViewRef,
+    onSceneReady,
   ]);
 
   return (
@@ -639,26 +474,4 @@ function deriveHandView(world: World, selfSeat: SeatIndex | null): HandView | nu
 function handViewKey(view: HandView | null): string {
   if (!view) return '';
   return view.handEntityId + '|' + view.cards.map(c => c.id + ':' + c.textureRef).join(',');
-}
-
-// Editor-panel view of an entity. Aggregates per-component schema sections
-// for the panel's Entity + per-component layout, plus the SurfaceSummary used
-// by the Surface elements list.
-function entityToObjectSummary(entity: Entity, isHost: boolean): ObjectSummary {
-  const surfaceComp = entity.getComponent(SurfaceComponent);
-  const surface = surfaceComp ? {
-    canvasSize: [...surfaceComp.state.canvasSize] as [number, number],
-    elements:   surfaceComp.state.elements.map(el => ({ ...el })),
-  } : null;
-  const sections = aggregatePropertySchema(entity, { isHost });
-  return {
-    id:         entity.id,
-    objectType: entity.type as SpawnableType,
-    name:       entity.name,
-    owner:      entity.owner,
-    tags:       [...entity.tags],
-    sections,
-    parentId:   entity.parentId,
-    surface,
-  };
 }

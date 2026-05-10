@@ -15,4 +15,6 @@ export type {
   ReplicationTarget,
   EntityHandle,
   SpawnOptions,
+  SceneController,
+  SceneHandle,
 } from './types';

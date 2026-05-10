@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { ThreeCanvas, type ReplicationTarget, type HandView } from '../ThreeCanvas';
 import { ConnectionManager } from '../net/ConnectionManager';
-import { EditorPanel, type ObjectSummary } from '../components/EditorPanel';
+import { EditorPanel } from '../components/EditorPanel';
+import { useSceneObjects } from '../components/useSceneObjects';
 import { ContextMenu } from '../components/ContextMenu';
 import { PlayersPanel } from '../components/PlayersPanel';
 import { Toolbar } from '../components/Toolbar';
@@ -11,18 +12,18 @@ import { UIPanel } from '../components/UIPanel';
 import { HandPanel } from '../components/HandPanel';
 import { TOOL_CATALOGUE } from '../input/tools';
 import { type ContextMenuRequest, dispatchMenuAction } from '../input/ContextMenuController';
-import { type Entity } from '../entity/Entity';
 import { type MenuItem } from '../entity/EntityComponent';
+import { aggregateContextMenu } from '../entity/contextMenu';
 import { aggregateEditorTools, dispatchEditorTool, type EditorToolItem } from '../entity/editorTools';
-import { type ChannelMessage, type SpawnableType } from '../net/SceneState';
+import { type ChannelMessage } from '../net/SceneState';
 import { type SeatIndex } from '../seats/SeatLayout';
-import { type InputEventName, type InputEventPayload } from '../input/inputEvents';
+import { DiceComponent } from '../entity/components/DiceComponent';
 import { RoomStateManager } from '../seats/RoomStateManager';
 import { RoomStateClient } from '../seats/RoomStateClient';
 import type { RoomStateMessage, RoomStateSnapshot } from '../seats/RoomState';
 import { type SceneHistoryService, type LastLoaded } from '../entity/SceneHistoryService';
-import { type RunResult, type ScriptState } from '../scripting/ScriptHost';
 import { type ScriptErrorLog } from '../scripting/ScriptErrorLog';
+import { type SceneHandle } from '../entity/world';
 import { ManifestStore } from '../assets/ManifestStore';
 import { assetService } from '../assets/AssetService';
 import { BASE_MANIFEST, PRIMITIVE_MANIFEST } from '../assets/baseManifest';
@@ -50,7 +51,6 @@ const noop = () => {};
 export function Room({ roomId, isHost }: Props) {
   const [status,       setStatus]       = useState<Status>('connecting');
   const [contextMenu,  setContextMenu]  = useState<ContextMenuRequest | null>(null);
-  const [objects,      setObjects]      = useState<ObjectSummary[]>([]);
   const [selectedId,   setSelectedId]   = useState<string | null>(null);
   const [isFreeCamera, setIsFreeCamera] = useState(false);
   const [roomSnapshot, setRoomSnapshot] = useState<RoomStateSnapshot | null>(null);
@@ -63,6 +63,7 @@ export function Room({ roomId, isHost }: Props) {
   const [scriptSource, setScriptSource]     = useState<string>('');
   const [scriptErrorLog, setScriptErrorLog] = useState<ScriptErrorLog | null>(null);
   const [manifestStore, setManifestStore]   = useState<ManifestStore | null>(null);
+  const [handle, setHandle]                 = useState<SceneHandle | null>(null);
 
   const sendRef            = useRef<(msg: ChannelMessage, opts?: { reliable?: boolean }) => void>(noop);
   const sendToRef          = useRef<(peerId: string, msg: ChannelMessage, opts?: { reliable?: boolean }) => void>(noop);
@@ -73,58 +74,55 @@ export function Room({ roomId, isHost }: Props) {
   const onMsgRef           = useRef<(peerId: string, msg: ChannelMessage) => void>(noop);
   const onPeerLeftRef      = useRef<(peerId: string) => void>(noop);
   const onPeerJoinedRef    = useRef<(peerId: string) => void>(noop);
-  const spawnRef           = useRef<(type: SpawnableType) => void>(noop);
-  const rollRef            = useRef<() => void>(noop);
   const onContextMenuRef   = useRef<(req: ContextMenuRequest) => void>(noop);
-  const deleteObjectRef    = useRef<(id: string) => void>(noop);
-  const attachSurfaceRef   = useRef<(parentId: string) => void>(noop);
-  const attachElementRef   = useRef<(surfaceId: string, kind: 'rich' | 'image' | 'shape-rect' | 'shape-circle') => void>(noop);
-  const mutateSurfaceElementRef = useRef<(surfaceId: string, elementId: string, patch: Record<string, unknown>) => void>(noop);
-  const removeSurfaceElementRef = useRef<(surfaceId: string, elementId: string) => void>(noop);
-  const drawFromDeckRef    = useRef<(deckId: string, count: number, callerSeat: SeatIndex | null) => void>(noop);
-  const shuffleDeckRef     = useRef<(deckId: string) => void>(noop);
-  const dealFromDeckRef    = useRef<(deckId: string, count: number, callerSeat: SeatIndex | null) => void>(noop);
-  const updateEntityFieldRef   = useRef<(id: string, key: string, value: unknown) => void>(noop);
-  const updateComponentPropRef = useRef<(id: string, typeId: string, key: string, value: unknown) => void>(noop);
   const freeCameraRef      = useRef<(on: boolean) => void>(noop);
-  const onObjectsChangeRef = useRef<(objs: ObjectSummary[]) => void>(noop);
   const onSelectRef        = useRef<(id: string | null) => void>(noop);
   const setHighlightRef    = useRef<(id: string | null) => void>(noop);
-  const getEntityRef       = useRef<(id: string) => Entity | undefined>(() => undefined);
   const setActiveToolRef   = useRef<(toolId: string) => boolean>(() => false);
   const getActiveToolRef   = useRef<() => string>(() => activeToolId);
   const setShowAllZonesRef = useRef<(on: boolean) => void>(noop);
   const setHandViewRef     = useRef<(view: HandView | null) => void>(noop);
-  const requestHandTileMenuRef = useRef<(entityId: string, x: number, y: number) => void>(noop);
-  const playCardToTableRef = useRef<(entityId: string, x: number, y: number) => void>(noop);
-  const reorderHandRef     = useRef<(handEntityId: string, newOrder: string[]) => void>(noop);
-  const fireTileInputEventRef = useRef<(tileId: string, eventName: InputEventName, payload: InputEventPayload) => void>(noop);
   const claimSeatRef       = useRef<(seatIndex: SeatIndex) => void>(noop);
   const kickPeerRef        = useRef<(peerId: string) => void>(noop);
   const banPeerRef         = useRef<(peerId: string) => void>(noop);
-  const saveSceneRef       = useRef<() => void>(noop);
-  const replaceSceneRef    = useRef<(snaps: unknown[]) => void>(noop);
-  const sceneHistoryRef    = useRef<SceneHistoryService | null>(null);
-  const onLastLoadedChangeRef = useRef<(loaded: LastLoaded | null) => void>(noop);
-  const onHistoryServiceChangeRef = useRef<(svc: SceneHistoryService | null) => void>(noop);
-  const runScriptRef       = useRef<(source: string) => Promise<RunResult>>(() => Promise.resolve({ ok: false, error: 'Canvas not ready.' }));
-  const saveScriptSourceRef    = useRef<(source: string) => void>(noop);
-  const getSavedScriptSourceRef = useRef<() => string>(() => '');
-  const loadScriptStateRef     = useRef<(state: ScriptState) => void>(noop);
-  const onErrorLogChangeRef = useRef<(log: ScriptErrorLog | null) => void>(noop);
-  const manifestStoreRef    = useRef<ManifestStore | null>(null);
-  const getManifestRef      = useRef<() => import('../assets/Manifest').AssetEntry[]>(() => []);
-  onErrorLogChangeRef.current = (log) => setScriptErrorLog(log);
-  getManifestRef.current      = () => manifestStoreRef.current?.getDraft().toArray() ?? [];
-  onLastLoadedChangeRef.current     = (loaded) => setLastLoaded(loaded);
-  onHistoryServiceChangeRef.current = (svc)    => setHistoryService(svc);
+  const manifestStoreRef   = useRef<ManifestStore | null>(null);
 
   // Set every render — fine, it's just a ref assignment.
   onContextMenuRef.current   = (req) => setContextMenu(req);
-  onObjectsChangeRef.current = (objs) => setObjects(objs);
   onSelectRef.current        = (id) => setSelectedId(id);
   getActiveToolRef.current   = () => activeToolId;
   setHandViewRef.current     = (view) => setHandView(view);
+
+  const objects = useSceneObjects(handle?.controller ?? null, isHost);
+
+  // Mirror the host's history service into React state. The service instance
+  // itself doesn't change while a handle is mounted, so a single subscribe
+  // suffices; gated on host because guests have no history surface.
+  useEffect(() => {
+    if (!handle || !isHost) {
+      setHistoryService(null);
+      setLastLoaded(null);
+      return;
+    }
+    const history = handle.controller.history;
+    setHistoryService(history);
+    if (!history) return;
+    setLastLoaded(history.lastLoaded);
+    return history.subscribe(() => {
+      setLastLoaded(history.lastLoaded);
+    });
+  }, [handle, isHost]);
+
+  // Mirror the host script error log into React state. Like history, the log
+  // instance is stable across the handle's lifetime; resubscribe only when
+  // handle swaps (e.g. StrictMode double-mount).
+  useEffect(() => {
+    if (!handle || !isHost) {
+      setScriptErrorLog(null);
+      return;
+    }
+    setScriptErrorLog(handle.controller.scripting?.errorLog ?? null);
+  }, [handle, isHost]);
 
   useEffect(() => {
     let manager: RoomStateManager | null = null;
@@ -165,6 +163,9 @@ export function Room({ roomId, isHost }: Props) {
       (s) => setStatus(s as Status),
       (peerId) => {
         manager?.removePeer(peerId);
+        // World peer-cleanup goes through the controller; the renderer ref
+        // covers cursor cleanup that lives outside the World.
+        handleRef.current?.controller.releasePeer(peerId);
         onPeerLeftRef.current(peerId);
       },
       (peerId) => {
@@ -259,6 +260,12 @@ export function Room({ roomId, isHost }: Props) {
     };
   }, [roomId, isHost]);
 
+  // Mirror the live handle into a ref for non-React consumers (the
+  // ConnectionManager onLeft callback closes over the effect's scope but
+  // needs to read the latest handle each call).
+  const handleRef = useRef<SceneHandle | null>(null);
+  useEffect(() => { handleRef.current = handle; }, [handle]);
+
   // Clear selection if the selected object is removed
   useEffect(() => {
     if (selectedId && !objects.some(o => o.id === selectedId)) setSelectedId(null);
@@ -297,8 +304,8 @@ export function Room({ roomId, isHost }: Props) {
   }, []);
 
   const selectedTools: EditorToolItem[] = (() => {
-    if (!isHost || !selectedId) return [];
-    const entity = getEntityRef.current(selectedId);
+    if (!isHost || !selectedId || !handle) return [];
+    const entity = handle.controller.get(selectedId)?.entity;
     if (!entity) return [];
     return aggregateEditorTools(entity, {
       recipientSeat: getSelfSeatRef.current(),
@@ -308,12 +315,12 @@ export function Room({ roomId, isHost }: Props) {
   })();
 
   const handleToolAction = (item: EditorToolItem & { kind: 'button' }) => {
-    if (!selectedId) return;
+    if (!selectedId || !handle) return;
     dispatchEditorTool(item, undefined, selectedId, {
-      entity:    getEntityRef.current(selectedId),
+      entity:    handle.controller.get(selectedId)?.entity,
       hostLocal: {
-        attachSurface: (id) => attachSurfaceRef.current(id),
-        attachElement: (id, kind) => attachElementRef.current(id, kind),
+        attachSurface: (id) => { handle.controller.attachSurface(id); },
+        attachElement: (id, kind) => { handle.controller.attachElement(id, kind); },
       },
     });
   };
@@ -325,13 +332,13 @@ export function Room({ roomId, isHost }: Props) {
     if (!contextMenu) return;
     dispatchMenuAction(item, args, contextMenu.entityId, {
       isHost,
-      entity:   getEntityRef.current(contextMenu.entityId),
+      entity:   handle?.controller.get(contextMenu.entityId)?.entity,
       send:     (msg) => sendRef.current(msg),
       hostLocal: {
-        delete:        (id) => deleteObjectRef.current(id),
-        drawFromDeck:  (deckId, count, seat) => drawFromDeckRef.current(deckId, count, seat),
-        shuffleDeck:   (deckId) => shuffleDeckRef.current(deckId),
-        dealFromDeck:  (deckId, count, seat) => dealFromDeckRef.current(deckId, count, seat),
+        delete:        (id) => handle?.controller.despawn(id),
+        drawFromDeck:  (deckId, count, seat) => handle?.controller.drawFromDeck(deckId, count, seat),
+        shuffleDeck:   (deckId) => handle?.controller.shuffleDeck(deckId),
+        dealFromDeck:  (deckId, count, seat) => handle?.controller.dealFromDeck(deckId, count, seat),
       },
       selfSeat: getSelfSeatRef.current(),
     });
@@ -350,6 +357,27 @@ export function Room({ roomId, isHost }: Props) {
   const handleToggleShowAllZones = (on: boolean) => {
     setShowAllZones(on);
     setShowAllZonesRef.current(on);
+  };
+
+  // Composes a hand-tile context menu via the same aggregator the 3D path
+  // uses, so component-contributed items appear identically. Replaces the old
+  // `requestHandTileMenuRef` indirection.
+  const handleHandTileContextMenu = (entityId: string, x: number, y: number) => {
+    if (!handle) return;
+    const entity = handle.controller.get(entityId)?.entity;
+    if (!entity) return;
+    const seat = getSelfSeatRef.current();
+    const items = aggregateContextMenu(entity, {
+      recipientSeat: seat, isHost, entity,
+    });
+    if (items.length === 0) return;
+    setContextMenu({
+      x, y,
+      entityId:   entity.id,
+      entityName: entity.name,
+      entityTags: [...entity.tags],
+      items,
+    });
   };
 
   const shareUrl = (() => {
@@ -371,43 +399,15 @@ export function Room({ roomId, isHost }: Props) {
         onMsgRef={onMsgRef}
         onPeerLeftRef={onPeerLeftRef}
         onPeerJoinedRef={onPeerJoinedRef}
-        spawnRef={spawnRef}
-        rollRef={rollRef}
         onContextMenuRef={onContextMenuRef}
-        deleteObjectRef={deleteObjectRef}
-        attachSurfaceRef={attachSurfaceRef}
-        attachElementRef={attachElementRef}
-        mutateSurfaceElementRef={mutateSurfaceElementRef}
-        removeSurfaceElementRef={removeSurfaceElementRef}
-        drawFromDeckRef={drawFromDeckRef}
-        shuffleDeckRef={shuffleDeckRef}
-        dealFromDeckRef={dealFromDeckRef}
-        updateEntityFieldRef={updateEntityFieldRef}
-        updateComponentPropRef={updateComponentPropRef}
         freeCameraRef={freeCameraRef}
-        onObjectsChangeRef={onObjectsChangeRef}
         onSelectRef={onSelectRef}
         setHighlightRef={setHighlightRef}
-        getEntityRef={getEntityRef}
         setActiveToolRef={setActiveToolRef}
         getActiveToolRef={getActiveToolRef}
         setShowAllZonesRef={setShowAllZonesRef}
         setHandViewRef={setHandViewRef}
-        requestHandTileMenuRef={requestHandTileMenuRef}
-        playCardToTableRef={playCardToTableRef}
-        reorderHandRef={reorderHandRef}
-        fireTileInputEventRef={fireTileInputEventRef}
-        saveSceneRef={saveSceneRef}
-        replaceSceneRef={replaceSceneRef}
-        sceneHistoryRef={sceneHistoryRef}
-        onLastLoadedChangeRef={onLastLoadedChangeRef}
-        onHistoryServiceChangeRef={onHistoryServiceChangeRef}
-        runScriptRef={runScriptRef}
-        saveScriptSourceRef={saveScriptSourceRef}
-        getSavedScriptSourceRef={getSavedScriptSourceRef}
-        loadScriptStateRef={loadScriptStateRef}
-        onErrorLogChangeRef={onErrorLogChangeRef}
-        getManifestRef={getManifestRef}
+        onSceneReady={setHandle}
       />
 
       <AnchorLayout>
@@ -417,33 +417,29 @@ export function Room({ roomId, isHost }: Props) {
           </div>
         </UIPanel>
 
-        {isHost && (
+        {isHost && handle && (
           <UIPanel anchor="top-center" order={10}>
             <HostActionBar
-              onSpawn={(t) => spawnRef.current(t)}
+              handle={handle}
               showAllZones={showAllZones}
               onToggleShowAllZones={handleToggleShowAllZones}
-              onSave={() => saveSceneRef.current()}
               onLoad={(envelope, filename) => {
-                sceneHistoryRef.current?.setLastLoaded({
+                handle.controller.history?.setLastLoaded({
                   snapshot: envelope.scene,
                   filename,
                   savedAt:  envelope.savedAt,
                 });
-                replaceSceneRef.current(envelope.scene);
-                loadScriptStateRef.current(envelope.script);
+                handle.controller.replaceScene(envelope.scene);
+                void handle.controller.scripting?.loadScript(envelope.script);
                 setScriptSource(envelope.script.source);
                 manifestStoreRef.current?.loadFromSave(envelope.manifest);
               }}
-              onRevert={() => sceneHistoryRef.current?.revert()}
+              onRevert={() => handle.controller.history?.revert()}
               lastLoaded={lastLoaded}
               currentEntityCount={objects.length}
               historyService={historyService}
               scriptSource={scriptSource}
               onScriptChange={setScriptSource}
-              onScriptSave={() => saveScriptSourceRef.current(scriptSource)}
-              onScriptRun={(src) => runScriptRef.current(src)}
-              getSavedScriptSource={() => getSavedScriptSourceRef.current()}
               scriptErrorLog={scriptErrorLog}
               manifestStore={manifestStore}
               onPushManifest={() => {
@@ -456,7 +452,7 @@ export function Room({ roomId, isHost }: Props) {
           </UIPanel>
         )}
 
-        {isHost && (
+        {isHost && handle && (
           <UIPanel anchor="top-left" order={10}>
             <EditorPanel
               objects={objects}
@@ -465,15 +461,15 @@ export function Room({ roomId, isHost }: Props) {
               manifestStore={manifestStore}
               selectedTools={selectedTools}
               onSelect={setSelectedId}
-              onRollDice={() => rollRef.current()}
-              onUpdateEntityField={(id, key, value) => updateEntityFieldRef.current(id, key, value)}
+              onRollDice={() => handle.controller.forEach((h) => h.entity.getComponent(DiceComponent)?.roll())}
+              onUpdateEntityField={(id, key, value) => handle.controller.updateEntityField(id, key, value)}
               onUpdateComponentProp={(id, typeId, key, value) =>
-                updateComponentPropRef.current(id, typeId, key, value)}
+                handle.controller.updateComponentProp(id, typeId, key, value)}
               onToggleFreeCamera={handleToggleFreeCamera}
               onToolAction={handleToolAction}
-              onMutateElement={(sid, eid, patch) => mutateSurfaceElementRef.current(sid, eid, patch)}
-              onRemoveElement={(sid, eid) => removeSurfaceElementRef.current(sid, eid)}
-              onDeleteEntity={(id) => deleteObjectRef.current(id)}
+              onMutateElement={(sid, eid, patch) => handle.controller.mutateSurfaceElement(sid, eid, patch)}
+              onRemoveElement={(sid, eid) => handle.controller.removeSurfaceElement(sid, eid)}
+              onDeleteEntity={(id) => handle.controller.despawn(id)}
             />
           </UIPanel>
         )}
@@ -512,11 +508,15 @@ export function Room({ roomId, isHost }: Props) {
               cards={handView.cards}
               selectedId={selectedId}
               onSelectTile={(id) => setSelectedId(id)}
-              onTileContextMenu={(id, x, y) => requestHandTileMenuRef.current(id, x, y)}
-              onPlayCardToTable={(id, x, y) => playCardToTableRef.current(id, x, y)}
-              onReorderHand={(newOrder) => reorderHandRef.current(handView.handEntityId, newOrder)}
+              onTileContextMenu={handleHandTileContextMenu}
+              onPlayCardToTable={(id, x, y) => handle?.playCardToTableAtScreen(id, x, y)}
+              onReorderHand={(newOrder) => handle?.controller.reorderHand(handView.handEntityId, newOrder)}
               handEntityId={handView.handEntityId}
-              onTileInputEvent={(id, name, payload) => fireTileInputEventRef.current(id, name, payload)}
+              onTileInputEvent={(id, name, payload) => {
+                const entity = handle?.controller.get(id)?.entity;
+                if (!entity) return;
+                handle.controller.fireInputEvent(entity, name, payload);
+              }}
               selfSeat={getSelfSeatRef.current()}
             />
           </UIPanel>

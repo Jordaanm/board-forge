@@ -229,6 +229,26 @@ export interface WorldIdentity {
   selfPeerId(): string | null;
 }
 
+// React-facing alias for `World`. Engine code keeps importing `World`; the
+// alias names the same object as a controller for panels that mutate scene
+// state. See planning/refactor-world-ref.md.
+export type SceneController = World;
+
+// Bundle exposed by ThreeCanvas to React. `controller` is the live World;
+// `captureThumbnail` and `playCardToTableAtScreen` close over the renderer
+// (WebGLRenderer + scene + camera + canvas DOM) and live on the handle so
+// they don't leak WebGL into the engine.
+export interface SceneHandle {
+  readonly controller: SceneController;
+  // Returns a PNG data URL for the current canvas, or null. Used by the host
+  // save flow to embed a thumbnail in the save envelope.
+  captureThumbnail(): string | null;
+  // Screen-coord wrapper around `controller.playCardToTable` — needs camera +
+  // canvas raycast to project the pointer onto the table plane. HandPanel
+  // (via Room) calls this when a tile is dragged out of the panel.
+  playCardToTableAtScreen(entityId: string, clientX: number, clientY: number): void;
+}
+
 export interface WorldOptions {
   role:      'host' | 'guest';
   scene:     THREE.Scene;

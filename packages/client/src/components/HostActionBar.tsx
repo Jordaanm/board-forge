@@ -10,16 +10,16 @@ import { HistoryModal } from './HistoryModal';
 import { ScriptEditorModal } from './ScriptEditorModal';
 import { AssetManagerModal } from './AssetManagerModal';
 import { type SaveEnvelope } from '../entity/SaveFile';
+import { downloadSceneFile } from '../entity/downloadSceneFile';
 import { type LastLoaded, type SceneHistoryService } from '../entity/SceneHistoryService';
-import { type RunResult } from '../scripting/ScriptHost';
 import { type ScriptErrorLog } from '../scripting/ScriptErrorLog';
 import { type ManifestStore } from '../assets/ManifestStore';
+import { type SceneHandle } from '../entity/world';
 
 interface Props {
-  onSpawn:              (type: string) => void;
+  handle:               SceneHandle;
   showAllZones:         boolean;
   onToggleShowAllZones: (on: boolean) => void;
-  onSave:               () => void;
   onLoad:               (envelope: SaveEnvelope, filename: string) => void;
   onRevert:             () => void;
   lastLoaded:           LastLoaded | null;
@@ -27,9 +27,6 @@ interface Props {
   historyService:       SceneHistoryService | null;
   scriptSource:         string;
   onScriptChange:       (next: string) => void;
-  onScriptSave:         () => void;
-  onScriptRun:          (source: string) => Promise<RunResult>;
-  getSavedScriptSource: () => string;
   scriptErrorLog:       ScriptErrorLog | null;
   manifestStore:        ManifestStore | null;
   onPushManifest:       () => void;
@@ -97,10 +94,9 @@ const FILE_TIMESTAMP: React.CSSProperties = {
 };
 
 export function HostActionBar({
-  onSpawn,
+  handle,
   showAllZones,
   onToggleShowAllZones,
-  onSave,
   onLoad,
   onRevert,
   lastLoaded,
@@ -108,9 +104,6 @@ export function HostActionBar({
   historyService,
   scriptSource,
   onScriptChange,
-  onScriptSave,
-  onScriptRun,
-  getSavedScriptSource,
   scriptErrorLog,
   manifestStore,
   onPushManifest,
@@ -118,10 +111,22 @@ export function HostActionBar({
   const [revertOpen, setRevertOpen] = useState(false);
   const canRevert = lastLoaded !== null;
 
+  const handleSave = () => {
+    // Capture thumbnail through the handle (renderer concern), then compose
+    // the envelope from controller state and trigger the file download.
+    const thumbnail = handle.captureThumbnail();
+    downloadSceneFile(
+      handle.controller.snapshot(),
+      thumbnail,
+      manifestStore?.getDraft().toArray() ?? [],
+      handle.controller.scripting?.getScriptState(),
+    );
+  };
+
   return (
     <div style={BAR}>
-      <SpawnObjectModal onSpawn={onSpawn} />
-      <button type="button" style={BUTTON} onClick={onSave}>Save</button>
+      <SpawnObjectModal onSpawn={(type) => { handle.controller.spawn(type); }} />
+      <button type="button" style={BUTTON} onClick={handleSave}>Save</button>
       <LoadSceneModal currentEntityCount={currentEntityCount} onConfirmLoad={onLoad} />
       <button
         type="button"
@@ -135,9 +140,13 @@ export function HostActionBar({
       <ScriptEditorModal
         source={scriptSource}
         onChange={onScriptChange}
-        onSave={onScriptSave}
-        onRun={onScriptRun}
-        getSavedSource={getSavedScriptSource}
+        onSave={() => handle.controller.scripting?.setSource(scriptSource)}
+        onRun={(src) => {
+          const sh = handle.controller.scripting;
+          if (!sh) return Promise.resolve({ ok: false, error: 'Scripting unavailable.' });
+          return sh.runScript(src);
+        }}
+        getSavedSource={() => handle.controller.scripting?.getScriptState().source ?? ''}
         errorLog={scriptErrorLog}
       />
       <AssetManagerModal store={manifestStore} onPush={onPushManifest} />
