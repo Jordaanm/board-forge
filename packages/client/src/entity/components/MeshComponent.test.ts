@@ -57,7 +57,7 @@ describe('MeshComponent — prim:plane', () => {
     mesh.fromJSON({
       meshRef:     'prim:plane',
       textureRefs: { default: '' },
-      tint:        '#ffffff',
+      color:        '#ffffff',
       size:        [2, 0.01, 3],
       ...state,
     });
@@ -96,7 +96,7 @@ describe('MeshComponent — prim:plane', () => {
   });
 
   test('round-trip: toJSON → fromJSON identity', () => {
-    const { mesh } = spawnPlane({ tint: '#abcdef', textureRefs: { default: 'base:tex/foo' } });
+    const { mesh } = spawnPlane({ color: '#abcdef', textureRefs: { default: 'base:tex/foo' } });
     const json = mesh.toJSON();
 
     const fresh = new MeshComponent();
@@ -106,7 +106,7 @@ describe('MeshComponent — prim:plane', () => {
 
   test('tint change applies via onPropertiesChanged', () => {
     const { mesh } = spawnPlane();
-    mesh.setState({ tint: '#ff0000' });
+    mesh.setState({ color: '#ff0000' });
     const child = mesh.group.children[0] as THREE.Mesh;
     const mat   = child.material as THREE.MeshLambertMaterial;
     expect(mat.color.getHexString()).toBe('ff0000');
@@ -153,5 +153,49 @@ describe('MeshComponent — isContained visibility', () => {
 
     mesh.onIsContainedChanged(false);
     expect(mesh.group.visible).toBe(true);
+  });
+});
+
+describe('MeshComponent — propertySchema (issue #2 of property-schema-refactor)', () => {
+  test('declares static label and color/meshRef/textureUrl entries', () => {
+    expect(MeshComponent.label).toBe('Mesh');
+    const keys = MeshComponent.propertySchema.map(d => d.key);
+    expect(keys).toEqual(['color', 'meshRef', 'textureUrl']);
+  });
+
+  test('textureUrl adapter get returns the default ref', () => {
+    const def = MeshComponent.propertySchema.find(d => d.key === 'textureUrl')!;
+    const state: MeshState = {
+      meshRef: 'prim:cube',
+      textureRefs: { default: 'base:tex/foo', face: 'unrelated' },
+      color: '#fff',
+      size: 1,
+    };
+    expect(def.get!(state, undefined as never)).toBe('base:tex/foo');
+  });
+
+  test('textureUrl adapter get returns empty string when missing', () => {
+    const def = MeshComponent.propertySchema.find(d => d.key === 'textureUrl')!;
+    const state: MeshState = {
+      meshRef: 'prim:cube',
+      textureRefs: {},
+      color: '#fff',
+      size: 1,
+    };
+    expect(def.get!(state, undefined as never)).toBe('');
+  });
+
+  test('textureUrl adapter set merges into the textureRefs map preserving siblings', () => {
+    const def = MeshComponent.propertySchema.find(d => d.key === 'textureUrl')!;
+    const state: MeshState = {
+      meshRef: 'prim:card',
+      textureRefs: { default: 'old', face: 'F.png', back: 'B.png' },
+      color: '#fff',
+      size: 1,
+    };
+    const patch = def.set!('new.png', state, undefined as never);
+    expect(patch).toEqual({
+      textureRefs: { default: 'new.png', face: 'F.png', back: 'B.png' },
+    });
   });
 });

@@ -118,7 +118,7 @@ export function createSurfaceChild(
   mesh.fromJSON({
     meshRef:     'prim:plane',
     textureRefs: { default: '' },
-    tint:        '#ffffff',
+    color:       '#ffffff',
     size:        [size[0], 0, size[1]],
   });
   surfaceEntity.attachComponent(mesh);

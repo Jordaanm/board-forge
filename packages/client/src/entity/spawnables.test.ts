@@ -65,7 +65,7 @@ describe('spawnables — board / die / token spawn', () => {
   test('token spawns with meeple primitive + blue tint', () => {
     const e = scene.spawn('token', ctx);
     expect(e.getComponent(MeshComponent)!.state.meshRef).toBe('prim:meeple');
-    expect(e.getComponent(MeshComponent)!.state.tint).toBe('#2266cc');
+    expect(e.getComponent(MeshComponent)!.state.color).toBe('#2266cc');
   });
 
   test('default name format `${label}-${guid.slice(0,8)}`', () => {
@@ -193,7 +193,7 @@ describe('MeshComponent — prim:card', () => {
       meshRef: 'prim:card',
       size: [0.63, 0.01, 0.88],
       textureRefs: { face: 'face.png', back: 'back.png' },
-      tint: '#ff0000',
+      color: '#ff0000',
     });
 
     const cardMesh = m.group.children[0] as THREE.Mesh;

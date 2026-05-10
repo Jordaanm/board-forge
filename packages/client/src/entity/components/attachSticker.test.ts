@@ -47,7 +47,7 @@ function makeParent(scene: SceneImpl, ctx: SpawnContext, halfExtents: [number, n
   mesh.fromJSON({
     meshRef:     'prim:cube',
     textureRefs: { default: '' },
-    tint:        '#888',
+    color:        '#888',
     size:        [halfExtents[0] * 2, halfExtents[1] * 2, halfExtents[2] * 2],
   });
   parent.attachComponent(mesh);
@@ -328,7 +328,7 @@ describe('attachSticker — parent pose composition (issue #1 of refactor)', () 
     mesh.fromJSON({
       meshRef:     'prim:cube',
       textureRefs: { default: '' },
-      tint:        '#888',
+      color:        '#888',
       size:        [halfExtents[0] * 2, halfExtents[1] * 2, halfExtents[2] * 2],
     });
     parent.attachComponent(mesh);

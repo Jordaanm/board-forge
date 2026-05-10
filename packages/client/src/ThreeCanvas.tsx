@@ -682,7 +682,7 @@ function entityToObjectSummary(entity: Entity, isHost: boolean): ObjectSummary {
     props.depth      = sz[2];
     props.textureUrl = mesh.state.textureRefs?.default ?? '';
   } else if (entity.type === 'token' && mesh) {
-    props.color   = mesh.state.tint;
+    props.color   = mesh.state.color;
     props.meshRef = mesh.state.meshRef;
   } else if (entity.type === 'die' && value) {
     props.value = value.state.value;

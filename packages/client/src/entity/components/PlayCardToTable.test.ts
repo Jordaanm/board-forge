@@ -216,7 +216,7 @@ describe('World.playCardToTable — host vs guest dispatch', () => {
         components: {
           value:     { value: '', isNumeric: false },
           transform: { position: [0, 1, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] },
-          mesh:      { meshRef: 'prim:card', textureRefs: { face: '', back: '' }, tint: '#fafafa', size: [0.63, 0.01, 0.88] },
+          mesh:      { meshRef: 'prim:card', textureRefs: { face: '', back: '' }, color: '#fafafa', size: [0.63, 0.01, 0.88] },
           physics:   { mass: 0.05, friction: 0.6, restitution: 0.1, isLocked: false },
           flatview:  { textureRef: '' },
           card:      { face: '', back: '', category: '' },

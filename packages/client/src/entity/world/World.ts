@@ -450,9 +450,6 @@ class WorldImpl implements World, HandleRouter {
       if      (key === 'width')      mesh.setState({ size: [Number(value), cur[1], cur[2]] });
       else if (key === 'depth')      mesh.setState({ size: [cur[0], cur[1], Number(value)] });
       else if (key === 'textureUrl') mesh.setState({ textureRefs: { ...mesh.state.textureRefs, default: String(value ?? '') } });
-    } else if (entity.type === 'token') {
-      if      (key === 'color')   mesh.setState({ tint: String(value ?? '#ffffff') });
-      else if (key === 'meshRef') mesh.setState({ meshRef: String(value ?? '') });
     } else if (entity.type === 'card') {
       const card = entity.getComponent(CardComponent);
       if (card && (key === 'face' || key === 'back')) {

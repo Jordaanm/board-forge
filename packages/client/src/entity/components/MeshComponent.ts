@@ -28,6 +28,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { EntityComponent, type SpawnContext, type MenuContext, type MenuItem, type ActionContext } from '../EntityComponent';
+import { type PropertyDef } from '../propertySchema';
 import { type EditorToolItem } from '../editorTools';
 import { TransformComponent } from './TransformComponent';
 import { assetService } from '../../assets/AssetService';
@@ -43,13 +44,27 @@ export type MeshSize = number | [number, number, number];
 export interface MeshState {
   meshRef:     string;
   textureRefs: Record<string, string>;
-  tint:        string;
+  color:       string;
   size:        MeshSize;
 }
 
 export class MeshComponent extends EntityComponent<MeshState> {
   static typeId   = 'mesh';
+  static label    = 'Mesh';
   static requires = ['transform'] as const;
+  static propertySchema: readonly PropertyDef<MeshState>[] = [
+    { key: 'color',   label: 'Color', type: 'color' },
+    { key: 'meshRef', label: 'Mesh',  type: 'asset:model' },
+    {
+      key:   'textureUrl',
+      label: 'Texture',
+      type:  'asset:image',
+      get:   (s) => s.textureRefs?.default ?? '',
+      set:   (v, s) => ({
+        textureRefs: { ...s.textureRefs, default: String(v ?? '') },
+      }),
+    },
+  ];
 
   group!: THREE.Group;
   private textureUnsubs: (() => void)[] = [];
@@ -83,7 +98,7 @@ export class MeshComponent extends EntityComponent<MeshState> {
     if (!this.group) return;
     if (changed.meshRef !== undefined || changed.size !== undefined) {
       this.rebuild();
-    } else if (changed.textureRefs !== undefined || changed.tint !== undefined) {
+    } else if (changed.textureRefs !== undefined || changed.color !== undefined) {
       this.applyMaterialAttributes();
     }
   }
@@ -124,7 +139,7 @@ export class MeshComponent extends EntityComponent<MeshState> {
   }
 
   onContextMenu(_ctx: MenuContext): MenuItem[] {
-    return [{ kind: 'colorpicker', id: 'set-tint', label: 'Tint', value: this.state.tint || '#ffffff' }];
+    return [{ kind: 'colorpicker', id: 'set-tint', label: 'Tint', value: this.state.color || '#ffffff' }];
   }
 
   onEditorTools(_ctx: MenuContext): EditorToolItem[] {
@@ -135,7 +150,7 @@ export class MeshComponent extends EntityComponent<MeshState> {
     if (actionId !== 'set-tint') return;
     const value = (args as { value?: unknown } | undefined)?.value;
     if (typeof value !== 'string') return;
-    this.setState({ tint: value });
+    this.setState({ color: value });
   }
 
   private rebuild(): void {
@@ -165,7 +180,7 @@ export class MeshComponent extends EntityComponent<MeshState> {
 
   private applyMaterialAttributes(): void {
     this.unsubAllTextures();
-    const tint  = this.state.tint || '#ffffff';
+    const tint  = this.state.color || '#ffffff';
     const slots = this.state.textureRefs ?? {};
 
     const apply = (mat: THREE.Material, slot: string): void => {

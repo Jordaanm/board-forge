@@ -48,7 +48,7 @@ export function registerCorePrimitives(): void {
     hidden:      true,
     components: [
       { typeId: 'transform', state: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } },
-      { typeId: 'mesh',      state: { meshRef: 'prim:table-rect', textureRefs: { default: '' }, tint: '#4a3728', size: [12, 0.3, 8] } },
+      { typeId: 'mesh',      state: { meshRef: 'prim:table-rect', textureRefs: { default: '' }, color: '#4a3728', size: [12, 0.3, 8] } },
       { typeId: 'physics',   state: { mass: 0, friction: 0.5, restitution: 0.3, isLocked: true } },
       { typeId: 'table',     state: {} },
       { typeId: 'skydome',   state: { textureUrl: 'base:sky/default' } },
@@ -63,7 +63,7 @@ export function registerCorePrimitives(): void {
     defaultTags: ['board'],
     components: [
       { typeId: 'transform', state: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } },
-      { typeId: 'mesh',      state: { meshRef: 'prim:cube', textureRefs: { default: '' }, tint: '#2d5a27', size: [4, 0.05, 3] } },
+      { typeId: 'mesh',      state: { meshRef: 'prim:cube', textureRefs: { default: '' }, color: '#2d5a27', size: [4, 0.05, 3] } },
       { typeId: 'physics',   state: { mass: 0.5, friction: 0.5, restitution: 0.3, isLocked: true } },
     ],
   });
@@ -75,7 +75,7 @@ export function registerCorePrimitives(): void {
     defaultTags: ['die'],
     components: [
       { typeId: 'transform', state: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } },
-      { typeId: 'mesh',      state: { meshRef: 'prim:d6', textureRefs: { default: '' }, tint: '#fafafa', size: 0.7 } },
+      { typeId: 'mesh',      state: { meshRef: 'prim:d6', textureRefs: { default: '' }, color: '#fafafa', size: 0.7 } },
       { typeId: 'physics',   state: { mass: 0.2, friction: 0.5, restitution: 0.5, isLocked: false } },
       { typeId: 'value',     state: { value: '6', isNumeric: true } },
       { typeId: 'dice',      state: { maxValue: 6, faceMap: D6_FACE_MAP } },
@@ -90,7 +90,7 @@ export function registerCorePrimitives(): void {
     defaultTags: ['die'],
     components: [
       { typeId: 'transform', state: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } },
-      { typeId: 'mesh',      state: { meshRef: 'prim:d20', textureRefs: { default: '' }, tint: '#fafafa', size: 1.4 } },
+      { typeId: 'mesh',      state: { meshRef: 'prim:d20', textureRefs: { default: '' }, color: '#fafafa', size: 1.4 } },
       { typeId: 'physics',   state: { mass: 0.25, friction: 0.5, restitution: 0.5, isLocked: false } },
       { typeId: 'value',     state: { value: '20', isNumeric: true } },
       { typeId: 'dice',      state: { maxValue: 20, faceMap: D20_FACE_MAP } },
@@ -105,7 +105,7 @@ export function registerCorePrimitives(): void {
     defaultTags: ['token'],
     components: [
       { typeId: 'transform', state: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } },
-      { typeId: 'mesh',      state: { meshRef: 'prim:meeple', textureRefs: { default: '' }, tint: '#2266cc', size: [0.5, 0.75, 0.5] } },
+      { typeId: 'mesh',      state: { meshRef: 'prim:meeple', textureRefs: { default: '' }, color: '#2266cc', size: [0.5, 0.75, 0.5] } },
       { typeId: 'physics',   state: { mass: 0.1, friction: 0.5, restitution: 0.3, isLocked: false } },
       { typeId: 'tween',     state: {} },
     ],
@@ -119,7 +119,7 @@ export function registerCorePrimitives(): void {
     components: [
       { typeId: 'value',     state: { value: '', isNumeric: false } },
       { typeId: 'transform', state: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } },
-      { typeId: 'mesh',      state: { meshRef: 'prim:card', textureRefs: { face: '', back: '' }, tint: '#fafafa', size: [0.63, 0.01, 0.88] } },
+      { typeId: 'mesh',      state: { meshRef: 'prim:card', textureRefs: { face: '', back: '' }, color: '#fafafa', size: [0.63, 0.01, 0.88] } },
       { typeId: 'physics',   state: { mass: 0.05, friction: 0.6, restitution: 0.1, isLocked: false } },
       { typeId: 'flatview',  state: { textureRef: '' } },
       { typeId: 'card',      state: { face: '', back: '', category: '' } },
@@ -135,7 +135,7 @@ export function registerCorePrimitives(): void {
     internal:    true,
     components: [
       { typeId: 'transform', state: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } },
-      { typeId: 'mesh',      state: { meshRef: 'prim:deck', textureRefs: { face: '', back: '' }, tint: '#fafafa', size: [0.63, 0.02, 0.88] } },
+      { typeId: 'mesh',      state: { meshRef: 'prim:deck', textureRefs: { face: '', back: '' }, color: '#fafafa', size: [0.63, 0.02, 0.88] } },
       { typeId: 'physics',   state: { mass: 0.05, friction: 0.6, restitution: 0.1, isLocked: false } },
       { typeId: 'tween',     state: {} },
       { typeId: 'deck',      state: { cards: [], category: '' } },

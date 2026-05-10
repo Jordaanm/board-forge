@@ -100,7 +100,7 @@ function spawnSurface(opts: {
   entity.attachComponent(transform);
 
   const mesh = new MeshComponent();
-  mesh.fromJSON({ meshRef: 'prim:plane', textureRefs: { default: '' }, tint: '#ffffff', size: [1, 0.01, 1] });
+  mesh.fromJSON({ meshRef: 'prim:plane', textureRefs: { default: '' }, color: '#ffffff', size: [1, 0.01, 1] });
   entity.attachComponent(mesh);
 
   const surface = new SurfaceComponent();
