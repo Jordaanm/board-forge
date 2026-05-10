@@ -6,6 +6,7 @@
 
 import * as THREE from 'three';
 import { EntityComponent, type SpawnContext } from '../EntityComponent';
+import { type PropertyDef } from '../propertySchema';
 
 export interface TransformState {
   position: [number, number, number];
@@ -15,7 +16,40 @@ export interface TransformState {
 
 export class TransformComponent extends EntityComponent<TransformState> {
   static typeId   = 'transform';
+  static label    = 'Transform';
   static channel  = 'unreliable' as const;
+  // Uniform-scale slider over the underlying [x, y, z] triple. Negative or
+  // zero scale would invert / collapse the mesh, so the dispatcher clamps and
+  // setState re-clamps.
+  static propertySchema: readonly PropertyDef<TransformState>[] = [
+    {
+      key:   'scale',
+      label: 'Scale',
+      type:  'number',
+      min:   0.0001,
+      get:   (s) => s.scale[0],
+      set:   (v) => {
+        const n = Number(v);
+        const safe = Number.isFinite(n) && n > 0 ? n : 1;
+        return { scale: [safe, safe, safe] as [number, number, number] };
+      },
+    },
+  ];
+
+  // Component-owned scale invariant (issue #7 of property-schema-refactor):
+  // any caller writing a non-positive scale gets clamped to 1 so the mesh
+  // can't collapse or invert.
+  setState(patch: Partial<TransformState>): void {
+    const fixed: Partial<TransformState> = { ...patch };
+    if (fixed.scale) {
+      const [x, y, z] = fixed.scale;
+      const sx = Number.isFinite(x) && x > 0 ? x : 1;
+      const sy = Number.isFinite(y) && y > 0 ? y : 1;
+      const sz = Number.isFinite(z) && z > 0 ? z : 1;
+      fixed.scale = [sx, sy, sz];
+    }
+    super.setState(fixed);
+  }
 
   object3d!: THREE.Object3D;
 

@@ -75,6 +75,52 @@ describe('EditorPanel — Mesh section rendering (issue #2 of property-schema-re
     expect(container.textContent).toContain('Texture');
   });
 
+  test('Table entity renders four sections in topological order', () => {
+    // Mirrors what aggregatePropertySchema returns for the Table singleton:
+    // mesh → skydome → lighting → transform (transform topo-first; visualised
+    // last in section order via topological onSpawn).
+    const sections: ComponentSchemaSection[] = [
+      { typeId: 'transform', label: 'Transform',
+        state: { scale: [1, 1, 1] },
+        entries: [{ key: 'scale', label: 'Scale', type: 'number', min: 0.0001 }] },
+      { typeId: 'mesh', label: 'Mesh',
+        state: { color: '#4a3728', meshRef: 'prim:table-rect', textureRefs: {} },
+        entries: [
+          { key: 'color', label: 'Color', type: 'color' },
+          { key: 'meshRef', label: 'Mesh', type: 'asset:model' },
+        ] },
+      { typeId: 'skydome', label: 'Sky',
+        state: { textureUrl: 'base:sky/default' },
+        entries: [{ key: 'textureUrl', label: 'Texture', type: 'asset:image' }] },
+      { typeId: 'lighting', label: 'Light',
+        state: { color: '#fff1dc', intensity: 1.1 },
+        entries: [
+          { key: 'color',     label: 'Color',     type: 'color' },
+          { key: 'intensity', label: 'Intensity', type: 'number', min: 0 },
+        ] },
+    ];
+    const objects: ObjectSummary[] = [makeSummary({
+      id: 'table-1', objectType: 'table' as ObjectSummary['objectType'], sections,
+    })];
+
+    const { container } = renderPanel(objects, 'table-1');
+    const html = container.innerHTML;
+
+    // All four section headers appear in the order they were aggregated.
+    const idxTransform = html.indexOf('Transform');
+    const idxMesh      = html.indexOf('Mesh');
+    const idxSky       = html.indexOf('Sky');
+    const idxLight     = html.indexOf('Light');
+    expect(idxTransform).toBeGreaterThan(-1);
+    expect(idxMesh).toBeGreaterThan(idxTransform);
+    expect(idxSky).toBeGreaterThan(idxMesh);
+    expect(idxLight).toBeGreaterThan(idxSky);
+
+    // Scale value visible.
+    expect(container.textContent).toContain('Scale');
+    expect(container.textContent).toContain('Intensity');
+  });
+
   test('Entity section renders above component sections with Name / Owner / Tags', () => {
     const meshSection: ComponentSchemaSection = {
       typeId: 'mesh',

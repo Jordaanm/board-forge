@@ -673,8 +673,8 @@ function entityToObjectSummary(entity: Entity, isHost: boolean): ObjectSummary {
     if (sky) props['sky.textureUrl'] = sky.state.textureUrl;
     const lighting = entity.getComponent(LightingComponent);
     if (lighting) {
-      props['light.color']     = lighting.state.keyColor;
-      props['light.intensity'] = lighting.state.keyIntensity;
+      props['light.color']     = lighting.state.color;
+      props['light.intensity'] = lighting.state.intensity;
     }
   } else if (entity.type === 'board' && mesh) {
     props.width      = mesh.state.width;

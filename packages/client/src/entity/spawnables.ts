@@ -52,7 +52,7 @@ export function registerCorePrimitives(): void {
       { typeId: 'physics',   state: { mass: 0, friction: 0.5, restitution: 0.3, isLocked: true } },
       { typeId: 'table',     state: {} },
       { typeId: 'skydome',   state: { textureUrl: 'base:sky/default' } },
-      { typeId: 'lighting',  state: { keyColor: '#fff1dc', keyIntensity: 1.1 } },
+      { typeId: 'lighting',  state: { color: '#fff1dc', intensity: 1.1 } },
     ],
   });
 

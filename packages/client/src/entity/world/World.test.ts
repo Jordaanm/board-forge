@@ -139,8 +139,8 @@ describe('World — Table boot path (table-as-entity slice 1)', () => {
     expect(hostTable.get(MeshComponent)!.state.meshRef).toBe('prim:table-circle');
     expect(hostTable.get(TransformComponent)!.state.scale).toEqual([1.5, 1.5, 1.5]);
     expect(hostTable.get(SkydomeComponent)!.state.textureUrl).toBe('custom:sky/pretty');
-    expect(hostTable.get(LightingComponent)!.state.keyColor).toBe('#abcdef');
-    expect(hostTable.get(LightingComponent)!.state.keyIntensity).toBeCloseTo(0.5, 5);
+    expect(hostTable.get(LightingComponent)!.state.color).toBe('#abcdef');
+    expect(hostTable.get(LightingComponent)!.state.intensity).toBeCloseTo(0.5, 5);
 
     pair.host.tick(0.016);
 
@@ -148,8 +148,8 @@ describe('World — Table boot path (table-as-entity slice 1)', () => {
     expect(guestTable.get(MeshComponent)!.state.meshRef).toBe('prim:table-circle');
     expect(guestTable.get(TransformComponent)!.state.scale).toEqual([1.5, 1.5, 1.5]);
     expect(guestTable.get(SkydomeComponent)!.state.textureUrl).toBe('custom:sky/pretty');
-    expect(guestTable.get(LightingComponent)!.state.keyColor).toBe('#abcdef');
-    expect(guestTable.get(LightingComponent)!.state.keyIntensity).toBeCloseTo(0.5, 5);
+    expect(guestTable.get(LightingComponent)!.state.color).toBe('#abcdef');
+    expect(guestTable.get(LightingComponent)!.state.intensity).toBeCloseTo(0.5, 5);
   });
 
   test('updateProp clamps a non-positive scale to 1', () => {
@@ -161,7 +161,7 @@ describe('World — Table boot path (table-as-entity slice 1)', () => {
   test('updateProp clamps a negative light intensity to 0', () => {
     pair = setup();
     pair.host.updateProp(TABLE_ENTITY_ID, 'light.intensity', -1);
-    expect(pair.host.get(TABLE_ENTITY_ID)!.get(LightingComponent)!.state.keyIntensity).toBe(0);
+    expect(pair.host.get(TABLE_ENTITY_ID)!.get(LightingComponent)!.state.intensity).toBe(0);
   });
 
   test('World.despawn(TABLE_ENTITY_ID) throws and leaves the Table intact (slice 5)', () => {
@@ -211,8 +211,8 @@ describe('World — Table boot path (table-as-entity slice 1)', () => {
     expect(table.get(MeshComponent)!.state.meshRef).toBe('prim:table-circle');
     expect(table.get(TransformComponent)!.state.scale).toEqual([1.5, 1.5, 1.5]);
     expect(table.get(SkydomeComponent)!.state.textureUrl).toBe('custom:sky/abc');
-    expect(table.get(LightingComponent)!.state.keyColor).toBe('#abcdef');
-    expect(table.get(LightingComponent)!.state.keyIntensity).toBeCloseTo(0.42, 5);
+    expect(table.get(LightingComponent)!.state.color).toBe('#abcdef');
+    expect(table.get(LightingComponent)!.state.intensity).toBeCloseTo(0.42, 5);
   });
 
   test('legacy snapshot without a Table re-bootstraps Table from defaults (slice 7)', () => {
@@ -225,7 +225,7 @@ describe('World — Table boot path (table-as-entity slice 1)', () => {
     expect(table!.entity.tags.sort()).toEqual(['fixture', 'table']);
     // Defaults from the spawnable definition.
     expect(table!.get(MeshComponent)!.state.meshRef).toBe('prim:table-rect');
-    expect(table!.get(LightingComponent)!.state.keyColor).toBe('#fff1dc');
+    expect(table!.get(LightingComponent)!.state.color).toBe('#fff1dc');
   });
 
   test('post-load host/guest convergence: guest mirrors the rebuilt Table (slice 7)', () => {
@@ -272,12 +272,12 @@ describe('World — Table boot path (table-as-entity slice 1)', () => {
     pair = setup();
     pair.host.tick(0.016);  // replicate Table to guest
     const hostLight = pair.host.get(TABLE_ENTITY_ID)!.get(LightingComponent)!;
-    hostLight.setState({ keyColor: '#80ff00', keyIntensity: 2.0 });
+    hostLight.setState({ color: '#80ff00', intensity: 2.0 });
     pair.host.tick(0.016);
 
     const guestLight = pair.guest.get(TABLE_ENTITY_ID)!.get(LightingComponent)!;
-    expect(guestLight.state.keyColor).toBe('#80ff00');
-    expect(guestLight.state.keyIntensity).toBeCloseTo(2.0, 5);
+    expect(guestLight.state.color).toBe('#80ff00');
+    expect(guestLight.state.intensity).toBeCloseTo(2.0, 5);
     // The underlying THREE light on the guest tracks the replicated state.
     expect(guestLight.light.intensity).toBeCloseTo(2.0, 5);
     expect('#' + guestLight.light.color.getHexString()).toBe('#80ff00');

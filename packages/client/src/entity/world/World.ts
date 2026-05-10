@@ -544,10 +544,10 @@ class WorldImpl implements World, HandleRouter {
     if (prefix === 'light') {
       const lighting = entity.getComponent(LightingComponent);
       if (!lighting) return;
-      if (tail === 'color')     lighting.setState({ keyColor:     String(value ?? '#ffffff') });
+      if (tail === 'color')     lighting.setState({ color:     String(value ?? '#ffffff') });
       if (tail === 'intensity') {
         const n = Number(value);
-        lighting.setState({ keyIntensity: Number.isFinite(n) && n >= 0 ? n : 0 });
+        lighting.setState({ intensity: Number.isFinite(n) && n >= 0 ? n : 0 });
       }
     }
   }

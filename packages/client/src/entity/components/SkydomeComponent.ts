@@ -5,6 +5,7 @@
 
 import * as THREE from 'three';
 import { EntityComponent, type SpawnContext } from '../EntityComponent';
+import { type PropertyDef } from '../propertySchema';
 import { createSkydome, applySkydomeProp } from '../../scene/Skydome';
 
 export interface SkydomeState {
@@ -13,6 +14,10 @@ export interface SkydomeState {
 
 export class SkydomeComponent extends EntityComponent<SkydomeState> {
   static typeId = 'skydome';
+  static label  = 'Sky';
+  static propertySchema: readonly PropertyDef<SkydomeState>[] = [
+    { key: 'textureUrl', label: 'Texture', type: 'asset:image' },
+  ];
 
   mesh!:        THREE.Mesh;
   private root: THREE.Scene | null = null;

@@ -25,8 +25,8 @@ describe('LightingComponent — lifecycle', () => {
     const e = scene.spawn('table', ctx, { id: TABLE_ENTITY_ID });
     const lighting = e.getComponent(LightingComponent)!;
     expect(lighting).toBeDefined();
-    expect(lighting.state.keyColor).toBe('#fff1dc');
-    expect(lighting.state.keyIntensity).toBeCloseTo(1.1, 5);
+    expect(lighting.state.color).toBe('#fff1dc');
+    expect(lighting.state.intensity).toBeCloseTo(1.1, 5);
   });
 
   test('onSpawn attaches the directional light to the THREE scene root', () => {
@@ -54,24 +54,47 @@ describe('LightingComponent — lifecycle', () => {
 });
 
 describe('LightingComponent — state changes', () => {
-  test('setState({keyColor}) updates the underlying directional light colour', () => {
+  test('setState({color}) updates the underlying directional light colour', () => {
     const e = scene.spawn('table', ctx, { id: TABLE_ENTITY_ID });
     const lighting = e.getComponent(LightingComponent)!;
-    lighting.setState({ keyColor: '#ff0000' });
+    lighting.setState({ color: '#ff0000' });
     expect('#' + lighting.light.color.getHexString()).toBe('#ff0000');
   });
 
-  test('setState({keyIntensity}) updates the underlying directional light intensity', () => {
+  test('setState({intensity}) updates the underlying directional light intensity', () => {
     const e = scene.spawn('table', ctx, { id: TABLE_ENTITY_ID });
     const lighting = e.getComponent(LightingComponent)!;
-    lighting.setState({ keyIntensity: 2.5 });
+    lighting.setState({ intensity: 2.5 });
     expect(lighting.light.intensity).toBeCloseTo(2.5, 5);
   });
 
-  test('negative intensity clamps to 0 via applyKeyLightProp', () => {
+  test('negative intensity clamps to 0 via setState invariant', () => {
     const e = scene.spawn('table', ctx, { id: TABLE_ENTITY_ID });
     const lighting = e.getComponent(LightingComponent)!;
-    lighting.setState({ keyIntensity: -1 });
+    lighting.setState({ intensity: -1 });
+    expect(lighting.state.intensity).toBe(0);
     expect(lighting.light.intensity).toBe(0);
+  });
+});
+
+describe('LightingComponent — propertySchema (issue #4 of property-schema-refactor)', () => {
+  test('declares static label and color/intensity entries', () => {
+    expect(LightingComponent.label).toBe('Light');
+    const keys = LightingComponent.propertySchema.map(d => d.key);
+    expect(keys).toEqual(['color', 'intensity']);
+    const intensity = LightingComponent.propertySchema.find(d => d.key === 'intensity')!;
+    expect(intensity.min).toBe(0);
+  });
+
+  test('save/load round-trip preserves the renamed color field', () => {
+    const e = scene.spawn('table', ctx, { id: TABLE_ENTITY_ID });
+    const lighting = e.getComponent(LightingComponent)!;
+    lighting.setState({ color: '#abcdef', intensity: 0.42 });
+
+    const json = lighting.toJSON();
+    const fresh = new LightingComponent();
+    fresh.fromJSON(json);
+    expect(fresh.state.color).toBe('#abcdef');
+    expect(fresh.state.intensity).toBeCloseTo(0.42, 5);
   });
 });
