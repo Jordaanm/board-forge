@@ -358,15 +358,16 @@ function CustomRow({ entry, onEdit, onDelete }: { entry: AssetEntry; onEdit: () 
 // image, model, or sound — so a broken GLTF or sound flags the warning badge
 // the same way a broken image does.
 function useAssetStatus(entry: AssetEntry): AssetStatus | null {
-  const [status, setStatus] = useState<AssetStatus | null>(
-    () => assetService.status(entry.slug, entry.type),
-  );
+  const [status, setStatus] = useState<AssetStatus | null>(null);
   useEffect(() => {
     if (entry.type === 'image') {
       return assetService.subscribe(entry.slug, 'image', (_tex, s) => setStatus(s));
     }
     if (entry.type === 'model') {
       return assetService.subscribe(entry.slug, 'model', (_obj, s) => setStatus(s));
+    }
+    if (entry.type === 'spritesheet') {
+      return assetService.subscribeSheet(entry.slug, (s) => setStatus(s));
     }
     return assetService.subscribe(entry.slug, 'sound', (_buf, s) => setStatus(s));
   }, [entry.slug, entry.type, entry.url]);
@@ -379,11 +380,22 @@ function EditRow({ entry, store, onClose }: { entry: AssetEntry; store: Manifest
   const [preload,     setPreload]     = useState(entry.preload);
   const [description, setDescription] = useState(entry.description ?? '');
   const [tags,        setTags]        = useState((entry.tags ?? []).join(', '));
+  const [cols,        setCols]        = useState(entry.cols !== undefined ? String(entry.cols) : '');
+  const [rows,        setRows]        = useState(entry.rows !== undefined ? String(entry.rows) : '');
   const [error,       setError]       = useState<string | null>(null);
   const preflight = useUrlPreflight(url, entry.url);
+  const isSheet   = entry.type === 'spritesheet';
 
   const commit = () => {
     if (name.trim().length === 0) { setError('Name is required.'); return; }
+    let colsNum: number | undefined;
+    let rowsNum: number | undefined;
+    if (isSheet) {
+      colsNum = Number(cols);
+      rowsNum = Number(rows);
+      if (!Number.isInteger(colsNum) || colsNum < 1) { setError('Cols must be a positive integer.'); return; }
+      if (!Number.isInteger(rowsNum) || rowsNum < 1) { setError('Rows must be a positive integer.'); return; }
+    }
     try {
       store.editDraft((d) => d.update(entry.slug, {
         name:        name.trim(),
@@ -391,10 +403,16 @@ function EditRow({ entry, store, onClose }: { entry: AssetEntry; store: Manifest
         preload,
         description: description.trim() || undefined,
         tags:        tags.split(',').map((t) => t.trim()).filter(Boolean),
+        ...(isSheet ? { cols: colsNum, rows: rowsNum } : {}),
       }));
       // URL changed → drop the cached fetch so subscribed consumers
-      // observe the new asset on next resolve.
+      // observe the new asset on next resolve. For sheets, invalidate
+      // refires every sprite-ref subscriber too.
       if (url !== entry.url) assetService.invalidate(entry.slug);
+      // Grid changed → refire sprite subscribers against new cols/rows.
+      else if (isSheet && (colsNum !== entry.cols || rowsNum !== entry.rows)) {
+        assetService.invalidate(entry.slug);
+      }
       onClose();
     } catch (e) {
       setError((e as Error).message);
@@ -419,6 +437,12 @@ function EditRow({ entry, store, onClose }: { entry: AssetEntry; store: Manifest
           <input type="checkbox" checked={preload} onChange={(e) => setPreload(e.target.checked)} />
           <span style={{ fontSize: 11, color: '#bdbdc0' }}>Fetch at session start</span>
         </label>
+        {isSheet && <>
+          <div style={FIELD_LABEL}>Cols</div>
+          <input style={INPUT} type="number" min={1} step={1} value={cols} onChange={(e) => setCols(e.target.value)} />
+          <div style={FIELD_LABEL}>Rows</div>
+          <input style={INPUT} type="number" min={1} step={1} value={rows} onChange={(e) => setRows(e.target.value)} />
+        </>}
       </div>
       <PreflightLine state={preflight} />
       {error && <div style={ERROR_LINE}>{error}</div>}
@@ -436,9 +460,12 @@ function AddRow({ store }: { store: ManifestStore }) {
   const [name,    setName]    = useState('');
   const [type,    setType]    = useState<AssetType>('image');
   const [preload, setPreload] = useState(true);
+  const [cols,    setCols]    = useState('');
+  const [rows,    setRows]    = useState('');
   const [error,   setError]   = useState<string | null>(null);
   const [staging, setStaging] = useState(false);
   const preflight = useUrlPreflight(url, '');
+  const isSheet   = type === 'spritesheet';
 
   // Auto-suggest slug from URL filename when the user hasn't manually typed
   // one. Once the user edits the slug field, stop syncing.
@@ -452,7 +479,8 @@ function AddRow({ store }: { store: ManifestStore }) {
 
   const reset = () => {
     setUrl(''); setSlug(''); setName(''); setType('image');
-    setPreload(true); setError(null); setSlugTouched(false); setStaging(false);
+    setPreload(true); setCols(''); setRows('');
+    setError(null); setSlugTouched(false); setStaging(false);
   };
 
   const commit = () => {
@@ -461,9 +489,18 @@ function AddRow({ store }: { store: ManifestStore }) {
     if (!name.trim())     return setError('Name is required.');
     const check = validateSlug(slug, 'custom');
     if (!check.ok)        return setError(check.error);
+    let colsNum: number | undefined;
+    let rowsNum: number | undefined;
+    if (isSheet) {
+      colsNum = Number(cols);
+      rowsNum = Number(rows);
+      if (!Number.isInteger(colsNum) || colsNum < 1) return setError('Cols must be a positive integer.');
+      if (!Number.isInteger(rowsNum) || rowsNum < 1) return setError('Rows must be a positive integer.');
+    }
     try {
       store.editDraft((d) => d.add({
         slug, name: name.trim(), type, url: url.trim(), preload,
+        ...(isSheet ? { cols: colsNum, rows: rowsNum } : {}),
       }));
       reset();
     } catch (e) {
@@ -508,12 +545,19 @@ function AddRow({ store }: { store: ManifestStore }) {
             <option value="image">image</option>
             <option value="model">model</option>
             <option value="sound">sound</option>
+            <option value="spritesheet">spritesheet</option>
           </select>
           <div style={FIELD_LABEL}>Preload</div>
           <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <input type="checkbox" checked={preload} onChange={(e) => setPreload(e.target.checked)} />
             <span style={{ fontSize: 11, color: '#bdbdc0' }}>Fetch at session start</span>
           </label>
+          {isSheet && <>
+            <div style={FIELD_LABEL}>Cols</div>
+            <input style={INPUT} type="number" min={1} step={1} value={cols} onChange={(e) => setCols(e.target.value)} />
+            <div style={FIELD_LABEL}>Rows</div>
+            <input style={INPUT} type="number" min={1} step={1} value={rows} onChange={(e) => setRows(e.target.value)} />
+          </>}
         </div>
         <PreflightLine state={preflight} />
         {error && <div style={ERROR_LINE}>{error}</div>}

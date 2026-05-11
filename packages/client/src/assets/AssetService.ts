@@ -125,10 +125,13 @@ interface ImageEntry {
   sheetSlug?:  string;
 }
 
+type SheetStatusListener = (status: AssetStatus) => void;
+
 interface SheetEntry {
   status:      AssetStatus;
   texture:     THREE.Texture | null;
   loadPromise: Promise<THREE.Texture | null>;
+  listeners:   Set<SheetStatusListener>;
 }
 
 interface ModelEntry {
@@ -480,6 +483,16 @@ export class AssetService {
     });
   }
 
+  // Subscribe to a spritesheet's parent-image load status. The Asset Manager
+  // uses this to surface the warning badge on a broken sheet URL — sprite-ref
+  // subscribers go broken automatically; the badge sees the underlying cause.
+  subscribeSheet(slug: string, listener: SheetStatusListener): () => void {
+    const entry = this.ensureSheet(slug);
+    entry.listeners.add(listener);
+    listener(entry.status);
+    return () => { entry.listeners.delete(listener); };
+  }
+
   private ensureSheet(slug: string): SheetEntry {
     const existing = this.sheets.get(slug);
     if (existing) return existing;
@@ -487,6 +500,7 @@ export class AssetService {
       status:      'pending',
       texture:     null,
       loadPromise: Promise.resolve(null),
+      listeners:   new Set(),
     };
     this.sheets.set(slug, entry);
     this.startSheetLoad(slug, entry);
@@ -494,14 +508,17 @@ export class AssetService {
   }
 
   private startSheetLoad(slug: string, entry: SheetEntry): void {
+    const notifySheet = (s: AssetStatus) => { for (const l of entry.listeners) l(s); };
     const found = this.lookupSlug(slug);
     if (!found || found.type !== 'spritesheet') {
       entry.status      = 'broken';
       entry.texture     = null;
       entry.loadPromise = Promise.resolve(null);
+      notifySheet('broken');
       return;
     }
-    entry.status      = 'pending';
+    entry.status = 'pending';
+    notifySheet('pending');
     entry.loadPromise = this.imageLoader(found.url).then(
       (tex) => {
         // Filters must be set BEFORE the texture is uploaded to the GPU.
@@ -515,11 +532,13 @@ export class AssetService {
         tex.magFilter       = THREE.LinearFilter;
         entry.status  = 'loaded';
         entry.texture = tex;
+        notifySheet('loaded');
         return tex;
       },
       () => {
         entry.status  = 'broken';
         entry.texture = null;
+        notifySheet('broken');
         return null;
       },
     );

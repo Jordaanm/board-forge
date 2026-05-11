@@ -24,7 +24,7 @@ import { type SeatIndex } from '../seats/SeatLayout';
 export const SAVE_FORMAT  = 'vtt-scene';
 export const SAVE_VERSION = 1;
 
-const ASSET_TYPES: ReadonlySet<AssetType> = new Set(['image', 'model', 'sound']);
+const ASSET_TYPES: ReadonlySet<AssetType> = new Set(['image', 'model', 'sound', 'spritesheet']);
 
 export interface SavedScript {
   source:      string;
@@ -182,7 +182,7 @@ function decodeManifest(raw: unknown): AssetEntry[] {
       throw new SaveFileError(`manifest[${i}].name must be a non-empty string.`);
     }
     if (typeof e.type !== 'string' || !ASSET_TYPES.has(e.type as AssetType)) {
-      throw new SaveFileError(`manifest[${i}].type must be one of image|model|sound.`);
+      throw new SaveFileError(`manifest[${i}].type must be one of image|model|sound|spritesheet.`);
     }
     if (typeof e.url !== 'string') {
       throw new SaveFileError(`manifest[${i}].url must be a string.`);
@@ -198,6 +198,14 @@ function decodeManifest(raw: unknown): AssetEntry[] {
         throw new SaveFileError(`manifest[${i}].tags must be a string array.`);
       }
     }
+    if (e.type === 'spritesheet') {
+      if (typeof e.cols !== 'number' || !Number.isInteger(e.cols) || e.cols < 1) {
+        throw new SaveFileError(`manifest[${i}].cols must be a positive integer.`);
+      }
+      if (typeof e.rows !== 'number' || !Number.isInteger(e.rows) || e.rows < 1) {
+        throw new SaveFileError(`manifest[${i}].rows must be a positive integer.`);
+      }
+    }
     return {
       slug,
       name:        e.name,
@@ -206,6 +214,7 @@ function decodeManifest(raw: unknown): AssetEntry[] {
       preload:     e.preload,
       description: e.description as string | undefined,
       tags:        e.tags ? [...(e.tags as string[])] : undefined,
+      ...(e.type === 'spritesheet' ? { cols: e.cols as number, rows: e.rows as number } : {}),
     };
   });
 }
@@ -219,6 +228,8 @@ function cloneAssetEntry(e: AssetEntry): AssetEntry {
     preload:     e.preload,
     description: e.description,
     tags:        e.tags ? [...e.tags] : undefined,
+    cols:        e.cols,
+    rows:        e.rows,
   };
 }
 

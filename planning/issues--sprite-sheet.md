@@ -109,7 +109,7 @@ Teach [AssetService](../packages/client/src/assets/AssetService.ts) to resolve s
 
 ---
 
-## Issue 4 — AssetManagerModal creates/edits spritesheet entries
+## Issue 4 — AssetManagerModal creates/edits spritesheet entries ✅ DONE
 
 **Type:** AFK
 **Blocked by:** #2
@@ -127,11 +127,11 @@ Extend the Custom tab in [AssetManagerModal](../packages/client/src/components/A
 
 ### Acceptance criteria
 
-- [ ] AddRow: selecting `spritesheet` reveals `cols` / `rows` inputs; both required, positive integers
-- [ ] EditRow: existing spritesheet entry shows editable `cols` / `rows`; saving applies immediately with no warning/scan
-- [ ] Switching the type away from spritesheet hides/clears the cols/rows fields
-- [ ] CORS preflight warning surfaces for sheets the same way it does for plain images
-- [ ] Primitives and Base tabs remain free of spritesheet entries
+- [x] AddRow: selecting `spritesheet` reveals `cols` / `rows` inputs; both required, positive integers
+- [x] EditRow: existing spritesheet entry shows editable `cols` / `rows`; saving applies immediately with no warning/scan
+- [x] Switching the type away from spritesheet hides/clears the cols/rows fields
+- [x] CORS preflight warning surfaces for sheets the same way it does for plain images
+- [x] Primitives and Base tabs remain free of spritesheet entries
 
 ### Blocked by
 
