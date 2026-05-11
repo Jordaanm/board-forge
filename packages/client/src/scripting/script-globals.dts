@@ -9,7 +9,7 @@ type Listener = (payload: unknown) => void;
 
 type SeatIndex = number;
 
-type AssetType = 'image' | 'model' | 'sound';
+type AssetType = 'image' | 'model' | 'sound' | 'spritesheet';
 
 interface AssetEntry {
     readonly slug: string;
@@ -19,6 +19,8 @@ interface AssetEntry {
     readonly preload: boolean;
     readonly description?: string;
     readonly tags?: readonly string[];
+    readonly cols?: number;
+    readonly rows?: number;
 }
 
 declare class AssetsApi {

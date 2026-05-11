@@ -30,7 +30,7 @@ export type EditorListener = (payload: unknown) => void;
 // Mirrors the runtime SeatIndex shape (number, narrowed by host code).
 export type EditorSeatIndex = number;
 
-export type EditorAssetType = 'image' | 'model' | 'sound';
+export type EditorAssetType = 'image' | 'model' | 'sound' | 'spritesheet';
 
 export interface EditorAssetEntry {
   readonly slug:         string;
@@ -40,6 +40,8 @@ export interface EditorAssetEntry {
   readonly preload:      boolean;
   readonly description?: string;
   readonly tags?:        readonly string[];
+  readonly cols?:        number;
+  readonly rows?:        number;
 }
 
 export class EditorAssetsApi {

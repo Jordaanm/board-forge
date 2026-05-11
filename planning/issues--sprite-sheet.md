@@ -37,7 +37,7 @@ None — can start immediately.
 
 ---
 
-## Issue 2 — Manifest + scripting types support `spritesheet`
+## Issue 2 — Manifest + scripting types support `spritesheet` ✅ DONE
 
 **Type:** AFK
 **Blocked by:** #1
@@ -57,11 +57,11 @@ Extend `Manifest` and the scripting type surface to recognize `spritesheet` as a
 
 ### Acceptance criteria
 
-- [ ] `Manifest.test.ts` covers: add/update of spritesheet entries, cols/rows required as integers ≥1, rejected on non-spritesheet types, cols/rows mutable on update, slug/type immutable on update
-- [ ] `add('base:sheet', { type: 'spritesheet', … })` rejected
-- [ ] Existing image/model/sound tests still pass unchanged
-- [ ] `script-globals.dts` regenerated and committed; `Assets.get('custom:deck')` typed to return `AssetEntry` with optional `cols`/`rows`
-- [ ] No consumer of `AssetEntry` regresses (forward-compatible: pre-spritesheet consumers ignore the new fields)
+- [x] `Manifest.test.ts` covers: add/update of spritesheet entries, cols/rows required as integers ≥1, rejected on non-spritesheet types, cols/rows mutable on update, slug/type immutable on update
+- [x] `add('base:sheet', { type: 'spritesheet', … })` rejected
+- [x] Existing image/model/sound tests still pass unchanged
+- [x] `script-globals.dts` regenerated and committed; `Assets.get('custom:deck')` typed to return `AssetEntry` with optional `cols`/`rows`
+- [x] No consumer of `AssetEntry` regresses (forward-compatible: pre-spritesheet consumers ignore the new fields)
 
 ### Blocked by
 

@@ -165,3 +165,49 @@ describe('Manifest.list / get', () => {
     expect(m.get('custom:my-card')?.tags).toEqual(['a', 'b']);
   });
 });
+
+describe('Manifest spritesheet entries', () => {
+  const sheet: AssetEntry = {
+    slug: 'custom:deck', name: 'Deck', type: 'spritesheet',
+    url: 'http://x/deck.png', preload: true, cols: 13, rows: 4,
+  };
+
+  test('add accepts spritesheet with cols/rows', () => {
+    const m = Manifest.empty().add(sheet);
+    const got = m.get('custom:deck')!;
+    expect(got.type).toBe('spritesheet');
+    expect(got.cols).toBe(13);
+    expect(got.rows).toBe(4);
+  });
+
+  test('rejects spritesheet missing cols or rows', () => {
+    expect(() => Manifest.empty().add({ ...sheet, cols: undefined })).toThrow(/cols/);
+    expect(() => Manifest.empty().add({ ...sheet, rows: undefined })).toThrow(/rows/);
+  });
+
+  test('rejects non-positive-integer cols/rows', () => {
+    expect(() => Manifest.empty().add({ ...sheet, cols: 0 })).toThrow(/cols/);
+    expect(() => Manifest.empty().add({ ...sheet, rows: -1 })).toThrow(/rows/);
+    expect(() => Manifest.empty().add({ ...sheet, cols: 1.5 })).toThrow(/cols/);
+  });
+
+  test('rejects cols/rows on non-spritesheet types', () => {
+    expect(() => Manifest.empty().add({ ...sampleImage, cols: 2 } as AssetEntry)).toThrow(/cols/);
+    expect(() => Manifest.empty().add({ ...sampleImage, rows: 2 } as AssetEntry)).toThrow(/rows/);
+  });
+
+  test('rejects spritesheet outside the custom namespace', () => {
+    expect(() => Manifest.empty().add({ ...sheet, slug: 'base:deck' })).toThrow(/custom/);
+    expect(() => Manifest.empty().add({ ...sheet, slug: 'prim:deck' })).toThrow(/custom/);
+  });
+
+  test('cols/rows are mutable on update; slug/type still immutable', () => {
+    const m  = Manifest.empty().add(sheet);
+    const m2 = m.update('custom:deck', { cols: 8, rows: 7 });
+    expect(m2.get('custom:deck')?.cols).toBe(8);
+    expect(m2.get('custom:deck')?.rows).toBe(7);
+
+    expect(() => m.update('custom:deck', { slug: 'custom:other' as never })).toThrow(/immutable/);
+    expect(() => m.update('custom:deck', { type: 'image' })).toThrow(/immutable/);
+  });
+});

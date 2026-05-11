@@ -9,7 +9,7 @@
 // is intentionally narrow so save files and wire payloads stay terse and
 // case-folding can't introduce ambiguity.
 
-export type AssetType = 'image' | 'model' | 'sound';
+export type AssetType = 'image' | 'model' | 'sound' | 'spritesheet';
 
 export interface AssetEntry {
   slug:         string;
@@ -19,6 +19,11 @@ export interface AssetEntry {
   preload:      boolean;
   description?: string;
   tags?:        string[];
+  // spritesheet-only: positive integers. Required iff type === 'spritesheet',
+  // rejected otherwise. cols/rows are mutable on update — hosts iterate on
+  // the grid without a re-import flow.
+  cols?:        number;
+  rows?:        number;
 }
 
 export class ManifestError extends Error {}
@@ -57,7 +62,11 @@ export function isSlug(ref: string): boolean {
   return namespaceOf(ref) !== null;
 }
 
-const ASSET_TYPES = new Set<AssetType>(['image', 'model', 'sound']);
+const ASSET_TYPES = new Set<AssetType>(['image', 'model', 'sound', 'spritesheet']);
+
+function isPositiveInt(n: unknown): n is number {
+  return typeof n === 'number' && Number.isInteger(n) && n >= 1;
+}
 
 function validateEntry(entry: AssetEntry): void {
   const slugCheck = validateSlug(entry.slug);
@@ -79,6 +88,24 @@ function validateEntry(entry: AssetEntry): void {
   }
   if (entry.tags !== undefined && (!Array.isArray(entry.tags) || entry.tags.some(t => typeof t !== 'string'))) {
     throw new ManifestError(`entry "${entry.slug}": tags must be a string array`);
+  }
+  if (entry.type === 'spritesheet') {
+    if (namespaceOf(entry.slug) !== 'custom') {
+      throw new ManifestError(`entry "${entry.slug}": spritesheet entries must use the "custom" namespace`);
+    }
+    if (!isPositiveInt(entry.cols)) {
+      throw new ManifestError(`entry "${entry.slug}": spritesheet cols must be a positive integer`);
+    }
+    if (!isPositiveInt(entry.rows)) {
+      throw new ManifestError(`entry "${entry.slug}": spritesheet rows must be a positive integer`);
+    }
+  } else {
+    if (entry.cols !== undefined) {
+      throw new ManifestError(`entry "${entry.slug}": cols is only valid on spritesheet entries`);
+    }
+    if (entry.rows !== undefined) {
+      throw new ManifestError(`entry "${entry.slug}": rows is only valid on spritesheet entries`);
+    }
   }
 }
 
