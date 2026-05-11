@@ -174,7 +174,7 @@ Add an in-place drill-in mode to [AssetPicker](../packages/client/src/components
 
 ---
 
-## Issue 6 — End-to-end smoke test: card deck
+## Issue 6 — End-to-end smoke test: card deck ✅ DONE
 
 **Type:** HITL
 **Blocked by:** #5
@@ -196,12 +196,12 @@ Flow:
 
 ### Acceptance criteria
 
-- [ ] Host flow: paste → cols/rows → spawn Card → pick face → render
-- [ ] No visible halo / cross-cell bleed at low render sizes
-- [ ] Save → reload preserves sprite ref (entity property is a plain string)
-- [ ] Guest in a second window sees the same sheet and the same card face
-- [ ] Grid shrink → magenta placeholder fallback on broken ref
-- [ ] CORS-failing sheet URL surfaces the preflight warning
+- [x] Host flow: paste → cols/rows → spawn Card → pick face → render
+- [x] No visible halo / cross-cell bleed at low render sizes
+- [x] Save → reload preserves sprite ref (entity property is a plain string)
+- [x] Guest in a second window sees the same sheet and the same card face
+- [x] Grid shrink → magenta placeholder fallback on broken ref
+- [x] CORS-failing sheet URL surfaces the preflight warning
 
 ### Blocked by
 
