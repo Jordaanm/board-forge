@@ -16,7 +16,10 @@ import { type SeatIndex } from '../seats/SeatLayout';
 import { type HostReplicatorV2 } from './HostReplicatorV2';
 import { type MergeService } from './MergeService';
 import { PhysicsComponent } from './components/PhysicsComponent';
+import { TransformComponent } from './components/TransformComponent';
 import { ZoneComponent } from './components/ZoneComponent';
+import { resolveSnap } from './snap/resolveSnap';
+import { gatherSnapCandidates, collectDescendantIds, yawToQuat } from './snap/snapHost';
 
 export interface ReleaseVelocity {
   vx: number;
@@ -67,16 +70,27 @@ export class HoldService {
     if (entity.heldBy === null) return;
     entity.heldBy = null;
 
+    const snap = this.resolveSnapForRelease(entity);
     const body = entity.getComponent(PhysicsComponent)?.body;
     if (body) {
       const prior = this.priorBodyType.get(entity.id) ?? CANNON.Body.DYNAMIC;
       body.type = prior;
       this.priorBodyType.delete(entity.id);
-      if (vel) body.velocity.set(vel.vx, vel.vy, vel.vz);
-      else     body.velocity.setZero();
+      if (snap) {
+        // Snap hit: zero velocity and skip the throw entirely. Position is
+        // applied below via the TransformComponent setState so guests see the
+        // teleport on the reliable channel.
+        body.velocity.setZero();
+      } else if (vel) {
+        body.velocity.set(vel.vx, vel.vy, vel.vz);
+      } else {
+        body.velocity.setZero();
+      }
       body.angularVelocity.setZero();
       body.wakeUp();
     }
+
+    if (snap) this.applySnap(entity, snap);
 
     this.replicator.enqueueHoldRelease(
       vel
@@ -118,5 +132,44 @@ export class HoldService {
   // overlap events for it until released.
   static suppressZoneEvents(entity: Entity): boolean {
     return entity.heldBy !== null;
+  }
+
+  // ── Snap on release (issue #3 of issues--snap.md) ─────────────────────
+  // Pure read against the scene + the dropped entity's transform. Returns
+  // null when no candidate point is within radius.
+  private resolveSnapForRelease(entity: Entity) {
+    const t = entity.getComponent(TransformComponent);
+    if (!t) return null;
+    const [dx, _dy, dz] = t.state.position;
+    return resolveSnap({
+      droppedXZ:       [dx, dz],
+      droppedEntityId: entity.id,
+      descendantIds:   collectDescendantIds(this.scene, entity.id),
+      candidates:      gatherSnapCandidates(this.scene),
+    });
+  }
+
+  private applySnap(
+    entity: Entity,
+    snap: { targetPos: [number, number, number]; targetYaw: number; snapRotation: boolean },
+  ): void {
+    const t = entity.getComponent(TransformComponent);
+    if (!t) return;
+    const nextRotation = snap.snapRotation
+      ? yawToQuat(snap.targetYaw)
+      : t.state.rotation;
+    t.setState({
+      position: snap.targetPos,
+      rotation: nextRotation,
+      scale:    t.state.scale,
+    });
+    // Sync the physics body so the next physics tick doesn't immediately
+    // overwrite the snap with the body's stale pose.
+    const body = entity.getComponent(PhysicsComponent)?.body;
+    if (body) {
+      body.position.set(snap.targetPos[0], snap.targetPos[1], snap.targetPos[2]);
+      const [qx, qy, qz, qw] = nextRotation;
+      body.quaternion.set(qx, qy, qz, qw);
+    }
   }
 }

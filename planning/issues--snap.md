@@ -131,17 +131,21 @@ Hook the snap-resolution module (#1) into the host's GrabTool release path so dr
 
 ### Acceptance criteria
 
-- [ ] Host drops a carried object near a SnapMarker (within the marker's snap-point radius in XZ) → object teleports to the marker's snap-point world pos; linear and angular velocity zeroed
-- [ ] Default SnapMarker point has `snapRotation: false` → dropped object's rotation is preserved on snap
-- [ ] Set `snapRotation: true` on the marker's point (via direct state edit for now; editor UX lands in #4) and drop again → dropped object's yaw is set to the point's world yaw
-- [ ] Drop away from any marker → existing throw / physics behavior unchanged
-- [ ] Two markers near each other, drop between them → closest in XZ wins
-- [ ] Drop the SnapMarker itself near another marker → the moving marker's own snap point is excluded from candidates; if the other marker is within its own radius, the moving marker snaps to the other one (consistent universal rule; no special-casing)
-- [ ] Guest releases a carried object near a host's SnapMarker → object snaps the same way (host runs the check; result reaches guest as a normal TransformComponent patch)
-- [ ] Scripted `entity.transform.setPosition(...)` to a position inside a snap radius does **not** trigger snap
-- [ ] Loading a save with entities placed inside snap radii does **not** trigger snap
-- [ ] Initial scene spawn does **not** trigger snap
-- [ ] No new keybind, no UI affordance — snap is automatic on release
+- [x] Host drops a carried object near a SnapMarker (within the marker's snap-point radius in XZ) → object teleports to the marker's snap-point world pos; linear and angular velocity zeroed
+- [x] Default SnapMarker point has `snapRotation: false` → dropped object's rotation is preserved on snap
+- [x] Set `snapRotation: true` on the marker's point (via direct state edit for now; editor UX lands in #4) and drop again → dropped object's yaw is set to the point's world yaw
+- [x] Drop away from any marker → existing throw / physics behavior unchanged
+- [x] Two markers near each other, drop between them → closest in XZ wins
+- [x] Drop the SnapMarker itself near another marker → the moving marker's own snap point is excluded from candidates; if the other marker is within its own radius, the moving marker snaps to the other one (consistent universal rule; no special-casing)
+- [x] Guest releases a carried object near a host's SnapMarker → object snaps the same way (host runs the check; result reaches guest as a normal TransformComponent patch)
+- [x] Scripted `entity.transform.setPosition(...)` to a position inside a snap radius does **not** trigger snap
+- [x] Loading a save with entities placed inside snap radii does **not** trigger snap
+- [x] Initial scene spawn does **not** trigger snap
+- [x] No new keybind, no UI affordance — snap is automatic on release
+
+**Status:** Complete. Snap logic lives in `HoldService.release` (host's single
+release convergence point — host's own GrabTool releases and guest hold-release
+RPCs both land here, so guest drops snap without GrabTool changes).
 
 ### Blocked by
 
