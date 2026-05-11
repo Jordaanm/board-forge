@@ -174,13 +174,17 @@ Add the numeric-form editor UX so the host can add, edit, and delete snap points
 
 ### Acceptance criteria
 
-- [ ] With **Show Snap Points** on and a SnapMarker selected, the editor panel shows the "Snap Points" section with the marker's default point listed and editable
-- [ ] Clicking "Add Snap Point" appends a new point at origin; visualization disc appears
-- [ ] Editing x/y/z/yaw/radius updates the point and the visualization in place
-- [ ] Toggling `snapRotation` adds/removes the forward arrow
-- [ ] Deleting a point removes both state and visualization
-- [ ] Editor flow works on regular entities too — manually attach a `SnapPointsComponent` to a card (via dev console or direct state edit), open the card in the editor panel, configure 4 edge points, drop a second card near the first card's right edge → second card snaps to the first card's edge point (validates the row-of-cards use case manually; built-in defaults remain out of scope per the PRD)
-- [ ] Edits replicate to guests over the reliable channel (verify by inspecting state on a second window)
+- [x] With **Show Snap Points** on and a SnapMarker selected, the editor panel shows the "Snap Points" section with the marker's default point listed and editable
+- [x] Clicking "Add Snap Point" appends a new point at origin; visualization disc appears
+- [x] Editing x/y/z/yaw/radius updates the point and the visualization in place
+- [x] Toggling `snapRotation` adds/removes the forward arrow
+- [x] Deleting a point removes both state and visualization
+- [x] Editor flow works on regular entities too — manually attach a `SnapPointsComponent` to a card (via dev console or direct state edit), open the card in the editor panel, configure 4 edge points, drop a second card near the first card's right edge → second card snaps to the first card's edge point (validates the row-of-cards use case manually; built-in defaults remain out of scope per the PRD)
+- [x] Edits replicate to guests over the reliable channel (verify by inspecting state on a second window)
+
+**Status:** Complete. Editor form lives in `SnapPointsComponent.onEditorTools`
+/ `onAction`; numeric/boolean items + row grouping added to the shared
+`EditorToolItem` union so the editor panel renders inline per-point rows.
 
 ### Blocked by
 

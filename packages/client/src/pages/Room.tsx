@@ -374,14 +374,15 @@ export function Room({ roomId, isHost }: Props) {
     });
   })();
 
-  const handleToolAction = (item: EditorToolItem & { kind: 'button' }) => {
+  const handleToolAction = (item: EditorToolItem, value?: unknown) => {
     if (!selectedId || !handle) return;
-    dispatchEditorTool(item, undefined, selectedId, {
+    dispatchEditorTool(item, value, selectedId, {
       entity:    handle.controller.get(selectedId)?.entity,
       hostLocal: {
         attachSurface: (id) => { handle.controller.attachSurface(id); },
         attachElement: (id, kind) => { handle.controller.attachElement(id, kind); },
       },
+      notify: () => handle.controller.requestRefresh(),
     });
   };
 

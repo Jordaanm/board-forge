@@ -51,7 +51,10 @@ interface Props {
   // Component-prop write. Routes through World.updateComponentProp.
   onUpdateComponentProp: (id: string, typeId: string, key: string, value: unknown) => void;
   onToggleFreeCamera:   (on: boolean) => void;
-  onToolAction:         (item: EditorToolItem & { kind: 'button' }) => void;
+  // Fired for any interactive tool item — buttons (value undefined),
+  // numerics (value: number), or booleans (value: boolean). Headings and
+  // rows never call this.
+  onToolAction:         (item: EditorToolItem, value?: unknown) => void;
   onMutateElement:      (surfaceId: string, elementId: string, patch: Record<string, unknown>) => void;
   onRemoveElement:      (surfaceId: string, elementId: string) => void;
   onDeleteEntity:       (id: string) => void;
@@ -919,35 +922,135 @@ function ToolsSection({
   tools, onToolAction,
 }: {
   tools:        EditorToolItem[];
-  onToolAction: (item: EditorToolItem & { kind: 'button' }) => void;
+  onToolAction: (item: EditorToolItem, value?: unknown) => void;
 }) {
   if (tools.length === 0) return null;
   return (
     <div style={SECTION}>
       <div style={SECTION_LABEL}>Tools</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {tools.map((item, i) => {
-          if (item.kind === 'heading') {
-            return (
-              <div
-                key={`h-${i}`}
-                style={{ ...SECTION_LABEL, marginBottom: 0, marginTop: i === 0 ? 0 : 4 }}
-              >{item.label}</div>
-            );
-          }
-          return (
-            <button
-              key={`${item.componentTypeId ?? ''}:${item.id}`}
-              style={SPAWN_BTN}
-              disabled={item.disabled}
-              onClick={() => onToolAction(item)}
-            >{item.label}</button>
-          );
-        })}
+        {tools.map((item, i) => (
+          <ToolItemView
+            key={toolItemKey(item, i)}
+            item={item}
+            firstInList={i === 0}
+            onToolAction={onToolAction}
+          />
+        ))}
       </div>
     </div>
   );
 }
+
+function ToolItemView({
+  item, firstInList, onToolAction,
+}: {
+  item:         EditorToolItem;
+  firstInList:  boolean;
+  onToolAction: (item: EditorToolItem, value?: unknown) => void;
+}) {
+  if (item.kind === 'heading') {
+    return (
+      <div style={{ ...SECTION_LABEL, marginBottom: 0, marginTop: firstInList ? 0 : 4 }}>
+        {item.label}
+      </div>
+    );
+  }
+  if (item.kind === 'row') {
+    return (
+      <div style={TOOL_ROW}>
+        {item.items.map((sub, j) => (
+          <ToolItemView
+            key={toolItemKey(sub, j)}
+            item={sub}
+            firstInList={false}
+            onToolAction={onToolAction}
+          />
+        ))}
+      </div>
+    );
+  }
+  if (item.kind === 'button') {
+    return (
+      <button
+        style={SPAWN_BTN}
+        disabled={item.disabled}
+        onClick={() => onToolAction(item)}
+      >{item.label}</button>
+    );
+  }
+  if (item.kind === 'number') {
+    return (
+      <label style={TOOL_FIELD}>
+        {item.label && <span style={TOOL_FIELD_LABEL}>{item.label}</span>}
+        <input
+          type="number"
+          step={item.step ?? 0.1}
+          min={item.min}
+          max={item.max}
+          style={TOOL_INPUT}
+          value={Number.isFinite(item.value) ? item.value : 0}
+          onChange={(e) => {
+            const n = parseFloat(e.target.value);
+            onToolAction(item, Number.isFinite(n) ? n : 0);
+          }}
+        />
+      </label>
+    );
+  }
+  // boolean
+  return (
+    <label style={TOOL_FIELD}>
+      {item.label && <span style={TOOL_FIELD_LABEL}>{item.label}</span>}
+      <input
+        type="checkbox"
+        checked={Boolean(item.value)}
+        onChange={(e) => onToolAction(item, e.target.checked)}
+      />
+    </label>
+  );
+}
+
+function toolItemKey(item: EditorToolItem, idx: number): string {
+  if (item.kind === 'heading') return `h-${idx}-${item.label}`;
+  if (item.kind === 'row')     return `row-${idx}`;
+  const argSuffix = item.args ? JSON.stringify(item.args) : '';
+  return `${item.componentTypeId ?? ''}:${item.id}:${argSuffix}`;
+}
+
+const TOOL_ROW: React.CSSProperties = {
+  display:    'flex',
+  alignItems: 'flex-end',
+  flexWrap:   'wrap',
+  gap:        4,
+};
+
+const TOOL_FIELD: React.CSSProperties = {
+  display:       'flex',
+  flexDirection: 'column',
+  alignItems:    'stretch',
+  gap:           2,
+  flex:          '1 1 36px',
+  minWidth:      0,
+};
+
+const TOOL_FIELD_LABEL: React.CSSProperties = {
+  color:    '#888',
+  fontSize: 10,
+};
+
+const TOOL_INPUT: React.CSSProperties = {
+  width:        '100%',
+  background:   'rgba(0,0,0,0.4)',
+  border:       '1px solid rgba(255,255,255,0.2)',
+  color:        '#e8e8e8',
+  padding:      '3px 4px',
+  borderRadius: 3,
+  fontSize:     11,
+  fontFamily:   'sans-serif',
+  boxSizing:    'border-box',
+  minWidth:     0,
+};
 
 function RollSection({ onRollDice }: { onRollDice: () => void }) {
   return (

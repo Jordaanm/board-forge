@@ -129,6 +129,11 @@ export interface World {
   // Coalesced subscription — fires once per state-affecting tick, not per patch.
   subscribe(fn: () => void): () => void;
 
+  // Force a subscriber notification. Used by paths that mutate state via
+  // `comp.setState` (e.g. editor-tool onAction handlers) where the World
+  // doesn't otherwise know to refresh the panel.
+  requestRefresh(): void;
+
   // Late-join + save/load.
   snapshot(): EntitySerialized[];
   loadSnapshot(snaps: readonly EntitySerialized[]): void;

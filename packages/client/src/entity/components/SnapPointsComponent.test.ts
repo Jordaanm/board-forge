@@ -4,6 +4,7 @@ import { SceneImpl } from '../Scene';
 import { type SpawnContext } from '../EntityComponent';
 import { TransformComponent } from './TransformComponent';
 import { SnapPointsComponent, type SnapPoint } from './SnapPointsComponent';
+import { type EditorToolItem } from '../editorTools';
 import { registerCorePrimitives } from '../spawnables';
 import { PhysicsWorld } from '../../physics/PhysicsWorld';
 
@@ -169,6 +170,113 @@ describe('SnapPointsComponent — raycast guard', () => {
     const disc = getDisc(e.getComponent(SnapPointsComponent)!);
     disc.updateMatrixWorld(true);
     expect(castThroughDisc(disc)).toEqual([]);
+  });
+});
+
+describe('SnapPointsComponent — editor numeric form', () => {
+  test('onEditorTools returns heading + one row per point + add button (host)', () => {
+    const e = scene.spawn('snap-marker', ctx);
+    const comp = e.getComponent(SnapPointsComponent)!;
+    comp.setState({ points: [
+      pt({ id: 'a', localPos: [1, 2, 3], localYaw: 0.5, radius: 0.7, snapRotation: true }),
+      pt({ id: 'b' }),
+    ] });
+    const items = comp.onEditorTools({ recipientSeat: null, isHost: true, entity: e });
+    expect(items[0]).toEqual({ kind: 'heading', label: 'Snap Points' });
+    expect(items[1].kind).toBe('row');
+    expect(items[2].kind).toBe('row');
+    expect(items[items.length - 1]).toEqual({ kind: 'button', id: 'add-point', label: 'Add Snap Point' });
+  });
+
+  test('onEditorTools returns empty on non-host', () => {
+    const e = scene.spawn('snap-marker', ctx);
+    const comp = e.getComponent(SnapPointsComponent)!;
+    expect(comp.onEditorTools({ recipientSeat: null, isHost: false, entity: e })).toEqual([]);
+  });
+
+  test("row carries per-point pointId in every interactive item's args", () => {
+    const e = scene.spawn('snap-marker', ctx);
+    const comp = e.getComponent(SnapPointsComponent)!;
+    comp.setState({ points: [pt({ id: 'pid-1' })] });
+    const items = comp.onEditorTools({ recipientSeat: null, isHost: true, entity: e });
+    const row = items[1] as Extract<EditorToolItem, { kind: 'row' }>;
+    for (const sub of row.items) {
+      if (sub.kind === 'number' || sub.kind === 'boolean' || sub.kind === 'button') {
+        expect((sub.args as { pointId: string }).pointId).toBe('pid-1');
+      }
+    }
+  });
+
+  test('add-point action appends a fresh point with default radius', () => {
+    const e = scene.spawn('snap-marker', ctx);
+    const comp = e.getComponent(SnapPointsComponent)!;
+    const before = comp.state.points.length;
+    comp.onAction('add-point', undefined, { recipientSeat: null, isHost: true, entity: e });
+    expect(comp.state.points.length).toBe(before + 1);
+    const added = comp.state.points[comp.state.points.length - 1];
+    expect(added.localPos).toEqual([0, 0, 0]);
+    expect(added.localYaw).toBe(0);
+    expect(added.snapRotation).toBe(false);
+    expect(added.radius).toBeGreaterThan(0);
+    expect(added.id).toBeTruthy();
+  });
+
+  test('delete-point removes the matching point', () => {
+    const e = scene.spawn('snap-marker', ctx);
+    const comp = e.getComponent(SnapPointsComponent)!;
+    comp.setState({ points: [pt({ id: 'a' }), pt({ id: 'b' })] });
+    comp.onAction('delete-point', { pointId: 'a' }, { recipientSeat: null, isHost: true, entity: e });
+    expect(comp.state.points.map(p => p.id)).toEqual(['b']);
+  });
+
+  test('edit-x / edit-y / edit-z update localPos coordinates independently', () => {
+    const e = scene.spawn('snap-marker', ctx);
+    const comp = e.getComponent(SnapPointsComponent)!;
+    comp.setState({ points: [pt({ id: 'a', localPos: [0, 0, 0] })] });
+    const c = { recipientSeat: null, isHost: true, entity: e };
+    comp.onAction('edit-x', { pointId: 'a', value: 1.5 }, c);
+    comp.onAction('edit-y', { pointId: 'a', value: 2.5 }, c);
+    comp.onAction('edit-z', { pointId: 'a', value: 3.5 }, c);
+    expect(comp.state.points[0].localPos).toEqual([1.5, 2.5, 3.5]);
+  });
+
+  test('edit-yaw / edit-radius / edit-rot update the right fields', () => {
+    const e = scene.spawn('snap-marker', ctx);
+    const comp = e.getComponent(SnapPointsComponent)!;
+    comp.setState({ points: [pt({ id: 'a' })] });
+    const c = { recipientSeat: null, isHost: true, entity: e };
+    comp.onAction('edit-yaw',    { pointId: 'a', value: 1.2 },  c);
+    comp.onAction('edit-radius', { pointId: 'a', value: 0.9 },  c);
+    comp.onAction('edit-rot',    { pointId: 'a', value: true }, c);
+    expect(comp.state.points[0].localYaw).toBe(1.2);
+    expect(comp.state.points[0].radius).toBe(0.9);
+    expect(comp.state.points[0].snapRotation).toBe(true);
+  });
+
+  test('edit-radius clamps negatives to zero', () => {
+    const e = scene.spawn('snap-marker', ctx);
+    const comp = e.getComponent(SnapPointsComponent)!;
+    comp.setState({ points: [pt({ id: 'a', radius: 0.5 })] });
+    comp.onAction('edit-radius', { pointId: 'a', value: -1 }, { recipientSeat: null, isHost: true, entity: e });
+    expect(comp.state.points[0].radius).toBe(0);
+  });
+
+  test('edit-* with mismatched pointId is a no-op', () => {
+    const e = scene.spawn('snap-marker', ctx);
+    const comp = e.getComponent(SnapPointsComponent)!;
+    comp.setState({ points: [pt({ id: 'a', localPos: [0, 0, 0] })] });
+    const before = comp.state.points[0];
+    comp.onAction('edit-x', { pointId: 'nope', value: 9 }, { recipientSeat: null, isHost: true, entity: e });
+    expect(comp.state.points[0]).toEqual(before);
+  });
+
+  test('editor edit drives visualization rebuild (snapRotation flips arrow on)', () => {
+    const e = scene.spawn('snap-marker', ctx);
+    const comp = e.getComponent(SnapPointsComponent)!;
+    comp.setState({ points: [pt({ id: 'a', snapRotation: false })] });
+    expect((getGroup(comp).children[0] as THREE.Group).children.length).toBe(1);
+    comp.onAction('edit-rot', { pointId: 'a', value: true }, { recipientSeat: null, isHost: true, entity: e });
+    expect((getGroup(comp).children[0] as THREE.Group).children.length).toBe(2);
   });
 });
 

@@ -164,6 +164,91 @@ describe('dispatchEditorTool', () => {
     }
   });
 
+  test('number kind dispatches with value merged into args', () => {
+    componentRegistry.register(Dispatcher);
+    const e = spawn('e1', Dispatcher);
+    const tracker = e.components.get('dispatcher') as Dispatcher;
+    const item: EditorToolItem = {
+      kind: 'number', id: 'edit-x', value: 0, componentTypeId: 'dispatcher', args: { pointId: 'p1' },
+    };
+    dispatchEditorTool(item, 3.5, e.id, {
+      entity:    e,
+      hostLocal: { attachSurface: () => {}, attachElement: () => {} },
+    });
+    expect(tracker.calls).toHaveLength(1);
+    expect(tracker.calls[0].actionId).toBe('edit-x');
+    expect(tracker.calls[0].args).toEqual({ pointId: 'p1', value: 3.5 });
+  });
+
+  test('boolean kind dispatches with value merged into args', () => {
+    componentRegistry.register(Dispatcher);
+    const e = spawn('e1', Dispatcher);
+    const tracker = e.components.get('dispatcher') as Dispatcher;
+    const item: EditorToolItem = {
+      kind: 'boolean', id: 'edit-rot', value: false, componentTypeId: 'dispatcher', args: { pointId: 'p1' },
+    };
+    dispatchEditorTool(item, true, e.id, {
+      entity:    e,
+      hostLocal: { attachSurface: () => {}, attachElement: () => {} },
+    });
+    expect(tracker.calls[0].args).toEqual({ pointId: 'p1', value: true });
+  });
+
+  test('heading and row kinds are dispatch no-ops', () => {
+    componentRegistry.register(Dispatcher);
+    const e = spawn('e1', Dispatcher);
+    const tracker = e.components.get('dispatcher') as Dispatcher;
+    const heading: EditorToolItem = { kind: 'heading', label: 'X' };
+    const row: EditorToolItem = { kind: 'row', items: [] };
+    dispatchEditorTool(heading, undefined, e.id, {
+      entity: e, hostLocal: { attachSurface: () => {}, attachElement: () => {} },
+    });
+    dispatchEditorTool(row, undefined, e.id, {
+      entity: e, hostLocal: { attachSurface: () => {}, attachElement: () => {} },
+    });
+    expect(tracker.calls).toHaveLength(0);
+  });
+
+  test('deps.notify fires after onAction dispatch', () => {
+    componentRegistry.register(Dispatcher);
+    const e = spawn('e1', Dispatcher);
+    const item: EditorToolItem = { kind: 'button', id: 'do-thing', label: 'X', componentTypeId: 'dispatcher' };
+    let notifyCount = 0;
+    dispatchEditorTool(item, undefined, e.id, {
+      entity:    e,
+      hostLocal: { attachSurface: () => {}, attachElement: () => {} },
+      notify:    () => { notifyCount++; },
+    });
+    expect(notifyCount).toBe(1);
+  });
+
+  test('aggregateEditorTools tags interactive items inside rows', () => {
+    class WithRow extends EntityComponent<object> {
+      static typeId = 'with-row';
+      onSpawn() {}
+      onPropertiesChanged() {}
+      onEditorTools(): EditorToolItem[] {
+        return [{
+          kind: 'row',
+          items: [
+            { kind: 'number',  id: 'n1', value: 0 },
+            { kind: 'boolean', id: 'b1', value: false },
+            { kind: 'button',  id: 'btn', label: 'x' },
+          ],
+        }];
+      }
+    }
+    componentRegistry.register(WithRow);
+    const e = spawn('e-row', WithRow);
+    const items = aggregateEditorTools(e, { recipientSeat: 0, isHost: true, entity: e });
+    const row = items[0] as Extract<EditorToolItem, { kind: 'row' }>;
+    for (const sub of row.items) {
+      if (sub.kind === 'number' || sub.kind === 'boolean' || sub.kind === 'button') {
+        expect(sub.componentTypeId).toBe('with-row');
+      }
+    }
+  });
+
   test('button without componentTypeId is dropped (no entity, no callback)', () => {
     const item: EditorToolItem & { kind: 'button' } = {
       kind: 'button', id: 'orphan', label: 'Orphan',

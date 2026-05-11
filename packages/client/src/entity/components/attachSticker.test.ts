@@ -347,7 +347,11 @@ describe('SurfaceComponent.onEditorTools', () => {
     const tools = surface.getComponent(SurfaceComponent)!.onEditorTools({
       recipientSeat: null, isHost: true, entity: surface,
     });
-    const ids = tools.map(t => (t.kind === 'button' ? t.id : t.label));
+    const ids = tools.map(t => {
+      if (t.kind === 'button')  return t.id;
+      if (t.kind === 'heading') return t.label;
+      return t.kind;
+    });
     expect(ids).toEqual(['add-rich', 'add-image', 'add-shape-rect', 'add-shape-circle', 'add-button']);
   });
 });

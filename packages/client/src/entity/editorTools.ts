@@ -1,8 +1,9 @@
 // Component-driven editor-panel tool aggregation. Mirrors `aggregateContextMenu`
 // but feeds the host editor panel rather than the right-click menu. Walks an
 // entity's components in topological order, calls `onEditorTools` on each,
-// and concatenates the results. Each button is tagged with the owning
-// component's typeId so the click router can dispatch through `onAction`.
+// and concatenates the results. Each interactive item is tagged with the
+// owning component's typeId so the click router can dispatch through
+// `onAction`.
 
 import { type Entity } from './Entity';
 import { type MenuContext, type ActionContext } from './EntityComponent';
@@ -17,7 +18,30 @@ export type EditorToolItem =
       disabled?:        boolean;
       args?:            object;
     }
-  | { kind: 'heading'; label: string };
+  | { kind: 'heading'; label: string }
+  | {
+      kind:  'number';
+      id:    string;
+      label?: string;
+      value: number;
+      componentTypeId?: string;
+      args?: object;
+      step?: number;
+      min?:  number;
+      max?:  number;
+    }
+  | {
+      kind:  'boolean';
+      id:    string;
+      label?: string;
+      value: boolean;
+      componentTypeId?: string;
+      args?: object;
+    }
+  // Visual grouping of interactive items in a single horizontal row. Used by
+  // SnapPointsComponent so each per-point editor (x/y/z/yaw/r + snap-rot +
+  // delete) is rendered inline.
+  | { kind: 'row'; items: EditorToolItem[] };
 
 export function aggregateEditorTools(entity: Entity, ctx: MenuContext): EditorToolItem[] {
   // Editor panel is host-only; non-host callers get an empty list.
@@ -39,8 +63,11 @@ export function aggregateEditorTools(entity: Entity, ctx: MenuContext): EditorTo
 }
 
 function tagItem(item: EditorToolItem, componentTypeId: string): EditorToolItem {
-  if (item.kind === 'button') {
+  if (item.kind === 'button' || item.kind === 'number' || item.kind === 'boolean') {
     return item.componentTypeId ? item : { ...item, componentTypeId };
+  }
+  if (item.kind === 'row') {
+    return { kind: 'row', items: item.items.map(i => tagItem(i, componentTypeId)) };
   }
   return item;
 }
@@ -57,6 +84,11 @@ export interface EditorToolDeps {
     attachSurface: (parentId: string) => void;
     attachElement: (surfaceId: string, kind: EditorElementKind) => void;
   };
+  // Optional. Fired after `onAction` so the React panel can refresh —
+  // `comp.setState` replicates and updates view artefacts but does not by
+  // itself trigger a `World` subscriber pass. Wire this on host callers that
+  // want add/delete/edit to immediately repaint the panel.
+  notify?:   () => void;
 }
 
 const SURFACE_ELEMENT_ACTIONS: Record<string, EditorElementKind> = {
@@ -68,16 +100,18 @@ const SURFACE_ELEMENT_ACTIONS: Record<string, EditorElementKind> = {
 };
 
 export function dispatchEditorTool(
-  item:    EditorToolItem & { kind: 'button' },
-  args:    object | undefined,
+  item:     EditorToolItem,
+  value:    unknown,
   entityId: string,
-  deps:    EditorToolDeps,
+  deps:     EditorToolDeps,
 ): void {
-  if (item.componentTypeId === 'mesh' && item.id === 'add-surface') {
+  if (item.kind === 'heading' || item.kind === 'row') return;
+
+  if (item.kind === 'button' && item.componentTypeId === 'mesh' && item.id === 'add-surface') {
     deps.hostLocal.attachSurface(entityId);
     return;
   }
-  if (item.componentTypeId === 'surface') {
+  if (item.kind === 'button' && item.componentTypeId === 'surface') {
     const kind = SURFACE_ELEMENT_ACTIONS[item.id];
     if (kind) {
       deps.hostLocal.attachElement(entityId, kind);
@@ -85,11 +119,17 @@ export function dispatchEditorTool(
     }
   }
 
-  // Component-defined buttons fall through to onAction on the owning
-  // component, mirroring the menu dispatch path.
   if (!item.componentTypeId || !deps.entity) return;
   const comp = deps.entity.components.get(item.componentTypeId);
   if (!comp) return;
   const ctx: ActionContext = { recipientSeat: null, isHost: true, entity: deps.entity };
+
+  let args: object | undefined;
+  if (item.kind === 'number' || item.kind === 'boolean') {
+    args = { ...(item.args ?? {}), value };
+  } else {
+    args = item.args;
+  }
   comp.onAction(item.id, args, ctx);
+  deps.notify?.();
 }

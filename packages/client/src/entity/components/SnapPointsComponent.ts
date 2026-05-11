@@ -6,9 +6,11 @@
 // #3; editor numeric form lands in #4.
 
 import * as THREE from 'three';
-import { EntityComponent, type SpawnContext } from '../EntityComponent';
+import { EntityComponent, type SpawnContext, type MenuContext, type ActionContext } from '../EntityComponent';
 import { TransformComponent } from './TransformComponent';
 import { MeshComponent } from './MeshComponent';
+import { type EditorToolItem } from '../editorTools';
+import { newElementId } from './SurfaceElement';
 
 export interface SnapPoint {
   id:           string;
@@ -24,6 +26,8 @@ export interface SnapPointsState {
 
 const DISC_COLOR  = 0x66dd66;
 const ARROW_COLOR = 0x66dd66;
+
+const DEFAULT_RADIUS = 0.4;
 
 export class SnapPointsComponent extends EntityComponent<SnapPointsState> {
   static typeId   = 'snap-points';
@@ -71,6 +75,81 @@ export class SnapPointsComponent extends EntityComponent<SnapPointsState> {
 
   onPropertiesChanged(changed: Partial<SnapPointsState>): void {
     if (changed.points !== undefined) this.rebuildAllPoints();
+  }
+
+  // Editor numeric form (issue #4). Heading + one row per point (x/y/z/yaw/r
+  // number inputs, snapRotation checkbox, delete button) + an Add button.
+  // Each interactive item carries `pointId` in args so onAction can route the
+  // edit to the right point without scanning the array.
+  onEditorTools(ctx: MenuContext): EditorToolItem[] {
+    if (!ctx.isHost) return [];
+    const items: EditorToolItem[] = [{ kind: 'heading', label: 'Snap Points' }];
+    for (const p of this.state.points) {
+      const a = { pointId: p.id };
+      items.push({
+        kind:  'row',
+        items: [
+          { kind: 'number',  id: 'edit-x',      label: 'x',   value: p.localPos[0], args: a, step: 0.1  },
+          { kind: 'number',  id: 'edit-y',      label: 'y',   value: p.localPos[1], args: a, step: 0.1  },
+          { kind: 'number',  id: 'edit-z',      label: 'z',   value: p.localPos[2], args: a, step: 0.1  },
+          { kind: 'number',  id: 'edit-yaw',    label: 'yaw', value: p.localYaw,    args: a, step: 0.1  },
+          { kind: 'number',  id: 'edit-radius', label: 'r',   value: p.radius,      args: a, step: 0.05, min: 0 },
+          { kind: 'boolean', id: 'edit-rot',    label: 'rot', value: p.snapRotation, args: a },
+          { kind: 'button',  id: 'delete-point', label: '×',  args: a },
+        ],
+      });
+    }
+    items.push({ kind: 'button', id: 'add-point', label: 'Add Snap Point' });
+    return items;
+  }
+
+  onAction(actionId: string, args: object | undefined, _ctx: ActionContext): void {
+    if (actionId === 'add-point') {
+      const next: SnapPoint = {
+        id:           newElementId(),
+        localPos:     [0, 0, 0],
+        localYaw:     0,
+        snapRotation: false,
+        radius:       DEFAULT_RADIUS,
+      };
+      this.setState({ points: [...this.state.points, next] });
+      return;
+    }
+    const a = args as { pointId?: string; value?: unknown } | undefined;
+    const pointId = a?.pointId;
+    if (!pointId) return;
+    if (actionId === 'delete-point') {
+      this.setState({ points: this.state.points.filter(p => p.id !== pointId) });
+      return;
+    }
+    const value = a?.value;
+    const points = this.state.points.map(p => {
+      if (p.id !== pointId) return p;
+      switch (actionId) {
+        case 'edit-x':
+          return typeof value === 'number'
+            ? { ...p, localPos: [value, p.localPos[1], p.localPos[2]] as [number, number, number] }
+            : p;
+        case 'edit-y':
+          return typeof value === 'number'
+            ? { ...p, localPos: [p.localPos[0], value, p.localPos[2]] as [number, number, number] }
+            : p;
+        case 'edit-z':
+          return typeof value === 'number'
+            ? { ...p, localPos: [p.localPos[0], p.localPos[1], value] as [number, number, number] }
+            : p;
+        case 'edit-yaw':
+          return typeof value === 'number' ? { ...p, localYaw: value } : p;
+        case 'edit-radius':
+          return typeof value === 'number' ? { ...p, radius: Math.max(0, value) } : p;
+        case 'edit-rot':
+          return typeof value === 'boolean' ? { ...p, snapRotation: value } : p;
+        default:
+          return p;
+      }
+    });
+    if (points === this.state.points) return;
+    this.setState({ points });
   }
 
   // Full rebuild on every state change. Cheap — handful of points per entity

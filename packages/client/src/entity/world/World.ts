@@ -587,6 +587,13 @@ class WorldImpl implements World, HandleRouter {
     return () => { this.listeners = this.listeners.filter(l => l !== fn); };
   }
 
+  // Public refresh hook. Component-driven action dispatchers (editor panel
+  // tool actions, context-menu fallbacks) call setState directly and then
+  // need a way to ask the panel to re-aggregate — they go through here.
+  requestRefresh(): void {
+    this.notify();
+  }
+
   private notify(): void {
     for (const l of this.listeners) l();
   }
