@@ -89,12 +89,17 @@ for (const stmt of sf.statements) {
 }
 
 // Global injection block — the names the SES Compartment binds at script
-// load time, per ScriptHost.runScript.
+// load time, per ScriptHost.runScript. `game` is bound only by
+// ScriptHost.runOneShot (the host's one-time Console panel) but is
+// declared here unconditionally so both editors get the same autocomplete
+// surface; in the main editor it's effectively unused.
 out.push('declare global {');
 if (declared.includes('SceneFacade'))
   out.push('  var scene: SceneFacade;');
-if (declared.includes('Game'))
+if (declared.includes('Game')) {
   out.push('  var Game: typeof Game;');
+  out.push('  var game: Game | null;');
+}
 out.push("  var console: Pick<Console, 'log' | 'error' | 'warn' | 'info' | 'debug'>;");
 out.push('}');
 out.push('');

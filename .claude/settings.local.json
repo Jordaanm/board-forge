@@ -59,7 +59,8 @@
       "Bash(perl -i -pe 's/\\\\bsize:\\\\s*\\\\[\\([^,\\\\]]+\\),\\\\s*\\([^,\\\\]]+\\),\\\\s*\\([^\\\\]]+\\)\\\\]/width: $1, height: $2, depth: $3/g' packages/client/src/entity/spawnables.test.ts packages/client/src/entity/components/TableComponent.test.ts)",
       "Bash(perl -i -pe 's/\\\\bkeyColor\\\\b/color/g; s/\\\\bkeyIntensity\\\\b/intensity/g' packages/client/src/ThreeCanvas.tsx packages/client/src/entity/components/LightingComponent.test.ts packages/client/src/entity/spawnables.ts packages/client/src/entity/world/World.ts packages/client/src/entity/world/World.test.ts)",
       "Bash(cmd *)",
-      "Bash(grep -i \"\\\\.tsx\\\\|\\\\.ts$\")"
+      "Bash(grep -i \"\\\\.tsx\\\\|\\\\.ts$\")",
+      "Bash(Get-ChildItem -Force)"
     ]
   }
 }

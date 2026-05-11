@@ -8,6 +8,7 @@ import { LoadSceneModal } from './LoadSceneModal';
 import { RevertConfirmModal } from './RevertConfirmModal';
 import { HistoryModal } from './HistoryModal';
 import { ScriptEditorModal } from './ScriptEditorModal';
+import { ScriptConsoleModal } from './ScriptConsoleModal';
 import { AssetManagerModal } from './AssetManagerModal';
 import { type SaveEnvelope } from '../entity/SaveFile';
 import { downloadSceneFile } from '../entity/downloadSceneFile';
@@ -159,6 +160,13 @@ export function HostActionBar({
         errorLog={scriptErrorLog}
       />
       <AssetManagerModal store={manifestStore} onPush={onPushManifest} />
+      <ScriptConsoleModal
+        onRun={
+          handle.controller.scripting
+            ? (src) => handle.controller.scripting!.runOneShot(src)
+            : null
+        }
+      />
       {turnControls}
       {lastLoaded && (
         <span style={FILE_LABEL}>

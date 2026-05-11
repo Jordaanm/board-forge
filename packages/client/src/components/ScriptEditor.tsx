@@ -80,6 +80,10 @@ interface Props {
   // which element has focus.
   onSave:   () => void;
   onRun:    () => void;
+  // Override the Monaco model URI. Distinct paths give each mount its own
+  // model, undo history, and cursor — required when the same component is
+  // used for both the main script editor and the one-shot Console panel.
+  modelPath?: string;
 }
 
 // `resize: vertical` paints a drag handle at the bottom-right corner. CSS
@@ -101,7 +105,7 @@ const WRAPPER: React.CSSProperties = {
 // cursor + undo history survive closing and reopening the modal.
 const MODEL_PATH = 'user-script.ts';
 
-export default function ScriptEditor({ source, onChange, onSave, onRun }: Props) {
+export default function ScriptEditor({ source, onChange, onSave, onRun, modelPath }: Props) {
   // editor.addCommand callbacks capture closures at mount time, so we use
   // refs to call the latest props without re-mounting the editor.
   const onSaveRef = useRef(onSave);
@@ -123,7 +127,7 @@ export default function ScriptEditor({ source, onChange, onSave, onRun }: Props)
       <Editor
         height="100%"
         defaultLanguage="typescript"
-        path={MODEL_PATH}
+        path={modelPath ?? MODEL_PATH}
         theme="vs-dark"
         value={source}
         onChange={(v) => onChange(v ?? '')}

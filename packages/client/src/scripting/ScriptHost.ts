@@ -27,6 +27,7 @@ import { Game } from './Game';
 import { SceneFacade } from './SceneFacade';
 import { type ScriptRunContext } from './EntityFacade';
 import { ScriptErrorLog } from './ScriptErrorLog';
+import { makeCapturingConsole, wrapOneShotSource, formatArg, type LogLine } from './ConsoleSandbox';
 import { type EntityScene } from '../entity/EntityComponent';
 import { type AssetEntry, type AssetType } from '../assets/Manifest';
 import { type StickerOpts } from '../entity/components/attachSticker';
@@ -65,6 +66,16 @@ export interface ScriptHostOptions {
 export type RunResult =
   | { ok: true }
   | { ok: false; error: string };
+
+// Result of a one-time console run (`runOneShot`). Captured console.log /
+// .error / .warn / .info / .debug lines are returned regardless of
+// success so the panel can render partial output before a thrown error.
+// `returnValue` carries whatever the user's `return X` resolved with
+// (pre-formatted as a string) so the panel renders it without re-walking
+// the value through a formatter.
+export type OneShotResult =
+  | { ok: true;  logs: LogLine[]; returnValue: string | null }
+  | { ok: false; logs: LogLine[]; error: string };
 
 // Persisted per-room script state. `source` is the authored TS the host
 // last saved; `initialised` flips to true after `onSceneInitialised` fires
@@ -264,6 +275,61 @@ export class ScriptHost {
     this.invokeHook(instance, 'onScriptLoaded', scene);
 
     return { ok: true };
+  }
+
+  // Host's one-time Console panel. Compiles + evaluates `source` once in a
+  // fresh Compartment with `scene`, `game` (the current Game instance, may
+  // be null), and a capturing `console`. Does NOT swap `currentRunCtx`, so
+  // the main script's listener registrations survive — and any listeners
+  // a one-shot adds are NOT tracked for teardown (documented in the panel
+  // seed). The user wraps their code in an async IIFE; an explicit
+  // `return X` surfaces as the panel's "result" line.
+  async runOneShot(source: string): Promise<OneShotResult> {
+    const compiled = await compileTypescript(wrapOneShotSource(source));
+    if (!compiled.ok) {
+      return { ok: false, logs: [], error: compiled.error };
+    }
+
+    const cap = makeCapturingConsole(this.console_);
+    // Fresh registration set — never observed by teardown, so listeners
+    // added during the one-shot leak by design. Documented at call site.
+    const ctx: ScriptRunContext = {
+      registrations: [],
+      errorLog:      this.errorLog_,
+      console:       cap.console,
+      playSound:     this.playSound_,
+    };
+    const scene = this.scene_
+      ? new SceneFacade(this.scene_, ctx, {
+          lookupSlug:    this.lookupSlug_,
+          listAssets:    this.listAssets_,
+          attachSticker: this.attachSticker_,
+          turns:         this.turns_,
+        })
+      : {};
+
+    try {
+      // Wrapper assigns `module.exports = (async () => { ... })();` so
+      // `loadModule` returns the promise itself, not a namespace object.
+      const exported = loadModule(compiled.js, {
+        Game,
+        scene,
+        game:    this.currentInstance,
+        console: cap.console,
+      }) as unknown as Promise<unknown>;
+      const value = await exported;
+      return {
+        ok:          true,
+        logs:        cap.logs,
+        returnValue: value === undefined ? null : formatArg(value),
+      };
+    } catch (e) {
+      return {
+        ok:    false,
+        logs:  cap.logs,
+        error: e instanceof Error ? e.message : String(e),
+      };
+    }
   }
 
   // Variant of invokeHook for turn hooks: the signature is (seat, ...rest)
