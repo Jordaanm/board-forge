@@ -16,6 +16,7 @@ import { CardComponent } from './components/CardComponent';
 import { TransformComponent } from './components/TransformComponent';
 import { TweenComponent } from './components/TweenComponent';
 import { PhysicsComponent } from './components/PhysicsComponent';
+import { MeshComponent } from './components/MeshComponent';
 import { HandComponent } from './components/HandComponent';
 
 export interface DeckHostFacade {
@@ -28,6 +29,9 @@ const SHUFFLE_JITTER_MS  = 200;
 const SHUFFLE_JITTER_RAD = 0.18;
 // Per-card stagger between scheduled deal tweens (ms).
 const DEAL_STAGGER_MS    = 80;
+// Per-card stagger between scheduled spread tweens (ms). Default for
+// `spreadDeck`; callers can pass a different value.
+export const SPREAD_STAGGER_MS_DEFAULT = 1000;
 // Total seat count — matches SeatLayout.SeatIndex range. Used by the
 // clockwise walk so we don't need to import SeatLayout here.
 const SEAT_COUNT         = 8;
@@ -169,6 +173,61 @@ export class DeckService {
     return dealt;
   }
 
+  // Spread the deck across the table: release every card in `cards` order,
+  // tween each into a row extending along the deck's local +X axis (starting
+  // one card-width away so the first card doesn't overlap the deck), then
+  // despawn the now-empty deck. Index 0 (the top card) lands closest to the
+  // deck; subsequent cards extend outward. `staggerMs` is the delay between
+  // each card's tween start.
+  spreadDeck(deckId: string, staggerMs: number = SPREAD_STAGGER_MS_DEFAULT): boolean {
+    const deck = this.scene.getEntity(deckId);
+    if (!deck) return false;
+    const deckC = deck.getComponent(DeckComponent);
+    if (!deckC) return false;
+    const cards = [...deckC.state.cards];
+    if (cards.length === 0) return false;
+
+    const transform = deck.getComponent(TransformComponent)!;
+    const deckPos = transform.state.position;
+    const deckRot = transform.state.rotation;
+
+    // Edge-to-edge spacing: card centers exactly one card-width apart. Well
+    // above MergeService's xz-overlap threshold (0.2), so adjacent cards
+    // won't merge back into a deck on contact.
+    const mesh = deck.getComponent(MeshComponent);
+    const spacing = mesh?.state.width ?? 0.63;
+
+    const q = new THREE.Quaternion(deckRot[0], deckRot[1], deckRot[2], deckRot[3]);
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(q);
+
+    // Clear deck.cards first so the deck mesh stops rendering its slab on
+    // the next replicator flush. The deck entity is despawned below.
+    deckC.setState({ cards: [] });
+
+    const n = cards.length;
+    for (let i = 0; i < n; i++) {
+      const card = this.scene.getEntity(cards[i]);
+      if (!card) continue;
+      // First card sits one card-width from the deck so it doesn't overlap;
+      // each subsequent card sits a further card-width along.
+      const offset = (i + 1) * spacing;
+      const targetPos: [number, number, number] = [
+        deckPos[0] + right.x * offset,
+        deckPos[1],
+        deckPos[2] + right.z * offset,
+      ];
+      this.releaseCardFromDeck(card, targetPos, deckRot);
+      const phys = card.getComponent(PhysicsComponent);
+      if (phys?.body) {
+        phys.body.velocity.setZero();
+        phys.body.angularVelocity.setZero();
+      }
+    }
+
+    this.host.despawn(deckId);
+    return true;
+  }
+
   // If the deck has exactly 1 card left, un-hide that card at the deck's
   // current pose with zero velocity, then despawn the deck. No-op otherwise.
   maybeDissolve(deckId: string): boolean {
@@ -212,6 +271,13 @@ export class DeckService {
       this.replicator.enqueueEntityPatch(card.id, { isContained: false });
     }
     if (card.parentId !== null) {
+      const parent = this.scene.getEntity(card.parentId);
+      if (parent) {
+        // Without this, despawning the deck cascade-despawns the released
+        // card because Scene.cascadeDespawn walks parent.children.
+        parent.children = parent.children.filter((c) => c !== card.id);
+        this.replicator.enqueueEntityPatch(parent.id, { children: [...parent.children] });
+      }
       card.parentId = null;
       this.replicator.enqueueEntityPatch(card.id, { parentId: null });
     }

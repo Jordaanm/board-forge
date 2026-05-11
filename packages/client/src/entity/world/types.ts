@@ -203,6 +203,10 @@ export interface World {
   // ordered clockwise from the caller (caller first). Issue #9 of issues--deck.md.
   dealFromDeck(deckId: string, count: number, callerSeat: SeatIndex | null): void;
 
+  // Release every card in the deck along its local +X axis (top card on the
+  // left), then despawn the deck.
+  spreadDeck(deckId: string): void;
+
   // Host-only — spawn one card per face-ref and immediately wrap them in a
   // fresh Deck entity (cards become children with isContained=true, so no
   // scatter). Backs the host "Generate Deck" tool. Returns a handle to the

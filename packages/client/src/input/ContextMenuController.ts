@@ -132,6 +132,7 @@ export interface MenuActionDeps {
     drawFromDeck?: (deckId: string, count: number, callerSeat: SeatIndex | null) => void;
     shuffleDeck?:  (deckId: string) => void;
     dealFromDeck?: (deckId: string, count: number, callerSeat: SeatIndex | null) => void;
+    spreadDeck?:   (deckId: string) => void;
   };
   selfSeat:      SeatIndex | null;
 }
@@ -177,6 +178,17 @@ export function dispatchMenuAction(
       deps.hostLocal.dealFromDeck?.(entityId, count, deps.selfSeat);
     } else {
       deps.send({ type: 'deal-from-deck', deckId: entityId, count });
+    }
+    return;
+  }
+
+  // Deck spread — release every card along the deck's local +X axis, despawn
+  // the deck.
+  if (item.kind === 'action' && item.id === 'spread' && item.componentTypeId === 'deck') {
+    if (deps.isHost) {
+      deps.hostLocal.spreadDeck?.(entityId);
+    } else {
+      deps.send({ type: 'spread-deck', deckId: entityId });
     }
     return;
   }

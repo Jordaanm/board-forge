@@ -76,6 +76,7 @@ export class DeckComponent extends EntityComponent<DeckState> {
       drawMenu,
       { kind: 'action', id: 'shuffle', label: 'Shuffle' },
       dealMenu,
+      { kind: 'action', id: 'spread', label: 'Spread deck' },
     ];
   }
 

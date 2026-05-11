@@ -16,7 +16,7 @@ import { canManipulate } from '../seats/OwnershipPolicy';
 import { type HoldService } from './HoldService';
 import { type DeckService } from './DeckService';
 import { type SceneHistoryService } from './SceneHistoryService';
-import { type HoldClaim, type HoldRelease, type InvokeAction, type RequestUpdate, type ApplyImpulse, type PlayCardToTable, type ReorderHand, type TweenIntoHand, type DrawFromDeck, type ShuffleDeck, type DealFromDeck } from './wire';
+import { type HoldClaim, type HoldRelease, type InvokeAction, type RequestUpdate, type ApplyImpulse, type PlayCardToTable, type ReorderHand, type TweenIntoHand, type DrawFromDeck, type ShuffleDeck, type DealFromDeck, type SpreadDeck } from './wire';
 import { type ActionContext } from './EntityComponent';
 import { PhysicsComponent } from './components/PhysicsComponent';
 import { TweenComponent } from './components/TweenComponent';
@@ -186,6 +186,19 @@ export class HostInputDispatcher {
     this.push(`deal ${msg.count} from ${entity.name}`);
     const dealt = this.decks.dealFromDeck(msg.deckId, msg.count, senderSeat);
     return dealt > 0;
+  }
+
+  // Guest right-clicks "Spread deck" on a deck. Host validates ownership and
+  // runs the spread via DeckService.
+  handleSpreadDeck(peerId: string, msg: SpreadDeck): boolean {
+    if (!this.decks) return false;
+    const senderSeat = this.getPeerSeat(peerId);
+    if (senderSeat === null) return false;
+    const entity = this.scene.getEntity(msg.deckId);
+    if (!entity) return false;
+    if (!canManipulate({ peerSeat: senderSeat, isHost: false }, entity.owner)) return false;
+    this.push(`spread ${entity.name}`);
+    return this.decks.spreadDeck(msg.deckId);
   }
 
   // Issue #7 of issues--hand.md — guest releases a 3D-grabbed entity over

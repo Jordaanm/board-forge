@@ -827,6 +827,18 @@ class WorldImpl implements World, HandleRouter {
     this.transport.send({ type: 'deal-from-deck', deckId, count }, { reliable: true });
   }
 
+  // Right-click "Spread deck" — release every card across the table along
+  // the deck's local +X axis and despawn the deck.
+  spreadDeck(deckId: string): void {
+    if (this.role === 'host') {
+      const deck = this.scene.getEntity(deckId);
+      if (deck) this.history_?.push(`spread ${deck.name}`);
+      this.decks?.spreadDeck(deckId);
+      return;
+    }
+    this.transport.send({ type: 'spread-deck', deckId }, { reliable: true });
+  }
+
   // Spawns one card per face-ref at a single deck position, then wraps them
   // in a fresh Deck entity via MergeService.assembleDeckFrom. Cards are
   // collocated and immediately parented (isContained=true) so they never
@@ -991,6 +1003,7 @@ class WorldImpl implements World, HandleRouter {
       case 'draw-from-deck':     this.hostInput?.handleDrawFromDeck(peerId, msg);     return;
       case 'shuffle-deck':       this.hostInput?.handleShuffleDeck(peerId, msg);      return;
       case 'deal-from-deck':     this.hostInput?.handleDealFromDeck(peerId, msg);     return;
+      case 'spread-deck':        this.hostInput?.handleSpreadDeck(peerId, msg);       return;
       case 'guest-drag-move':  this.guestInput?.handleMessage(peerId, msg);      return;
       case 'guest-drag-start':
       case 'guest-drag-end':
@@ -1134,6 +1147,7 @@ class WorldImpl implements World, HandleRouter {
       case 'draw-from-deck':
       case 'shuffle-deck':
       case 'deal-from-deck':
+      case 'spread-deck':
       case 'guest-drag-move':
       case 'guest-drag-start':
       case 'guest-drag-end':

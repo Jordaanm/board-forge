@@ -178,6 +178,14 @@ export interface DealFromDeck {
   count:  number;
 }
 
+// Right-click "Spread deck" — release every card in deck order along the
+// deck's local +X axis, then despawn the now-empty deck. Reliable channel;
+// host validates `canManipulate(deck.owner)` before running.
+export interface SpreadDeck {
+  type:   'spread-deck';
+  deckId: string;
+}
+
 // Cosmetic sound effect broadcast initiated from a host script via
 // `scene.playSound(slug)`. Issue #11 of issues--asset-registry.md. Rides the
 // unreliable channel — missed messages are not retried (audio cues are
@@ -233,5 +241,6 @@ export type SceneMessage =
   | DrawFromDeck
   | ShuffleDeck
   | DealFromDeck
+  | SpreadDeck
   | ToolBroadcast
   | PlaySoundMessage;

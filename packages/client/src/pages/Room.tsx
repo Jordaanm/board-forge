@@ -397,6 +397,7 @@ export function Room({ roomId, isHost }: Props) {
         drawFromDeck:  (deckId, count, seat) => handle?.controller.drawFromDeck(deckId, count, seat),
         shuffleDeck:   (deckId) => handle?.controller.shuffleDeck(deckId),
         dealFromDeck:  (deckId, count, seat) => handle?.controller.dealFromDeck(deckId, count, seat),
+        spreadDeck:    (deckId) => handle?.controller.spreadDeck(deckId),
       },
       selfSeat: getSelfSeatRef.current(),
     });
