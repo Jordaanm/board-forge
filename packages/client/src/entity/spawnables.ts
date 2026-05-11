@@ -14,6 +14,7 @@ import { FlatViewComponent } from './components/FlatViewComponent';
 import { CardComponent } from './components/CardComponent';
 import { DeckComponent } from './components/DeckComponent';
 import { ZoneComponent } from './components/ZoneComponent';
+import { SnapPointsComponent } from './components/SnapPointsComponent';
 import { TweenComponent } from './components/TweenComponent';
 import { HandComponent } from './components/HandComponent';
 import { TableComponent } from './components/TableComponent';
@@ -32,8 +33,9 @@ export function registerCorePrimitives(): void {
   if (!componentRegistry.has('flatview'))  componentRegistry.register(FlatViewComponent);
   if (!componentRegistry.has('card'))      componentRegistry.register(CardComponent);
   if (!componentRegistry.has('deck'))      componentRegistry.register(DeckComponent);
-  if (!componentRegistry.has('zone'))      componentRegistry.register(ZoneComponent);
-  if (!componentRegistry.has('tween'))     componentRegistry.register(TweenComponent);
+  if (!componentRegistry.has('zone'))         componentRegistry.register(ZoneComponent);
+  if (!componentRegistry.has('snap-points'))  componentRegistry.register(SnapPointsComponent);
+  if (!componentRegistry.has('tween'))        componentRegistry.register(TweenComponent);
   if (!componentRegistry.has('hand'))      componentRegistry.register(HandComponent);
   if (!componentRegistry.has('table'))     componentRegistry.register(TableComponent);
   if (!componentRegistry.has('skydome'))   componentRegistry.register(SkydomeComponent);
@@ -150,6 +152,23 @@ export function registerCorePrimitives(): void {
     components: [
       { typeId: 'transform', state: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } },
       { typeId: 'zone',      state: { halfExtents: [0.5, 0.1, 0.5], containedIds: [], isVisible: true } },
+    ],
+  });
+
+  if (!getSpawnable('snap-marker')) registerSpawnable({
+    type:        'snap-marker',
+    label:       'Snap Marker',
+    category:    'Zones',
+    defaultTags: ['snap-marker'],
+    components: [
+      { typeId: 'transform',   state: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } },
+      { typeId: 'snap-points', state: { points: [{
+          id:           'default',
+          localPos:     [0, 0, 0],
+          localYaw:     0,
+          snapRotation: false,
+          radius:       0.4,
+      }] } },
     ],
   });
 

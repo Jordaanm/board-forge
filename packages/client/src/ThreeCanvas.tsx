@@ -7,6 +7,7 @@ import { RtcTransport } from './entity/world';
 import { type Entity } from './entity/Entity';
 import { TransformComponent } from './entity/components/TransformComponent';
 import { ZoneComponent } from './entity/components/ZoneComponent';
+import { SnapPointsComponent } from './entity/components/SnapPointsComponent';
 import { HandComponent } from './entity/components/HandComponent';
 import { FlatViewComponent } from './entity/components/FlatViewComponent';
 import { surfaceRenderQueue } from './entity/components/SurfaceRenderQueue';
@@ -53,6 +54,7 @@ interface Props {
   setActiveToolRef:    MutableRefObject<(toolId: string) => boolean>;
   getActiveToolRef:    MutableRefObject<() => string>;
   setShowAllZonesRef:  MutableRefObject<(on: boolean) => void>;
+  setShowSnapPointsRef: MutableRefObject<(on: boolean) => void>;
   setHandViewRef:      MutableRefObject<(view: HandView | null) => void>;
   // Fires after the World is constructed inside the canvas effect; null on
   // cleanup. Replaces the ~30 scene-mutate refs that used to thread through
@@ -72,6 +74,7 @@ export function ThreeCanvas({
   freeCameraRef,
   onSelectRef, setHighlightRef, setActiveToolRef, getActiveToolRef,
   setShowAllZonesRef,
+  setShowSnapPointsRef,
   setHandViewRef,
   onSceneReady,
 }: Props) {
@@ -246,6 +249,7 @@ export function ThreeCanvas({
     };
 
     setShowAllZonesRef.current = (on) => { ZoneComponent.showAllZones = on; };
+    setShowSnapPointsRef.current = (on) => { SnapPointsComponent.setShowAll(on); };
 
     // ── SceneHandle for React ──────────────────────────────────────────
     // Bundles the live World controller with renderer-bound helpers
@@ -422,6 +426,7 @@ export function ThreeCanvas({
       container.removeChild(renderer.domElement);
       ZoneComponent.selectedEntityId = null;
       ZoneComponent.showAllZones     = false;
+      SnapPointsComponent.setShowAll(false);
     };
   }, [
     isHost, sendRef, sendToRef, getTargetsRef, getSelfSeatRef, getSelfPeerIdRef, getPeerSeatRef,
@@ -429,7 +434,7 @@ export function ThreeCanvas({
     onContextMenuRef,
     freeCameraRef,
     onSelectRef, setHighlightRef, setActiveToolRef, getActiveToolRef,
-    setShowAllZonesRef, setHandViewRef,
+    setShowAllZonesRef, setShowSnapPointsRef, setHandViewRef,
     onSceneReady,
   ]);
 

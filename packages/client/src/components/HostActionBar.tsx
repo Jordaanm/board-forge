@@ -25,6 +25,8 @@ interface Props {
   handle:               SceneHandle;
   showAllZones:         boolean;
   onToggleShowAllZones: (on: boolean) => void;
+  showSnapPoints:         boolean;
+  onToggleShowSnapPoints: (on: boolean) => void;
   onLoad:               (envelope: SaveEnvelope, filename: string) => void;
   onRevert:             () => void;
   lastLoaded:           LastLoaded | null;
@@ -73,6 +75,8 @@ export function HostActionBar({
   handle,
   showAllZones,
   onToggleShowAllZones,
+  showSnapPoints,
+  onToggleShowSnapPoints,
   onLoad,
   onRevert,
   lastLoaded,
@@ -152,6 +156,11 @@ export function HostActionBar({
           label:   'Show all zones',
           onClick: () => onToggleShowAllZones(!showAllZones),
           checked: showAllZones,
+        },
+        {
+          label:   'Show Snap Points',
+          onClick: () => onToggleShowSnapPoints(!showSnapPoints),
+          checked: showSnapPoints,
         },
       ],
     },

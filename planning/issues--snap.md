@@ -81,16 +81,18 @@ The full entity-side stack so the host can spawn a SnapMarker, see it on screen,
 
 ### Acceptance criteria
 
-- [ ] Component registers, serializes, and round-trips through `toJSON` / `fromJSON` / `applyRemoteState` (unit tests on the component, following the `ZoneComponent.test.ts` boundary discipline)
-- [ ] `SnapPointsComponent.showAll = true` flips all live instances' visualization visible; `= false` flips them invisible
-- [ ] Toggle in HostActionBar drives `showAll`; unmount resets to `false`
-- [ ] Spawning a SnapMarker via the existing host spawn UI creates an entity with `Transform` + `SnapPoints` only (no mesh, no physics)
-- [ ] With **Show Snap Points** on: marker shows the disc; `snapRotation: false` default → no arrow
-- [ ] With **Show Snap Points** off: marker fully invisible; cannot be grabbed (raycast misses)
-- [ ] Host drags the marker with the existing GrabTool — marker moves; visualization follows because it's a child of the TransformComponent group
-- [ ] Save → reload preserves SnapMarker entities and SnapPointsComponent state (existing save envelope handles this without modification — verify with a manual smoke test)
-- [ ] Guest in a second window receives the SnapMarker entity through the existing replication path; guest's visualization stays hidden regardless
-- [ ] No regression in existing `Show All Zones` behavior or component registration
+- [x] Component registers, serializes, and round-trips through `toJSON` / `fromJSON` / `applyRemoteState` (unit tests on the component, following the `ZoneComponent.test.ts` boundary discipline)
+- [x] `SnapPointsComponent.showAll = true` flips all live instances' visualization visible; `= false` flips them invisible
+- [x] Toggle in HostActionBar drives `showAll`; unmount resets to `false`
+- [x] Spawning a SnapMarker via the existing host spawn UI creates an entity with `Transform` + `SnapPoints` only (no mesh, no physics)
+- [x] With **Show Snap Points** on: marker shows the disc; `snapRotation: false` default → no arrow
+- [x] With **Show Snap Points** off: marker fully invisible; cannot be grabbed (raycast misses)
+- [x] Host drags the marker with the existing GrabTool — marker moves; visualization follows because it's a child of the TransformComponent group
+- [x] Save → reload preserves SnapMarker entities and SnapPointsComponent state (existing save envelope handles this without modification — verify with a manual smoke test)
+- [x] Guest in a second window receives the SnapMarker entity through the existing replication path; guest's visualization stays hidden regardless
+- [x] No regression in existing `Show All Zones` behavior or component registration
+
+**Status:** Complete.
 
 ### Blocked by
 
