@@ -53,6 +53,7 @@ export function PlayersPanel({
                 seat={seat}
                 isSelf={seat.peerId !== null && seat.peerId === selfPeerId}
                 isHostPeer={seat.peerId === snapshot.hostPeerId}
+                isActiveTurn={snapshot.turns.enabled && snapshot.turns.activeSeat === seat.index}
                 onContextMenu={(e) => openMenu(e, {
                   rowKind: 'seat', seat, peerId: seat.peerId,
                 })}
@@ -93,11 +94,12 @@ export function PlayersPanel({
 }
 
 function SeatRow({
-  seat, isSelf, isHostPeer, onContextMenu,
+  seat, isSelf, isHostPeer, isActiveTurn, onContextMenu,
 }: {
   seat:          SeatEntry;
   isSelf:        boolean;
   isHostPeer:    boolean;
+  isActiveTurn:  boolean;
   onContextMenu: (e: React.MouseEvent) => void;
 }) {
   const occupied = seat.peerId !== null;
@@ -106,6 +108,12 @@ function SeatRow({
       className={`players-panel__row${isSelf ? ' players-panel__row--self' : ''}`}
       onContextMenu={onContextMenu}
     >
+      {isActiveTurn && (
+        <span
+          className="players-panel__turn-indicator"
+          title="Active turn"
+        >▶</span>
+      )}
       <div
         className={`players-panel__swatch${occupied ? '' : ' players-panel__swatch--empty'}`}
         style={{ background: occupied ? seat.colour : undefined }}

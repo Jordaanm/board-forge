@@ -2,7 +2,7 @@
 // "Spawn Object" trigger. Pattern accommodates future host actions (Reset
 // Scene, Save Layout, etc.) without rearchitecting.
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { SpawnObjectModal } from './SpawnObjectModal';
 import { LoadSceneModal } from './LoadSceneModal';
 import { RevertConfirmModal } from './RevertConfirmModal';
@@ -30,6 +30,9 @@ interface Props {
   scriptErrorLog:       ScriptErrorLog | null;
   manifestStore:        ManifestStore | null;
   onPushManifest:       () => void;
+  // Optional slot for the turn-tracker controls dropdown — rendered alongside
+  // the other bar buttons.
+  turnControls?:        ReactNode;
 }
 
 const BAR: React.CSSProperties = {
@@ -107,6 +110,7 @@ export function HostActionBar({
   scriptErrorLog,
   manifestStore,
   onPushManifest,
+  turnControls,
 }: Props) {
   const [revertOpen, setRevertOpen] = useState(false);
   const canRevert = lastLoaded !== null;
@@ -150,6 +154,7 @@ export function HostActionBar({
         errorLog={scriptErrorLog}
       />
       <AssetManagerModal store={manifestStore} onPush={onPushManifest} />
+      {turnControls}
       {lastLoaded && (
         <span style={FILE_LABEL}>
           <span style={FILE_NAME}>{lastLoaded.filename}</span>

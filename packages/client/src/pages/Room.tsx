@@ -5,6 +5,8 @@ import { EditorPanel } from '../components/EditorPanel';
 import { useSceneObjects } from '../components/useSceneObjects';
 import { ContextMenu } from '../components/ContextMenu';
 import { PlayersPanel } from '../components/PlayersPanel';
+import { EndTurnButton } from '../components/EndTurnButton';
+import { TurnControlsPanel } from '../components/TurnControlsPanel';
 import { Toolbar } from '../components/Toolbar';
 import { HostActionBar } from '../components/HostActionBar';
 import { AnchorLayout } from '../components/AnchorLayout';
@@ -21,6 +23,7 @@ import { DiceComponent } from '../entity/components/DiceComponent';
 import { RoomStateManager } from '../seats/RoomStateManager';
 import { RoomStateClient } from '../seats/RoomStateClient';
 import type { RoomStateMessage, RoomStateSnapshot } from '../seats/RoomState';
+import type { TurnAction, TurnEvent } from '../seats/TurnTracker';
 import { type SceneHistoryService, type LastLoaded } from '../entity/SceneHistoryService';
 import { type ScriptErrorLog } from '../scripting/ScriptErrorLog';
 import { type SceneHandle } from '../entity/world';
@@ -86,6 +89,8 @@ export function Room({ roomId, isHost }: Props) {
   const kickPeerRef        = useRef<(peerId: string) => void>(noop);
   const banPeerRef         = useRef<(peerId: string) => void>(noop);
   const manifestStoreRef   = useRef<ManifestStore | null>(null);
+  const endTurnRef         = useRef<() => void>(noop);
+  const dispatchTurnRef    = useRef<(action: TurnAction) => void>(noop);
 
   // Set every render — fine, it's just a ref assignment.
   onContextMenuRef.current   = (req) => setContextMenu(req);
@@ -150,6 +155,21 @@ export function Room({ roomId, isHost }: Props) {
           }
           return;
         }
+        if (m.type === 'end-turn-request') {
+          if (manager && handleRef.current) {
+            if (!manager.getTurns().enabled) return;
+            const seat = manager.getSeat(peerId);
+            if (seat === null) return;
+            if (manager.getTurns().activeSeat !== seat) return;
+            const scripting = handleRef.current.controller.scripting;
+            if (scripting) {
+              scripting.dispatchEndTurnRequest(seat, 'player');
+            } else {
+              manager.dispatchTurnAction({ kind: 'next', endedBy: 'player' });
+            }
+          }
+          return;
+        }
         if (m.type === 'kicked') {
           setStatus('disconnected');
           return;
@@ -193,6 +213,16 @@ export function Room({ roomId, isHost }: Props) {
             mgr.send(patchMsg);
             setRoomSnapshot(change.snapshot);
           });
+          manager.onTurnEvent((event: TurnEvent) => {
+            handleRef.current?.controller.scripting?.dispatchTurnEvent(event);
+          });
+          // Wire the turn-tracker bridge into the ScriptHost so `scene.turns`
+          // dispatches reach the manager's pure reducer.
+          const m = manager;
+          handleRef.current?.controller.scripting?.setTurnsBridge({
+            dispatch: (action) => m.dispatchTurnAction(action),
+            getState: () => m.getTurns(),
+          });
           setRoomSnapshot(manager.snapshot());
           console.log('[RoomState] my seat:', manager.getSeat(peerId));
         } else {
@@ -227,6 +257,28 @@ export function Room({ roomId, isHost }: Props) {
       mgr.send({ type: 'seat-claim-request', seatIndex } satisfies RoomStateMessage);
     };
 
+    endTurnRef.current = () => {
+      if (manager) {
+        // Host clicking End Turn from their own button — route through the
+        // script hook so endedBy='player' on the host matches the guest path.
+        const self = mgr.getPeerId();
+        if (!self) return;
+        if (!manager.getTurns().enabled) return;
+        const seat = manager.getSeat(self);
+        if (seat === null || manager.getTurns().activeSeat !== seat) return;
+        const scripting = handleRef.current?.controller.scripting;
+        if (scripting) scripting.dispatchEndTurnRequest(seat, 'player');
+        else manager.dispatchTurnAction({ kind: 'next', endedBy: 'player' });
+        return;
+      }
+      mgr.send({ type: 'end-turn-request' } satisfies RoomStateMessage);
+    };
+
+    dispatchTurnRef.current = (action) => {
+      if (!manager) return;
+      manager.dispatchTurnAction(action);
+    };
+
     kickPeerRef.current = (peerId) => {
       if (!manager) return;
       mgr.sendTo(peerId, { type: 'kicked', reason: 'kick' } satisfies RoomStateMessage);
@@ -255,6 +307,8 @@ export function Room({ roomId, isHost }: Props) {
       claimSeatRef.current     = noop;
       kickPeerRef.current      = noop;
       banPeerRef.current       = noop;
+      endTurnRef.current       = noop;
+      dispatchTurnRef.current  = noop;
       setRoomSnapshot(null);
       setSelfPeerId(null);
     };
@@ -448,6 +502,24 @@ export function Room({ roomId, isHost }: Props) {
                 const snapshot = store.push();
                 sendRef.current({ type: 'manifest-publish', snapshot });
               }}
+              turnControls={
+                <TurnControlsPanel
+                  snapshot={roomSnapshot}
+                  onEnable={() => dispatchTurnRef.current({ kind: 'enable' })}
+                  onDisable={() => dispatchTurnRef.current({ kind: 'disable', endedBy: 'host' })}
+                  onEndCurrent={() => {
+                    // Route through the script hook so a script that gates
+                    // end-of-turn can still veto the host's button.
+                    const turns = roomSnapshot?.turns;
+                    if (!turns?.enabled || turns.activeSeat === null) return;
+                    const scripting = handle.controller.scripting;
+                    if (scripting) scripting.dispatchEndTurnRequest(turns.activeSeat, 'host');
+                    else dispatchTurnRef.current({ kind: 'next', endedBy: 'host' });
+                  }}
+                  onJumpToSeat={(seat) => dispatchTurnRef.current({ kind: 'setActive', seat, endedBy: 'host' })}
+                  onSetOrder={(order) => dispatchTurnRef.current({ kind: 'setOrder', order })}
+                />
+              }
             />
           </UIPanel>
         )}
@@ -473,6 +545,14 @@ export function Room({ roomId, isHost }: Props) {
             />
           </UIPanel>
         )}
+
+        <UIPanel anchor="top-center" order={20}>
+          <EndTurnButton
+            snapshot={roomSnapshot}
+            selfSeat={getSelfSeatRef.current()}
+            onEndTurn={() => endTurnRef.current()}
+          />
+        </UIPanel>
 
         <UIPanel anchor="top-right" order={10}>
           <PlayersPanel

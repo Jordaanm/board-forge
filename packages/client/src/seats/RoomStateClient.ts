@@ -6,6 +6,7 @@ import {
   type RoomStatePatch,
   type RoomStateSnapshot,
 } from './RoomState';
+import { initialTurnState, type TurnState } from './TurnTracker';
 
 type Listener = (snapshot: RoomStateSnapshot) => void;
 
@@ -23,6 +24,7 @@ export class RoomStateClient {
       hostPeerId: snapshot.hostPeerId,
       seats:      snapshot.seats.map(s => ({ ...s })),
       spectators: [...snapshot.spectators],
+      turns:      snapshot.turns ? cloneTurns(snapshot.turns) : initialTurnState(),
     };
     this.emit();
   }
@@ -52,6 +54,10 @@ export class RoomStateClient {
       );
     }
 
+    if (patch.turns) {
+      this.currentSnapshot.turns = cloneTurns(patch.turns);
+    }
+
     this.emit();
   }
 
@@ -61,7 +67,13 @@ export class RoomStateClient {
       hostPeerId: this.currentSnapshot.hostPeerId,
       seats:      this.currentSnapshot.seats.map(s => ({ ...s })),
       spectators: [...this.currentSnapshot.spectators],
+      turns:      cloneTurns(this.currentSnapshot.turns),
     };
+  }
+
+  getTurns(): TurnState | null {
+    if (!this.currentSnapshot) return null;
+    return cloneTurns(this.currentSnapshot.turns);
   }
 
   onChange(listener: Listener): () => void {
@@ -96,4 +108,14 @@ export class RoomStateClient {
   hasSnapshot(): boolean {
     return this.currentSnapshot !== null;
   }
+}
+
+function cloneTurns(t: TurnState): TurnState {
+  return {
+    enabled:    t.enabled,
+    order:      [...t.order],
+    activeSeat: t.activeSeat,
+    turnNumber: t.turnNumber,
+    orderIndex: t.orderIndex,
+  };
 }

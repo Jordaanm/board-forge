@@ -17,6 +17,9 @@ import { TABLE_ENTITY_ID } from '../entity/tableEntity';
 import { type StickerOpts } from '../entity/components/attachSticker';
 import { ElementHandle, entitySceneLookup } from '../entity/components/ElementHandle';
 import { SurfaceComponent } from '../entity/components/SurfaceComponent';
+import { type SeatIndex } from '../seats/SeatLayout';
+import { type TurnState } from '../seats/TurnTracker';
+import { type TurnsBridge } from './TurnsBridge';
 
 export interface SceneFacadeOptions {
   // Optional asset-slug lookup used to validate `playSound` slugs against
@@ -37,6 +40,12 @@ export interface SceneFacadeOptions {
   // (unknown parent, missing mesh, no-op contexts). When absent (e.g.
   // guest, unit tests), `scene.attachSticker` warns and no-ops.
   attachSticker?: (parentId: string, opts: StickerOpts) => { surfaceId: string; elementId: string } | null;
+  // Host-only turn tracker bridge backing `scene.turns`. Reads run through
+  // `getState`; mutations dispatch through the supplied callbacks which the
+  // host wires to `RoomStateManager.dispatchTurnAction`. Absent on guests —
+  // the TurnsApi then warns and no-ops on mutating methods, but still reads
+  // through if a `getState` is wired against a `RoomStateClient`.
+  turns?: TurnsBridge;
 }
 
 // Read-only catalog surface exposed as `scene.assets`. Returns deeply frozen
@@ -79,6 +88,7 @@ function freezeEntry(entry: AssetEntry): Readonly<AssetEntry> {
 
 export class SceneFacade {
   public readonly assets: AssetsApi;
+  public readonly turns:  TurnsApi;
   private readonly scene: EntityScene;
   private readonly ctx:   ScriptRunContext;
   private readonly opts:  SceneFacadeOptions;
@@ -89,6 +99,7 @@ export class SceneFacade {
     this.ctx    = ctx;
     this.opts   = opts;
     this.assets = new AssetsApi(opts);
+    this.turns  = new TurnsApi(opts.turns, (msg) => this.warn(msg));
   }
 
   getObjectById(id: string): EntityFacade | undefined {
@@ -192,5 +203,72 @@ export class SceneFacade {
     const fresh = new EntityFacade(entity, this.ctx);
     this.cache.set(id, fresh);
     return fresh;
+  }
+}
+
+// Script-facing turn-tracker surface, exposed as `scene.turns`. Reads delegate
+// to the bridge's `getState`; mutations dispatch through callbacks routed by
+// the host to `RoomStateManager.dispatchTurnAction`. On contexts without a
+// bridge (guest scripts, unit tests), mutations warn-and-no-op and reads
+// return safe defaults.
+export class TurnsApi {
+  private readonly bridge: TurnsBridge | undefined;
+  private readonly warn:   (message: string) => void;
+
+  constructor(bridge: TurnsBridge | undefined, warn: (message: string) => void) {
+    this.bridge = bridge;
+    this.warn   = warn;
+  }
+
+  enable(order?: SeatIndex[]): void {
+    if (!this.requireHost('enable')) return;
+    this.bridge!.dispatch({ kind: 'enable', order: order ? [...order] : undefined });
+  }
+
+  disable(): void {
+    if (!this.requireHost('disable')) return;
+    this.bridge!.dispatch({ kind: 'disable', endedBy: 'script' });
+  }
+
+  next(): void {
+    if (!this.requireHost('next')) return;
+    this.bridge!.dispatch({ kind: 'next', endedBy: 'script' });
+  }
+
+  setActive(seat: SeatIndex): void {
+    if (!this.requireHost('setActive')) return;
+    this.bridge!.dispatch({ kind: 'setActive', seat, endedBy: 'script' });
+  }
+
+  setOrder(order: SeatIndex[]): void {
+    if (!this.requireHost('setOrder')) return;
+    this.bridge!.dispatch({ kind: 'setOrder', order: [...order] });
+  }
+
+  isEnabled(): boolean {
+    return this.readState()?.enabled ?? false;
+  }
+
+  getActive(): SeatIndex | null {
+    return this.readState()?.activeSeat ?? null;
+  }
+
+  getOrder(): SeatIndex[] {
+    const s = this.readState();
+    return s ? [...s.order] : [];
+  }
+
+  getTurnNumber(): number {
+    return this.readState()?.turnNumber ?? 0;
+  }
+
+  private readState(): TurnState | null {
+    return this.bridge?.getState() ?? null;
+  }
+
+  private requireHost(method: string): boolean {
+    if (this.bridge?.dispatch) return true;
+    this.warn(`scene.turns.${method}: no-op (host-only API; not running on host)`);
+    return false;
   }
 }

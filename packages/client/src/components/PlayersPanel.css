@@ -115,3 +115,11 @@
   letter-spacing: 1px;
   color: #888;
 }
+
+.players-panel__turn-indicator {
+  color: #ffd740;
+  font-size: 11px;
+  width: 12px;
+  display: inline-block;
+  text-align: center;
+}

@@ -103,8 +103,25 @@ export class EditorElementHandle {
   removeEventListener(event: string, cb: EditorListener): void { void event; void cb; }
 }
 
+export type EditorEndedBy = 'player' | 'host' | 'script';
+
+// Editor-facing turn-tracker surface mounted at `scene.turns`. Mirrors the
+// runtime TurnsApi. See planning/prd--turn-order.md.
+export class EditorTurnsApi {
+  enable(order?: EditorSeatIndex[]): void { void order; }
+  disable(): void {}
+  next(): void {}
+  setActive(seat: EditorSeatIndex): void { void seat; }
+  setOrder(order: EditorSeatIndex[]): void { void order; }
+  isEnabled(): boolean { return false; }
+  getActive(): EditorSeatIndex | null { return null; }
+  getOrder(): EditorSeatIndex[] { return []; }
+  getTurnNumber(): number { return 0; }
+}
+
 export class EditorSceneFacade {
   declare readonly assets: EditorAssetsApi;
+  declare readonly turns:  EditorTurnsApi;
   getObjectById(id: string): EditorEntityFacade | undefined { void id; return undefined; }
   getTable(): EditorEntityFacade | undefined { return undefined; }
   getObjectsByTag(tag: string): EditorEntityFacade[] { void tag; return []; }
@@ -118,6 +135,12 @@ export class EditorSceneFacade {
 }
 
 export class EditorGame {
+  declare scene: unknown;
   onSceneInitialised(scene: EditorSceneFacade): void { void scene; }
   onScriptLoaded(scene: EditorSceneFacade): void { void scene; }
+  onTurnStart(seat: EditorSeatIndex, turnNumber: number): void { void seat; void turnNumber; }
+  onTurnEnd(seat: EditorSeatIndex, turnNumber: number, endedBy: EditorEndedBy): void {
+    void seat; void turnNumber; void endedBy;
+  }
+  onTurnEndRequested(seat: EditorSeatIndex): void { void seat; }
 }

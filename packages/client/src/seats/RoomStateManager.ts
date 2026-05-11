@@ -9,6 +9,15 @@ import {
   type RoomStateSnapshot,
   type SeatEntry,
 } from './RoomState';
+import {
+  reduce,
+  initialTurnState,
+  type TurnAction,
+  type TurnEvent,
+  type TurnState,
+  type SeatsSnapshot,
+  type EndedBy,
+} from './TurnTracker';
 
 export interface SeatedPeer { seat: SeatIndex; peerId: string; }
 
@@ -18,6 +27,7 @@ export interface RoomStateChange {
 }
 
 type Listener = (change: RoomStateChange) => void;
+type TurnEventListener = (event: TurnEvent) => void;
 
 export class RoomStateManager {
   private readonly hostPeerId: string;
@@ -25,6 +35,8 @@ export class RoomStateManager {
   private readonly spectators: string[] = [];
   private readonly banned: Set<string> = new Set();
   private readonly listeners: Listener[] = [];
+  private readonly turnEventListeners: TurnEventListener[] = [];
+  private turns: TurnState = initialTurnState();
 
   constructor(hostPeerId: string) {
     this.hostPeerId = hostPeerId;
@@ -117,6 +129,7 @@ export class RoomStateManager {
       hostPeerId: this.hostPeerId,
       seats:      this.seats.map(s => ({ ...s })),
       spectators: [...this.spectators],
+      turns:      cloneTurns(this.turns),
     };
   }
 
@@ -126,6 +139,61 @@ export class RoomStateManager {
       const i = this.listeners.indexOf(listener);
       if (i !== -1) this.listeners.splice(i, 1);
     };
+  }
+
+  // Subscribers receive a TurnEvent per reducer-emitted event, in order. The
+  // Game-hook bridge attaches here.
+  onTurnEvent(listener: TurnEventListener): () => void {
+    this.turnEventListeners.push(listener);
+    return () => {
+      const i = this.turnEventListeners.indexOf(listener);
+      if (i !== -1) this.turnEventListeners.splice(i, 1);
+    };
+  }
+
+  // Read-only snapshot of the current turn state.
+  getTurns(): TurnState {
+    return cloneTurns(this.turns);
+  }
+
+  // Host-side mutation entry. Builds the seat snapshot, dispatches the action
+  // through the pure reducer, applies the result, then fires events.
+  dispatchTurnAction(action: TurnAction): void {
+    const snapshot = this.seatsOccupancy();
+    const result = reduce(this.turns, action, snapshot);
+    const turnsChanged = !sameTurns(this.turns, result.nextState);
+    this.turns = result.nextState;
+    if (turnsChanged) {
+      this.emit({ turns: cloneTurns(this.turns) });
+    }
+    for (const event of result.events) {
+      for (const l of this.turnEventListeners) l(event);
+    }
+  }
+
+  // Host-only: invoked when a guest sends an `end-turn-request`. Validates
+  // the sender holds the active seat, then routes the action through the
+  // reducer with endedBy='player'. Out-of-turn requests are silently dropped
+  // (host's authoritative state isn't visible to the guest mid-flight).
+  endTurnRequest(peerId: string): boolean {
+    if (!this.turns.enabled) return false;
+    const seat = this.getSeat(peerId);
+    if (seat === null) return false;
+    if (this.turns.activeSeat !== seat) return false;
+    this.dispatchTurnAction({ kind: 'next', endedBy: 'player' });
+    return true;
+  }
+
+  // Host-only: install a turn-state restored from a save envelope. Silent —
+  // does not fire events. Replaces the turn state wholesale and broadcasts a
+  // patch so guests mirror the new value.
+  hydrateTurns(turns: TurnState): void {
+    this.turns = cloneTurns(turns);
+    this.emit({ turns: cloneTurns(this.turns) });
+  }
+
+  private seatsOccupancy(): SeatsSnapshot {
+    return this.seats.map(s => s.peerId !== null);
   }
 
   private locate(peerId: string): boolean {
@@ -139,7 +207,8 @@ export class RoomStateManager {
     if (
       (!patch.seats || patch.seats.length === 0) &&
       (!patch.spectatorsAdded   || patch.spectatorsAdded.length   === 0) &&
-      (!patch.spectatorsRemoved || patch.spectatorsRemoved.length === 0)
+      (!patch.spectatorsRemoved || patch.spectatorsRemoved.length === 0) &&
+      !patch.turns
     ) return;
 
     const change: RoomStateChange = { patch, snapshot: this.snapshot() };
@@ -149,3 +218,26 @@ export class RoomStateManager {
 
 // Re-export so callers can type the seat count without a separate import.
 export { SEAT_COUNT };
+export { type EndedBy };
+
+function cloneTurns(t: TurnState): TurnState {
+  return {
+    enabled:    t.enabled,
+    order:      [...t.order],
+    activeSeat: t.activeSeat,
+    turnNumber: t.turnNumber,
+    orderIndex: t.orderIndex,
+  };
+}
+
+function sameTurns(a: TurnState, b: TurnState): boolean {
+  if (a.enabled !== b.enabled) return false;
+  if (a.activeSeat !== b.activeSeat) return false;
+  if (a.turnNumber !== b.turnNumber) return false;
+  if (a.orderIndex !== b.orderIndex) return false;
+  if (a.order.length !== b.order.length) return false;
+  for (let i = 0; i < a.order.length; i++) {
+    if (a.order[i] !== b.order[i]) return false;
+  }
+  return true;
+}

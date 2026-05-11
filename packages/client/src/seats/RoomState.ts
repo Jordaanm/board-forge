@@ -2,6 +2,7 @@
 // See planning/prd--seats-MVP.md and planning/issues/issues--seats-mvp.md (slice #2).
 
 import { SEAT_COLOURS, type SeatColour, type SeatIndex } from './SeatLayout';
+import { type TurnState } from './TurnTracker';
 
 export interface SeatEntry {
   index:  SeatIndex;
@@ -13,18 +14,21 @@ export interface RoomStateSnapshot {
   hostPeerId: string;
   seats:      SeatEntry[];   // length 8, index === position in array
   spectators: string[];
+  turns:      TurnState;
 }
 
 export interface RoomStatePatch {
   seats?:             SeatEntry[];
   spectatorsAdded?:   string[];
   spectatorsRemoved?: string[];
+  turns?:             TurnState;
 }
 
 export type RoomStateMessage =
   | { type: 'room-state';         snapshot: RoomStateSnapshot }
   | { type: 'room-state-patch';   patch:    RoomStatePatch    }
   | { type: 'seat-claim-request'; seatIndex: SeatIndex        }
+  | { type: 'end-turn-request'                                }
   | { type: 'kicked';             reason: 'kick' | 'ban'      };
 
 export const SEAT_COUNT = 8;

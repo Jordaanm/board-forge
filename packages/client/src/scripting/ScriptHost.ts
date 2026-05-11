@@ -30,6 +30,9 @@ import { ScriptErrorLog } from './ScriptErrorLog';
 import { type EntityScene } from '../entity/EntityComponent';
 import { type AssetEntry, type AssetType } from '../assets/Manifest';
 import { type StickerOpts } from '../entity/components/attachSticker';
+import { type TurnsBridge } from './TurnsBridge';
+import { type TurnEvent } from '../seats/TurnTracker';
+import { type SeatIndex } from '../seats/SeatLayout';
 
 export interface ScriptHostOptions {
   // The scene this host queries. Optional so unit tests that don't exercise
@@ -54,6 +57,9 @@ export interface ScriptHostOptions {
   // refactor.md). Returns the new surface entity id + element id pair, or
   // null when the host can't honour the request. Absent on guest contexts.
   attachSticker?: (parentId: string, opts: StickerOpts) => { surfaceId: string; elementId: string } | null;
+  // Host-only turn-tracker bridge backing `scene.turns`. Constructed by World
+  // / Room wiring around the host's RoomStateManager.
+  turns?: TurnsBridge;
 }
 
 export type RunResult =
@@ -75,6 +81,7 @@ export class ScriptHost {
   private readonly lookupSlug_:     ScriptHostOptions['lookupSlug'];
   private readonly listAssets_:     ScriptHostOptions['listAssets'];
   private readonly attachSticker_:  ScriptHostOptions['attachSticker'];
+  private turns_:                   ScriptHostOptions['turns'];
   // Bounded ring buffer of script errors surfaced to the script panel
   // (issue #7). Hook errors, listener errors, AND startup-failure errors
   // (compile, module-load, structural, constructor) all funnel here so the
@@ -98,6 +105,45 @@ export class ScriptHost {
     this.lookupSlug_    = opts.lookupSlug;
     this.listAssets_    = opts.listAssets;
     this.attachSticker_ = opts.attachSticker;
+    this.turns_         = opts.turns;
+  }
+
+  // Host wiring: install the turn-tracker bridge after construction. World
+  // constructs ScriptHost before RoomStateManager exists, so Room.tsx wires
+  // this in once the manager is available. Subsequent Runs see the bridge.
+  setTurnsBridge(bridge: TurnsBridge | undefined): void {
+    this.turns_ = bridge;
+  }
+
+  // Host wiring: dispatch a turn event to the current Game instance. The
+  // RoomStateManager.onTurnEvent subscription routes through here so the
+  // bridge owns the manager → script-host coupling, not the reverse.
+  dispatchTurnEvent(event: TurnEvent): void {
+    const instance = this.currentInstance;
+    if (!instance) return;
+    if (event.kind === 'turn-start') {
+      this.invokeTurnHook(instance, 'onTurnStart', [event.seat, event.turnNumber]);
+    } else {
+      this.invokeTurnHook(instance, 'onTurnEnd', [event.seat, event.turnNumber, event.endedBy]);
+    }
+  }
+
+  // Host wiring: route an end-turn request through the active Game instance
+  // so scripts can gate or veto the advance.
+  //
+  // When the user's class doesn't override `onTurnEndRequested`, the engine
+  // bypasses the hook and dispatches `next` directly with the originating
+  // `endedBy` — preserving the 'player' / 'host' source per the PRD event
+  // table. When the user *has* overridden the hook, control transfers to
+  // them; any `scene.turns.next()` they call lands as `endedBy: 'script'`
+  // because the decision was script-driven.
+  dispatchEndTurnRequest(seat: SeatIndex, endedBy: 'player' | 'host'): void {
+    const instance = this.currentInstance;
+    if (!instance || isDefaultHook(instance, 'onTurnEndRequested')) {
+      this.turns_?.dispatch({ kind: 'next', endedBy });
+      return;
+    }
+    this.invokeTurnHook(instance, 'onTurnEndRequested', [seat]);
   }
 
   // Bounded ring of runtime errors (hook + listener). Subscribe via
@@ -158,6 +204,7 @@ export class ScriptHost {
           lookupSlug:    this.lookupSlug_,
           listAssets:    this.listAssets_,
           attachSticker: this.attachSticker_,
+          turns:         this.turns_,
         })
       : {};
 
@@ -202,6 +249,11 @@ export class ScriptHost {
     // tracked in the Run context and torn down on the next Run regardless).
     this.currentInstance = instance;
 
+    // Make `scene` reachable as `this.scene` from any hook so the base
+    // `Game.onTurnEndRequested` default ("this.scene.turns.next()") works
+    // without forcing every script author to save it in onSceneInitialised.
+    (instance as unknown as { scene: unknown }).scene = scene;
+
     // Run does NOT persist `source` — Save Script (`setSource`) is the
     // explicit save path. The user might click Run on a draft they don't
     // want saved yet.
@@ -212,6 +264,25 @@ export class ScriptHost {
     this.invokeHook(instance, 'onScriptLoaded', scene);
 
     return { ok: true };
+  }
+
+  // Variant of invokeHook for turn hooks: the signature is (seat, ...rest)
+  // rather than (scene). Wrapped in try/catch like the others so a buggy
+  // script doesn't abort the engine's event-dispatch loop.
+  // Note: function declarations below the class body are also in module scope.
+  private invokeTurnHook(
+    instance: Game,
+    name: 'onTurnStart' | 'onTurnEnd' | 'onTurnEndRequested',
+    args: unknown[],
+  ): void {
+    const fn = (instance as unknown as Record<string, unknown>)[name];
+    if (typeof fn !== 'function') return;
+    try {
+      (fn as (...a: unknown[]) => void).apply(instance, args);
+    } catch (e) {
+      this.console_?.error(`[script] ${name} threw:`, e);
+      this.errorLog_.push(name, e);
+    }
   }
 
   // Iterates the per-Run registration set and detaches each listener from
@@ -232,4 +303,14 @@ export class ScriptHost {
       this.errorLog_.push(name, e);
     }
   }
+}
+
+// Returns true when `instance[name]` resolves to the same function the Game
+// base class declares — i.e. the user did NOT override the hook. Walks the
+// prototype chain via `===` rather than instanceof so a subclass that ALSO
+// inherits straight from Game (without overriding) still hits the base.
+function isDefaultHook(instance: Game, name: 'onTurnEndRequested'): boolean {
+  const own = (instance as unknown as Record<string, unknown>)[name];
+  const base = (Game.prototype as unknown as Record<string, unknown>)[name];
+  return own === base;
 }
