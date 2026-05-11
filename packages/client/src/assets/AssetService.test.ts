@@ -2,6 +2,7 @@ import { describe, test, expect } from 'vitest';
 import * as THREE from 'three';
 import { AssetService, type AssetStatus, getImagePlaceholder, getModelPlaceholder } from './AssetService';
 import { Manifest, type AssetEntry } from './Manifest';
+import { spriteUV } from './spriteUV';
 import { BASE_MANIFEST, PRIMITIVE_MANIFEST } from './baseManifest';
 
 const flushMicrotasks = () => new Promise((r) => setTimeout(r, 0));
@@ -477,5 +478,187 @@ describe('AssetService.invalidate', () => {
     // Listener survives — observes pending then the new texture.
     expect(seen[seen.length - 1].tex).toBe(t2);
     expect(seen[seen.length - 1].status).toBe('loaded');
+  });
+});
+
+describe('AssetService sprite-ref resolution', () => {
+  const sheetEntry: AssetEntry = {
+    slug: 'custom:deck', name: 'Deck', type: 'spritesheet',
+    url: 'http://x/deck.png', preload: false, cols: 13, rows: 4,
+  };
+
+  test('sprite-ref subscribe fires loaded with cloned texture + UV offset/repeat', async () => {
+    const parent = new THREE.Texture();
+    const svc = new AssetService({
+      manifests:   [Manifest.from([sheetEntry])],
+      imageLoader: () => Promise.resolve(parent),
+    });
+    const seen: { tex: THREE.Texture; status: AssetStatus }[] = [];
+    svc.subscribe('custom:deck:0', 'image', (tex, status) => seen.push({ tex, status }));
+
+    expect(seen[0].status).toBe('pending');
+    expect(seen[0].tex).toBe(getImagePlaceholder());
+
+    await flushMicrotasks();
+    const last = seen[seen.length - 1];
+    expect(last.status).toBe('loaded');
+    expect(last.tex).not.toBe(parent);            // cloned
+    expect(last.tex.image).toBe(parent.image);    // shared image source
+    const uv0 = spriteUV(0, 13, 4);
+    expect(last.tex.offset.x).toBeCloseTo(uv0.offsetX);
+    expect(last.tex.offset.y).toBeCloseTo(uv0.offsetY);
+    expect(last.tex.repeat.x).toBeCloseTo(uv0.repeatX);
+    expect(last.tex.repeat.y).toBeCloseTo(uv0.repeatY);
+  });
+
+  test('parent sheet load sets generateMipmaps=false and linear filters', async () => {
+    const parent = new THREE.Texture();
+    parent.generateMipmaps = true;
+    parent.minFilter       = THREE.NearestMipmapLinearFilter;
+    parent.magFilter       = THREE.NearestFilter;
+    const svc = new AssetService({
+      manifests:   [Manifest.from([sheetEntry])],
+      imageLoader: () => Promise.resolve(parent),
+    });
+    svc.subscribe('custom:deck:0', 'image', () => {});
+    await flushMicrotasks();
+    expect(parent.generateMipmaps).toBe(false);
+    expect(parent.minFilter).toBe(THREE.LinearFilter);
+    expect(parent.magFilter).toBe(THREE.LinearFilter);
+  });
+
+  test('two sprite refs to the same sheet share one fetch', async () => {
+    let calls = 0;
+    const parent = new THREE.Texture();
+    const svc = new AssetService({
+      manifests:   [Manifest.from([sheetEntry])],
+      imageLoader: () => { calls++; return Promise.resolve(parent); },
+    });
+    svc.subscribe('custom:deck:0', 'image', () => {});
+    svc.subscribe('custom:deck:5', 'image', () => {});
+    await flushMicrotasks();
+    expect(calls).toBe(1);
+  });
+
+  test('two sprite refs to the same sheet yield distinct cloned textures', async () => {
+    const parent = new THREE.Texture();
+    const svc = new AssetService({
+      manifests:   [Manifest.from([sheetEntry])],
+      imageLoader: () => Promise.resolve(parent),
+    });
+    let tex0: THREE.Texture | null = null;
+    let tex1: THREE.Texture | null = null;
+    svc.subscribe('custom:deck:0', 'image', (t, s) => { if (s === 'loaded') tex0 = t; });
+    svc.subscribe('custom:deck:1', 'image', (t, s) => { if (s === 'loaded') tex1 = t; });
+    await flushMicrotasks();
+    expect(tex0).not.toBe(null);
+    expect(tex1).not.toBe(null);
+    expect(tex0).not.toBe(tex1);
+    expect(tex0!.offset.x).not.toBeCloseTo(tex1!.offset.x);
+  });
+
+  test('out-of-bounds sprite index → broken', async () => {
+    const svc = new AssetService({
+      manifests:   [Manifest.from([sheetEntry])],
+      imageLoader: () => Promise.resolve(new THREE.Texture()),
+    });
+    const seen: AssetStatus[] = [];
+    svc.subscribe('custom:deck:9999', 'image', (_t, s) => seen.push(s));
+    await flushMicrotasks();
+    expect(seen[seen.length - 1]).toBe('broken');
+  });
+
+  test('missing parent sheet → broken', async () => {
+    const svc = new AssetService({ manifests: [BASE_MANIFEST] });
+    const seen: AssetStatus[] = [];
+    svc.subscribe('custom:nope:0', 'image', (_t, s) => seen.push(s));
+    await flushMicrotasks();
+    expect(seen[seen.length - 1]).toBe('broken');
+  });
+
+  test('sheet load failure → all sprite subscribers go broken', async () => {
+    const svc = new AssetService({
+      manifests:   [Manifest.from([sheetEntry])],
+      imageLoader: () => Promise.reject(new Error('404')),
+    });
+    const seen: AssetStatus[] = [];
+    svc.subscribe('custom:deck:0', 'image', (_t, s) => seen.push(s));
+    await flushMicrotasks();
+    expect(seen).toEqual(['pending', 'broken']);
+  });
+
+  test('preload of a spritesheet entry fetches the sheet exactly once', async () => {
+    let calls = 0;
+    const svc = new AssetService({
+      imageLoader: () => { calls++; return Promise.resolve(new THREE.Texture()); },
+    });
+    const m = Manifest.from([{ ...sheetEntry, preload: true }]);
+    svc.setManifests([m]);
+    await svc.preload(m);
+    expect(calls).toBe(1);
+  });
+
+  test('preload then subscribe reuses the prefetched sheet', async () => {
+    let calls = 0;
+    const svc = new AssetService({
+      imageLoader: () => { calls++; return Promise.resolve(new THREE.Texture()); },
+    });
+    const m = Manifest.from([{ ...sheetEntry, preload: true }]);
+    svc.setManifests([m]);
+    await svc.preload(m);
+    svc.subscribe('custom:deck:0', 'image', () => {});
+    svc.subscribe('custom:deck:1', 'image', () => {});
+    await flushMicrotasks();
+    expect(calls).toBe(1);
+  });
+
+  test('invalidate(sheetSlug) refires all sprite subscribers', async () => {
+    let attempt = 0;
+    const svc = new AssetService({
+      manifests:   [Manifest.from([sheetEntry])],
+      imageLoader: () => Promise.resolve((attempt++, new THREE.Texture())),
+    });
+    const seenA: AssetStatus[] = [];
+    const seenB: AssetStatus[] = [];
+    svc.subscribe('custom:deck:0', 'image', (_t, s) => seenA.push(s));
+    svc.subscribe('custom:deck:5', 'image', (_t, s) => seenB.push(s));
+    await flushMicrotasks();
+    expect(seenA).toEqual(['pending', 'loaded']);
+    expect(seenB).toEqual(['pending', 'loaded']);
+
+    svc.invalidate('custom:deck');
+    await flushMicrotasks();
+    expect(seenA).toEqual(['pending', 'loaded', 'pending', 'loaded']);
+    expect(seenB).toEqual(['pending', 'loaded', 'pending', 'loaded']);
+    expect(attempt).toBe(2);
+  });
+
+  test('grid-shrunk-out sprite ref → broken after setManifests', async () => {
+    const svc = new AssetService({
+      imageLoader: () => Promise.resolve(new THREE.Texture()),
+    });
+    svc.setManifests([Manifest.from([{ ...sheetEntry, cols: 10, rows: 10 }])]);
+    const seen: AssetStatus[] = [];
+    svc.subscribe('custom:deck:99', 'image', (_t, s) => seen.push(s));
+    await flushMicrotasks();
+    expect(seen[seen.length - 1]).toBe('loaded');
+
+    svc.setManifests([Manifest.from([{ ...sheetEntry, cols: 5, rows: 5 }])]);
+    await flushMicrotasks();
+    expect(seen[seen.length - 1]).toBe('broken');
+  });
+
+  test('sprite ref subscribed before manifest arrives goes broken, then recovers after setManifests', async () => {
+    const svc = new AssetService({
+      imageLoader: () => Promise.resolve(new THREE.Texture()),
+    });
+    const seen: AssetStatus[] = [];
+    svc.subscribe('custom:deck:0', 'image', (_t, s) => seen.push(s));
+    await flushMicrotasks();
+    expect(seen[seen.length - 1]).toBe('broken');
+
+    svc.setManifests([Manifest.from([sheetEntry])]);
+    await flushMicrotasks();
+    expect(seen[seen.length - 1]).toBe('loaded');
   });
 });

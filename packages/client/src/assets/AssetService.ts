@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { type AssetEntry, type AssetType, isSlug, Manifest } from './Manifest';
+import { parseRef } from './spriteRef';
+import { spriteUV } from './spriteUV';
 import { BASE_MANIFEST, PRIMITIVE_MANIFEST } from './baseManifest';
 
 // Single funnel for asset loads. Issues #1, #2, and #9 of
@@ -118,6 +120,15 @@ interface ImageEntry {
   texture:     THREE.Texture;
   listeners:   Set<ImageListener>;
   loadPromise: Promise<THREE.Texture>;
+  // Set only when this entry is a 3-segment sprite ref. Used by
+  // `invalidateSheet` to refire dependent sprites on grid/URL changes.
+  sheetSlug?:  string;
+}
+
+interface SheetEntry {
+  status:      AssetStatus;
+  texture:     THREE.Texture | null;
+  loadPromise: Promise<THREE.Texture | null>;
 }
 
 interface ModelEntry {
@@ -147,6 +158,7 @@ export class AssetService {
   private images            = new Map<string, ImageEntry>();
   private models            = new Map<string, ModelEntry>();
   private sounds            = new Map<string, SoundEntry>();
+  private sheets            = new Map<string, SheetEntry>();
   private imageLoader:        ImageLoader;
   private modelLoader:        ModelLoader;
   private soundLoader:        SoundLoader;
@@ -170,6 +182,7 @@ export class AssetService {
   // resolved URL changes.
   setManifests(manifests: Manifest[]): void {
     this.manifests = [...manifests];
+    for (const slug of [...this.sheets.keys()]) this.invalidateSheet(slug);
     for (const ref of [...this.images.keys()]) if (isSlug(ref)) this.invalidate(ref);
     for (const ref of [...this.models.keys()]) if (isSlug(ref)) this.invalidate(ref);
     for (const ref of [...this.sounds.keys()]) if (isSlug(ref)) this.invalidate(ref);
@@ -244,8 +257,11 @@ export class AssetService {
   }
 
   // Drops cached state for `ref` and re-fetches; existing listeners are
-  // re-notified through the new entry. Used by manager UI on URL edit.
+  // re-notified through the new entry. Used by manager UI on URL edit. If
+  // `ref` is a 2-segment spritesheet slug, every sprite-ref subscriber under
+  // that sheet is also refired.
   invalidate(ref: string): void {
+    if (this.sheets.has(ref)) this.invalidateSheet(ref);
     const img = this.images.get(ref);
     if (img) {
       img.status  = 'pending';
@@ -289,6 +305,10 @@ export class AssetService {
         if (!e.preload) continue;
         if (e.url.startsWith('placeholder://')) continue;
         if (e.url.startsWith('primitive://'))   continue;
+        if (e.type === 'spritesheet') {
+          tasks.push(this.trackedSheetFetch(e.slug));
+          continue;
+        }
         tasks.push(this.trackedResolve(e.slug, e.type));
       }
     }
@@ -315,8 +335,18 @@ export class AssetService {
     const p: Promise<unknown> =
       type === 'image' ? this.resolve(ref, 'image') :
       type === 'model' ? this.resolve(ref, 'model') :
-                         this.resolve(ref, 'sound');
+      type === 'sound' ? this.resolve(ref, 'sound') :
+                         Promise.resolve();
     return p.finally(() => {
+      this.pending--;
+      this.notifyProgress();
+    });
+  }
+
+  private trackedSheetFetch(slug: string): Promise<unknown> {
+    this.pending++;
+    this.notifyProgress();
+    return this.ensureSheet(slug).loadPromise.finally(() => {
       this.pending--;
       this.notifyProgress();
     });
@@ -355,6 +385,12 @@ export class AssetService {
   }
 
   private startImageLoad(ref: string, entry: ImageEntry): void {
+    const parsed = parseRef(ref);
+    if (parsed && parsed.kind === 'sprite') {
+      this.startSpriteLoad(ref, entry, parsed.sheetSlug, parsed.index);
+      return;
+    }
+
     let url:        string;
     let slugBroken = false;
 
@@ -391,6 +427,121 @@ export class AssetService {
         return entry.texture;
       },
     );
+  }
+
+  // Resolve a 3-segment sprite ref. Validates the parent sheet exists and the
+  // index is in-bounds, ensures the parent sheet's underlying image is
+  // fetched once (regardless of how many sprite refs subscribe), then clones
+  // the parent texture with `offset`/`repeat` from spriteUV. Failure modes
+  // (missing parent, wrong type, out-of-bounds, sheet load rejected) collapse
+  // to the magenta placeholder + broken status.
+  private startSpriteLoad(ref: string, entry: ImageEntry, sheetSlug: string, index: number): void {
+    entry.sheetSlug = sheetSlug;
+
+    const fail = () => {
+      entry.status      = 'broken';
+      entry.texture     = getImagePlaceholder();
+      entry.loadPromise = Promise.resolve(entry.texture);
+      for (const l of entry.listeners) l(entry.texture, 'broken');
+    };
+
+    const found = this.lookupSlug(sheetSlug);
+    if (!found || found.type !== 'spritesheet') { fail(); return; }
+    const cols = found.cols, rows = found.rows;
+    if (!cols || !rows || index >= cols * rows) { fail(); return; }
+
+    const sheet = this.ensureSheet(sheetSlug);
+    entry.loadPromise = sheet.loadPromise.then((parentTex) => {
+      if (!parentTex) {
+        entry.status  = 'broken';
+        entry.texture = getImagePlaceholder();
+        for (const l of entry.listeners) l(entry.texture, 'broken');
+        return entry.texture;
+      }
+      // Re-check bounds against the *current* manifest — cols/rows may have
+      // shrunk between the sheet load kicking off and resolving.
+      const currentSheet = this.lookupSlug(sheetSlug);
+      if (!currentSheet || currentSheet.type !== 'spritesheet'
+          || !currentSheet.cols || !currentSheet.rows
+          || index >= currentSheet.cols * currentSheet.rows) {
+        entry.status  = 'broken';
+        entry.texture = getImagePlaceholder();
+        for (const l of entry.listeners) l(entry.texture, 'broken');
+        return entry.texture;
+      }
+      const clone = parentTex.clone();
+      const uv    = spriteUV(index, currentSheet.cols, currentSheet.rows);
+      clone.offset.set(uv.offsetX, uv.offsetY);
+      clone.repeat.set(uv.repeatX, uv.repeatY);
+      entry.status  = 'loaded';
+      entry.texture = clone;
+      for (const l of entry.listeners) l(clone, 'loaded');
+      return clone;
+    });
+  }
+
+  private ensureSheet(slug: string): SheetEntry {
+    const existing = this.sheets.get(slug);
+    if (existing) return existing;
+    const entry: SheetEntry = {
+      status:      'pending',
+      texture:     null,
+      loadPromise: Promise.resolve(null),
+    };
+    this.sheets.set(slug, entry);
+    this.startSheetLoad(slug, entry);
+    return entry;
+  }
+
+  private startSheetLoad(slug: string, entry: SheetEntry): void {
+    const found = this.lookupSlug(slug);
+    if (!found || found.type !== 'spritesheet') {
+      entry.status      = 'broken';
+      entry.texture     = null;
+      entry.loadPromise = Promise.resolve(null);
+      return;
+    }
+    entry.status      = 'pending';
+    entry.loadPromise = this.imageLoader(found.url).then(
+      (tex) => {
+        // Filters must be set BEFORE the texture is uploaded to the GPU.
+        // The first upload happens when the clone is first rendered in a
+        // material — by that point this Promise has resolved, the clone
+        // has been created (inheriting `generateMipmaps`/`minFilter`),
+        // and the source has its filter state locked in. See
+        // planning/prd--sprite-sheet.md "Further Notes".
+        tex.generateMipmaps = false;
+        tex.minFilter       = THREE.LinearFilter;
+        tex.magFilter       = THREE.LinearFilter;
+        entry.status  = 'loaded';
+        entry.texture = tex;
+        return tex;
+      },
+      () => {
+        entry.status  = 'broken';
+        entry.texture = null;
+        return null;
+      },
+    );
+  }
+
+  // Drop the cached sheet texture and re-fetch through `startSheetLoad`.
+  // Every sprite-ref entry depending on this sheet is also reset to pending
+  // and re-evaluated against the (possibly new) manifest cols/rows.
+  private invalidateSheet(slug: string): void {
+    const sheet = this.sheets.get(slug);
+    if (!sheet) return;
+    this.startSheetLoad(slug, sheet);
+    for (const [ref, entry] of this.images) {
+      if (entry.sheetSlug !== slug) continue;
+      entry.status  = 'pending';
+      entry.texture = getImagePlaceholder();
+      for (const l of entry.listeners) l(entry.texture, 'pending');
+      const parsed = parseRef(ref);
+      if (parsed && parsed.kind === 'sprite') {
+        this.startSpriteLoad(ref, entry, parsed.sheetSlug, parsed.index);
+      }
+    }
   }
 
   private ensureSound(ref: string): SoundEntry {

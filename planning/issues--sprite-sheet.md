@@ -69,7 +69,7 @@ Extend `Manifest` and the scripting type surface to recognize `spritesheet` as a
 
 ---
 
-## Issue 3 — AssetService resolves 3-segment refs to cloned textures
+## Issue 3 — AssetService resolves 3-segment refs to cloned textures ✅ DONE
 
 **Type:** AFK
 **Blocked by:** #1, #2
@@ -94,13 +94,13 @@ Teach [AssetService](../packages/client/src/assets/AssetService.ts) to resolve s
 
 ### Acceptance criteria
 
-- [ ] `subscribe('custom:deck:0', 'image', …)` fires `loaded` and supplies a `THREE.Texture` whose `offset` / `repeat` match `spriteUV(0, cols, rows)`
-- [ ] Two sprite refs to the same sheet share one fetch — fake imageLoader asserted called once
-- [ ] `preload` of a manifest containing a spritesheet entry triggers exactly one fetch for the sheet
-- [ ] `invalidate(sheetSlug)` re-fires all sprite-ref subscribers
-- [ ] Out-of-bounds index, missing parent, and grid-shrunk-out refs all fire `broken`
-- [ ] Tests follow the `AssetService.test.ts` pattern: subscribe through public API, assert what the listener receives, never inspect internal cache maps
-- [ ] No changes required at consumer sites (CardComponent, ButtonImagesPatch, StickerOpts.image, MeshComponent) — verified manually by binding a Card's `face` to `custom:deck:0` with a hand-crafted manifest entry
+- [x] `subscribe('custom:deck:0', 'image', …)` fires `loaded` and supplies a `THREE.Texture` whose `offset` / `repeat` match `spriteUV(0, cols, rows)`
+- [x] Two sprite refs to the same sheet share one fetch — fake imageLoader asserted called once
+- [x] `preload` of a manifest containing a spritesheet entry triggers exactly one fetch for the sheet
+- [x] `invalidate(sheetSlug)` re-fires all sprite-ref subscribers
+- [x] Out-of-bounds index, missing parent, and grid-shrunk-out refs all fire `broken`
+- [x] Tests follow the `AssetService.test.ts` pattern: subscribe through public API, assert what the listener receives, never inspect internal cache maps
+- [x] No changes required at consumer sites (CardComponent, ButtonImagesPatch, StickerOpts.image, MeshComponent) — verified manually by binding a Card's `face` to `custom:deck:0` with a hand-crafted manifest entry
 
 ### Blocked by
 
