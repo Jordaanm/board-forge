@@ -1,7 +1,6 @@
 ## TODO
 
 ### Major Features
-* Turn order management / current turn
 * Multiselect
 * Magnets (sticking points on the surface of an entity)
 * PDF Viewer
@@ -26,3 +25,16 @@
 * Convert current planning docs into proper documentation
 * Remove the transitional `__delete` host-local built-in from `ContextMenuController.ts`.
 * Decide whether Delete becomes a base-class action on every entity or moves into the editor panel UX. Either way, drop the special-cased id in `dispatchMenuAction`.
+
+
+## Splendor
+Features needed to simulate Splendor's functionality.
+
+* Cards
+* Tokens for currency
+* Bowl with Zone to count currency
+* Auto Layout of Cards
+* Auto-detect when a merchant requirements are met
+* Turn order
+* Restart? (basically a revert/reload of the save file)
+* Add images, etc to custom asset manifest
