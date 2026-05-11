@@ -31,6 +31,7 @@ import { ZoneComponent } from '../components/ZoneComponent';
 import { TweenComponent } from '../components/TweenComponent';
 import { HandComponent } from '../components/HandComponent';
 import { TableComponent } from '../components/TableComponent';
+import { CardComponent } from '../components/CardComponent';
 import { registerCorePrimitives } from '../spawnables';
 import { getSpawnable } from '../SpawnableRegistry';
 import { defaultEntityName } from '../Entity';
@@ -58,6 +59,7 @@ import {
   type EntityHandle,
   type SpawnOptions,
   type ReplicationPolicy,
+  type GenerateDeckOptions,
 } from './types';
 import { getPropertySchema, clampForSchema, type PropertyDef } from '../propertySchema';
 import { type HoldRelease, type ToolBroadcast, type PlayCardToTable, type ReorderHand, type TweenIntoHand, type PlaySoundMessage } from '../wire';
@@ -823,6 +825,53 @@ class WorldImpl implements World, HandleRouter {
       return;
     }
     this.transport.send({ type: 'deal-from-deck', deckId, count }, { reliable: true });
+  }
+
+  // Spawns one card per face-ref at a single deck position, then wraps them
+  // in a fresh Deck entity via MergeService.assembleDeckFrom. Cards are
+  // collocated and immediately parented (isContained=true) so they never
+  // appear scattered. Backs the host "Generate Deck" tool.
+  generateDeck(opts: GenerateDeckOptions): EntityHandle | null {
+    if (this.role !== 'host') throw new Error('World.generateDeck is host-only');
+    if (!this.merge) return null;
+    if (opts.faceRefs.length === 0) return null;
+
+    this.history_?.push('generate deck');
+
+    const position = opts.position ?? this.defaultDeckPosition();
+
+    const cards: Entity[] = [];
+    for (const faceRef of opts.faceRefs) {
+      const card  = this.spawnEntity('card', { position });
+      const cardC = card.getComponent(CardComponent);
+      if (cardC) {
+        cardC.setState({ face: faceRef, back: opts.backRef, category: opts.category });
+      }
+      if (opts.tag) {
+        card.tags = [...card.tags, opts.tag];
+        this.replicator?.enqueueEntityPatch(card.id, { tags: [...card.tags] });
+      }
+      cards.push(card);
+    }
+
+    const deck = this.merge.assembleDeckFrom(cards, position, opts.category);
+    if (opts.tag) {
+      deck.tags = [...deck.tags, opts.tag];
+      this.replicator?.enqueueEntityPatch(deck.id, { tags: [...deck.tags] });
+    }
+
+    this.notify();
+    return this.handleFor(deck);
+  }
+
+  // Picks a scatter position for a freshly-generated deck. Mirrors the
+  // X/Z formula in `defaultSpawnPosition` so generated decks land in the
+  // same play area as one-off spawns.
+  private defaultDeckPosition(): [number, number, number] {
+    const x = (Math.random() - 0.5) * 6;
+    const z = (Math.random() - 0.5) * 3;
+    const y = TABLE_SURFACE_Y + 0.5;
+    return [x, y, z];
   }
 
   applyImpulse(entity: Entity, v: { x: number; y: number; z: number }): void {

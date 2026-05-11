@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { SceneImpl } from './Scene';
 import { type SpawnContext } from './EntityComponent';
 import { HostReplicatorV2, type ReplicatorPolicy } from './HostReplicatorV2';
-import { MergeService } from './MergeService';
+import { MergeService, MERGE_XZ_OVERLAP_THRESHOLD } from './MergeService';
 import { registerCorePrimitives } from './spawnables';
 import { PhysicsWorld } from '../physics/PhysicsWorld';
 import { CardComponent } from './components/CardComponent';
@@ -97,6 +97,25 @@ describe('MergeService.canMerge — gating', () => {
     const a = spawnCard({ category: 'x' });
     const die = scene.spawn('die', ctx);
     expect(merge.canMerge(a, die)).toBe(false);
+  });
+
+  test('XZ centers outside overlap threshold → false', () => {
+    const a = spawnCard({ pos: [0,     0.5, 0], category: 'x' });
+    const b = spawnCard({ pos: [10000, 0.7, 0], category: 'x' });
+    expect(merge.canMerge(a, b)).toBe(false);
+  });
+
+  test('XZ centers within overlap threshold → true', () => {
+    const offset = MERGE_XZ_OVERLAP_THRESHOLD / 2;
+    const a = spawnCard({ pos: [0,      0.5, 0],      category: 'x' });
+    const b = spawnCard({ pos: [offset, 0.7, offset], category: 'x' });
+    expect(merge.canMerge(a, b)).toBe(true);
+  });
+
+  test('Y difference alone does not block merge (XZ only)', () => {
+    const a = spawnCard({ pos: [0, 0,    0], category: 'x' });
+    const b = spawnCard({ pos: [0, 1000, 0], category: 'x' });
+    expect(merge.canMerge(a, b)).toBe(true);
   });
 });
 

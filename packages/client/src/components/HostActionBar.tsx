@@ -13,7 +13,6 @@ import { ScriptConsoleModal } from './ScriptConsoleModal';
 import { AssetManagerModal } from './AssetManagerModal';
 import { GenerateDeckModal, type GenerateDeckRequest } from './GenerateDeckModal';
 import { HostToolsMenu, type MenuEntry } from './HostToolsMenu';
-import { CardComponent } from '../entity/components/CardComponent';
 import { type SaveEnvelope } from '../entity/SaveFile';
 import { downloadSceneFile } from '../entity/downloadSceneFile';
 import { type LastLoaded, type SceneHistoryService } from '../entity/SceneHistoryService';
@@ -101,14 +100,12 @@ export function HostActionBar({
   const scriptingAvailable = handle.controller.scripting !== null;
 
   const handleGenerateDeck = (req: GenerateDeckRequest) => {
-    for (const faceRef of req.faceRefs) {
-      const h = handle.controller.spawn('card');
-      const card = h.entity.getComponent(CardComponent);
-      if (card) card.setState({ face: faceRef, back: req.backRef });
-      if (req.tag) {
-        handle.controller.updateEntityField(h.id, 'tags', [...h.entity.tags, req.tag]);
-      }
-    }
+    handle.controller.generateDeck({
+      faceRefs: req.faceRefs,
+      backRef:  req.backRef,
+      category: req.tag,
+      tag:      req.tag,
+    });
   };
 
   const handleSave = () => {

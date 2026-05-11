@@ -30,6 +30,10 @@
 ## Splendor
 Features needed to simulate Splendor's functionality.
 
+* split deck
+* flip card
+* snap points
+
 * Cards
 * Tokens for currency
 * Bowl with Zone to count currency

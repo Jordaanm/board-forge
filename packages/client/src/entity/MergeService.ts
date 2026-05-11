@@ -18,6 +18,11 @@ import { CardComponent } from './components/CardComponent';
 import { DeckComponent } from './components/DeckComponent';
 import { TransformComponent } from './components/TransformComponent';
 
+// Max XZ-plane distance (in world units) between two entity centers for them
+// to count as overlapping for merge purposes. Pure beginContact gating let
+// edge-grazes form decks; this requires the centers to land close to each
+// other before the merge fires.
+export const MERGE_XZ_OVERLAP_THRESHOLD = 0.2;
 export interface MergeHostFacade {
   // Spawns an entity of the given type at the supplied position; returns the
   // backing Entity (not a handle) so MergeService can patch component state
@@ -111,16 +116,13 @@ export class MergeService {
     const aDeck = a.getComponent(DeckComponent);
     const bDeck = b.getComponent(DeckComponent);
 
-    if (aCard && bCard) {
-      return aCard.state.category === bCard.state.category;
-    }
-    if (aCard && bDeck) {
-      return aCard.state.category === bDeck.state.category;
-    }
-    if (aDeck && bCard) {
-      return bCard.state.category === aDeck.state.category;
-    }
-    return false;
+    let categoryMatch = false;
+    if (aCard && bCard)      categoryMatch = aCard.state.category === bCard.state.category;
+    else if (aCard && bDeck) categoryMatch = aCard.state.category === bDeck.state.category;
+    else if (aDeck && bCard) categoryMatch = bCard.state.category === aDeck.state.category;
+    if (!categoryMatch) return false;
+
+    return xzDistance(a, b) < MERGE_XZ_OVERLAP_THRESHOLD;
   }
 
   merge(a: Entity, b: Entity): Entity | null {
@@ -170,26 +172,50 @@ export class MergeService {
     const upper = aPos[1] <= bPos[1] ? b : a;
     const lowerPos = lower.getComponent(TransformComponent)!.state.position;
     const category = a.getComponent(CardComponent)!.state.category;
+    return this.assembleDeckFrom(
+      [upper, lower],
+      [lowerPos[0], lowerPos[1], lowerPos[2]],
+      category,
+    );
+  }
 
-    const deck = this.host.spawnAt('deck', lowerPos);
-    const cards = [upper.id, lower.id];
+  // Spawns a fresh deck at `position` and parents the given cards into it
+  // (index 0 = visible top). Mirrors the parent/child + isContained wiring of
+  // mergeCardCard, but unconstrained by canMerge — callers (mergeCardCard,
+  // World.generateDeck) are responsible for any gating. Returns the new deck.
+  assembleDeckFrom(
+    cards:    readonly Entity[],
+    position: [number, number, number],
+    category: string,
+  ): Entity {
+    const deck = this.host.spawnAt('deck', position);
+    const cardIds = cards.map((c) => c.id);
 
     const name = category ? `Deck of ${category}` : `Deck-${deck.id.slice(0, 8)}`;
     deck.name = name;
     this.replicator.enqueueEntityPatch(deck.id, { name });
 
-    deck.children = [...cards];
-    this.replicator.enqueueEntityPatch(deck.id, { children: [...cards] });
+    deck.children = [...cardIds];
+    this.replicator.enqueueEntityPatch(deck.id, { children: [...cardIds] });
 
-    deck.getComponent(DeckComponent)!.setState({ cards, category });
+    deck.getComponent(DeckComponent)!.setState({ cards: cardIds, category });
 
-    setEntityIsContained(upper, true,    this.replicator);
-    setEntityIsContained(lower, true,    this.replicator);
-    setEntityParentId   (upper, deck.id, this.replicator);
-    setEntityParentId   (lower, deck.id, this.replicator);
+    for (const card of cards) {
+      setEntityIsContained(card, true,    this.replicator);
+      setEntityParentId   (card, deck.id, this.replicator);
+    }
 
     return deck;
   }
+}
+
+function xzDistance(a: Entity, b: Entity): number {
+  const aT = a.getComponent(TransformComponent);
+  const bT = b.getComponent(TransformComponent);
+  if (!aT || !bT) return Infinity;
+  const dx = aT.state.position[0] - bT.state.position[0];
+  const dz = aT.state.position[2] - bT.state.position[2];
+  return Math.sqrt(dx * dx + dz * dz);
 }
 
 function addContact(map: Map<string, Set<string>>, a: string, b: string): void {

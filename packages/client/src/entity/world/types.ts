@@ -203,7 +203,23 @@ export interface World {
   // ordered clockwise from the caller (caller first). Issue #9 of issues--deck.md.
   dealFromDeck(deckId: string, count: number, callerSeat: SeatIndex | null): void;
 
+  // Host-only — spawn one card per face-ref and immediately wrap them in a
+  // fresh Deck entity (cards become children with isContained=true, so no
+  // scatter). Backs the host "Generate Deck" tool. Returns a handle to the
+  // new deck, or null if the request can't be honoured.
+  generateDeck(opts: GenerateDeckOptions): EntityHandle | null;
+
   dispose(): void;
+}
+
+export interface GenerateDeckOptions {
+  faceRefs: readonly string[];
+  backRef:  string;
+  category: string;
+  // Optional tag applied to the deck and every child card.
+  tag?:     string;
+  // Optional spawn position; defaults to the same scatter formula as `spawn`.
+  position?: [number, number, number];
 }
 
 // Single seam for the wire. Production: RtcTransport over ConnectionManager.
