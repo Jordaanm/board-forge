@@ -410,6 +410,13 @@ class WorldImpl implements World, HandleRouter {
       this.notify();
       return;
     }
+    if (key === 'customData') {
+      const next = normaliseCustomData(value);
+      entity.customData = new Map(Object.entries(next));
+      if (this.replicator) this.replicator.enqueueEntityPatch(entity.id, { customData: { ...next } });
+      this.notify();
+      return;
+    }
   }
 
   // Component-state field write (issue #1 of property-schema-refactor). Looks
@@ -1162,6 +1169,17 @@ function nowMs(): number {
   return typeof performance !== 'undefined' && typeof performance.now === 'function'
     ? performance.now()
     : Date.now();
+}
+
+function normaliseCustomData(value: unknown): Record<string, string> {
+  if (!value || typeof value !== 'object') return {};
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    const key = String(k);
+    if (!key) continue;
+    out[key] = v == null ? '' : String(v);
+  }
+  return out;
 }
 
 function normaliseTags(value: unknown): string[] {

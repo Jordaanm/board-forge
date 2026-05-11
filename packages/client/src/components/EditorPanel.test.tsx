@@ -39,6 +39,7 @@ function makeSummary(overrides: Partial<ObjectSummary> = {}): ObjectSummary {
     name:       'Tok',
     owner:      null,
     tags:       [],
+    customData: {},
     sections:   [],
     parentId:   null,
     surface:    null,

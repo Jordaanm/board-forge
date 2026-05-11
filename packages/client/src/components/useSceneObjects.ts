@@ -51,6 +51,7 @@ export function entityToObjectSummary(entity: Entity, isHost: boolean): ObjectSu
     name:       entity.name,
     owner:      entity.owner,
     tags:       [...entity.tags],
+    customData: Object.fromEntries(entity.customData),
     sections,
     parentId:   entity.parentId,
     surface,

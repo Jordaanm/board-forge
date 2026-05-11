@@ -26,6 +26,7 @@ export interface ObjectSummary {
   name:  string;
   owner: number | null;
   tags: string[];
+  customData: Record<string, string>;
   // Aggregated schema sections — one per component that declares a
   // `propertySchema`. Each section carries its own state snapshot so the
   // panel doesn't need a live Entity reference.
@@ -409,6 +410,10 @@ function EntitySection({
         tags={selected.tags}
         onChange={(next) => onUpdateEntityField(selected.id, 'tags', next)}
       />
+      <CustomDataRow
+        customData={selected.customData}
+        onChange={(next) => onUpdateEntityField(selected.id, 'customData', next)}
+      />
       <button
         type="button"
         style={{
@@ -515,6 +520,146 @@ function TagsRow({
     </div>
   );
 }
+
+function CustomDataRow({
+  customData, onChange,
+}: { customData: Record<string, string>; onChange: (next: Record<string, string>) => void }) {
+  const [draftKey, setDraftKey] = useState('');
+  const [draftValue, setDraftValue] = useState('');
+  const entries = Object.entries(customData);
+
+  const renameKey = (oldKey: string, newKey: string) => {
+    const k = newKey.trim();
+    if (!k || k === oldKey) return;
+    const next: Record<string, string> = {};
+    for (const [ek, ev] of entries) {
+      if (ek === oldKey) next[k] = ev;
+      else if (ek !== k) next[ek] = ev;
+    }
+    onChange(next);
+  };
+
+  const setValue = (key: string, value: string) => {
+    if (customData[key] === value) return;
+    onChange({ ...customData, [key]: value });
+  };
+
+  const remove = (key: string) => {
+    const next: Record<string, string> = {};
+    for (const [ek, ev] of entries) if (ek !== key) next[ek] = ev;
+    onChange(next);
+  };
+
+  const addDraft = () => {
+    const k = draftKey.trim();
+    if (!k) return;
+    onChange({ ...customData, [k]: draftValue });
+    setDraftKey('');
+    setDraftValue('');
+  };
+
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <label style={{ display: 'block', color: '#aaa', fontSize: 11, marginBottom: 3 }}>Custom Data</label>
+      {entries.map(([k, v]) => (
+        <CustomDataEntry
+          key={k}
+          entryKey={k}
+          entryValue={v}
+          onRenameKey={(nk) => renameKey(k, nk)}
+          onChangeValue={(nv) => setValue(k, nv)}
+          onRemove={() => remove(k)}
+        />
+      ))}
+      <div style={CUSTOM_DATA_ROW}>
+        <input
+          type="text"
+          style={INPUT}
+          placeholder="key"
+          value={draftKey}
+          onChange={e => setDraftKey(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addDraft(); } }}
+        />
+        <input
+          type="text"
+          style={INPUT}
+          placeholder="value"
+          value={draftValue}
+          onChange={e => setDraftValue(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addDraft(); } }}
+        />
+        <button
+          type="button"
+          style={CUSTOM_DATA_ADD_BTN}
+          onClick={addDraft}
+          disabled={!draftKey.trim()}
+          title="Add entry"
+        >+</button>
+      </div>
+    </div>
+  );
+}
+
+function CustomDataEntry({
+  entryKey, entryValue, onRenameKey, onChangeValue, onRemove,
+}: {
+  entryKey:      string;
+  entryValue:    string;
+  onRenameKey:   (next: string) => void;
+  onChangeValue: (next: string) => void;
+  onRemove:      () => void;
+}) {
+  const [keyDraft, setKeyDraft] = useState(entryKey);
+  const [valDraft, setValDraft] = useState(entryValue);
+  useEffect(() => { setKeyDraft(entryKey); }, [entryKey]);
+  useEffect(() => { setValDraft(entryValue); }, [entryValue]);
+
+  return (
+    <div style={CUSTOM_DATA_ROW}>
+      <input
+        type="text"
+        style={INPUT}
+        value={keyDraft}
+        onChange={e => setKeyDraft(e.target.value)}
+        onBlur={() => onRenameKey(keyDraft)}
+        onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+      />
+      <input
+        type="text"
+        style={INPUT}
+        value={valDraft}
+        onChange={e => setValDraft(e.target.value)}
+        onBlur={() => onChangeValue(valDraft)}
+        onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+      />
+      <button
+        type="button"
+        style={CHIP_X}
+        onClick={onRemove}
+        title="Remove entry"
+      >×</button>
+    </div>
+  );
+}
+
+const CUSTOM_DATA_ROW: React.CSSProperties = {
+  display:             'grid',
+  gridTemplateColumns: '1fr 1fr auto',
+  gap:                 4,
+  marginBottom:        4,
+  alignItems:          'center',
+};
+
+const CUSTOM_DATA_ADD_BTN: React.CSSProperties = {
+  background:   'rgba(255,255,255,0.1)',
+  border:       '1px solid rgba(255,255,255,0.2)',
+  color:        '#e8e8e8',
+  cursor:       'pointer',
+  fontSize:     14,
+  lineHeight:   1,
+  padding:      '2px 8px',
+  borderRadius: 3,
+};
 
 function SchemaPropertyRow({
   def, value, manifestStore, onChange,
