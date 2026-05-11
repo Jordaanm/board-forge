@@ -68,6 +68,8 @@ export function Room({ roomId, isHost }: Props) {
   const [manifestStore, setManifestStore]   = useState<ManifestStore | null>(null);
   const [handle, setHandle]                 = useState<SceneHandle | null>(null);
 
+  const managerRef         = useRef<RoomStateManager | null>(null);
+
   const sendRef            = useRef<(msg: ChannelMessage, opts?: { reliable?: boolean }) => void>(noop);
   const sendToRef          = useRef<(peerId: string, msg: ChannelMessage, opts?: { reliable?: boolean }) => void>(noop);
   const getTargetsRef      = useRef<() => ReplicationTarget[]>(() => []);
@@ -208,6 +210,7 @@ export function Room({ roomId, isHost }: Props) {
         setSelfPeerId(peerId);
         if (isHost) {
           manager = new RoomStateManager(peerId);
+          managerRef.current = manager;
           manager.onChange((change) => {
             const patchMsg: RoomStateMessage = { type: 'room-state-patch', patch: change.patch };
             mgr.send(patchMsg);
@@ -309,6 +312,7 @@ export function Room({ roomId, isHost }: Props) {
       banPeerRef.current       = noop;
       endTurnRef.current       = noop;
       dispatchTurnRef.current  = noop;
+      managerRef.current       = null;
       setRoomSnapshot(null);
       setSelfPeerId(null);
     };
@@ -487,6 +491,7 @@ export function Room({ roomId, isHost }: Props) {
                 void handle.controller.scripting?.loadScript(envelope.script);
                 setScriptSource(envelope.script.source);
                 manifestStoreRef.current?.loadFromSave(envelope.manifest);
+                managerRef.current?.hydrateTurns(envelope.turns);
               }}
               onRevert={() => handle.controller.history?.revert()}
               lastLoaded={lastLoaded}
@@ -520,6 +525,7 @@ export function Room({ roomId, isHost }: Props) {
                   onSetOrder={(order) => dispatchTurnRef.current({ kind: 'setOrder', order })}
                 />
               }
+              turns={roomSnapshot?.turns}
             />
           </UIPanel>
         )}

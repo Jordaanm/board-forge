@@ -18,6 +18,8 @@
 import { type EntitySerialized } from './Scene';
 import { componentRegistry } from './ComponentRegistry';
 import { type AssetEntry, type AssetType, validateSlug } from '../assets/Manifest';
+import { initialTurnState, type TurnState } from '../seats/TurnTracker';
+import { type SeatIndex } from '../seats/SeatLayout';
 
 export const SAVE_FORMAT  = 'vtt-scene';
 export const SAVE_VERSION = 1;
@@ -39,6 +41,10 @@ export interface SaveEnvelope {
   scene:     EntitySerialized[];
   script:    SavedScript;
   manifest:  AssetEntry[];
+  // Turn-tracker state at save-time. Omitted from pre-turn-tracker save files;
+  // `decodeSaveFile` substitutes a default state in that case so old saves
+  // continue to load.
+  turns:     TurnState;
 }
 
 export interface EncodeOptions {
@@ -47,6 +53,7 @@ export interface EncodeOptions {
   savedAt?:  string;  // defaults to new Date().toISOString()
   script?:   SavedScript;
   manifest?: readonly AssetEntry[];
+  turns?:    TurnState;
 }
 
 export function encodeSaveFile(opts: EncodeOptions): SaveEnvelope {
@@ -58,6 +65,7 @@ export function encodeSaveFile(opts: EncodeOptions): SaveEnvelope {
     scene:     [...opts.scene],
     script:    opts.script ?? { ...EMPTY_SCRIPT },
     manifest:  opts.manifest ? opts.manifest.map(cloneAssetEntry) : [],
+    turns:     opts.turns ? cloneTurnState(opts.turns) : initialTurnState(),
   };
 }
 
@@ -107,6 +115,50 @@ export function decodeSaveFile(text: string): SaveEnvelope {
     scene,
     script:    decodeScript(obj.script),
     manifest:  decodeManifest(obj.manifest),
+    turns:     decodeTurns(obj.turns),
+  };
+}
+
+function decodeTurns(raw: unknown): TurnState {
+  if (raw === undefined || raw === null) return initialTurnState();
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new SaveFileError('Field "turns" must be an object.');
+  }
+  const t = raw as Record<string, unknown>;
+  if (typeof t.enabled !== 'boolean') {
+    throw new SaveFileError('Field "turns.enabled" must be a boolean.');
+  }
+  if (!Array.isArray(t.order) || t.order.some(v => typeof v !== 'number')) {
+    throw new SaveFileError('Field "turns.order" must be a number array.');
+  }
+  if (t.activeSeat !== null && typeof t.activeSeat !== 'number') {
+    throw new SaveFileError('Field "turns.activeSeat" must be a number or null.');
+  }
+  if (typeof t.turnNumber !== 'number') {
+    throw new SaveFileError('Field "turns.turnNumber" must be a number.');
+  }
+  // orderIndex is optional for forward compatibility with envelopes encoded
+  // before the field was tracked. Default to -1 so the next next() wraps to
+  // order[0] — the natural "off-order" fallback.
+  const orderIndex = t.orderIndex === undefined ? -1
+    : typeof t.orderIndex === 'number' ? t.orderIndex
+    : (() => { throw new SaveFileError('Field "turns.orderIndex" must be a number.'); })();
+  return {
+    enabled:    t.enabled,
+    order:      [...(t.order as number[])] as SeatIndex[],
+    activeSeat: t.activeSeat as SeatIndex | null,
+    turnNumber: t.turnNumber,
+    orderIndex,
+  };
+}
+
+function cloneTurnState(t: TurnState): TurnState {
+  return {
+    enabled:    t.enabled,
+    order:      [...t.order],
+    activeSeat: t.activeSeat,
+    turnNumber: t.turnNumber,
+    orderIndex: t.orderIndex,
   };
 }
 

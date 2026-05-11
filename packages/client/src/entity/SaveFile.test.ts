@@ -120,6 +120,32 @@ describe('SaveFile round-trip', () => {
     const decoded = decodeSaveFile(text);
     expect(decoded.script).toEqual({ source: '', initialised: false });
   });
+
+  test('encode → JSON → decode preserves turn state', () => {
+    const turns = {
+      enabled:    true,
+      order:      [2, 0, 1] as never,
+      activeSeat: 2 as never,
+      turnNumber: 7,
+      orderIndex: 0,
+    };
+    const env = encodeSaveFile({ scene: [], thumbnail: null, turns });
+    const decoded = decodeSaveFile(JSON.stringify(env));
+    expect(decoded.turns).toEqual(turns);
+  });
+
+  test('decode tolerates a missing turns field (pre-turn-tracker save)', () => {
+    const text = JSON.stringify({
+      format:  SAVE_FORMAT,
+      version: SAVE_VERSION,
+      scene:   [],
+    });
+    const decoded = decodeSaveFile(text);
+    expect(decoded.turns.enabled).toBe(false);
+    expect(decoded.turns.activeSeat).toBeNull();
+    expect(decoded.turns.turnNumber).toBe(0);
+    expect(decoded.turns.order).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+  });
 });
 
 describe('SaveFile.decode validation', () => {

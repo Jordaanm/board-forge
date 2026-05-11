@@ -15,6 +15,7 @@ import { type LastLoaded, type SceneHistoryService } from '../entity/SceneHistor
 import { type ScriptErrorLog } from '../scripting/ScriptErrorLog';
 import { type ManifestStore } from '../assets/ManifestStore';
 import { type SceneHandle } from '../entity/world';
+import { type TurnState } from '../seats/TurnTracker';
 
 interface Props {
   handle:               SceneHandle;
@@ -33,6 +34,8 @@ interface Props {
   // Optional slot for the turn-tracker controls dropdown — rendered alongside
   // the other bar buttons.
   turnControls?:        ReactNode;
+  // Current turn-tracker state, embedded in the save envelope.
+  turns?:               TurnState;
 }
 
 const BAR: React.CSSProperties = {
@@ -111,6 +114,7 @@ export function HostActionBar({
   manifestStore,
   onPushManifest,
   turnControls,
+  turns,
 }: Props) {
   const [revertOpen, setRevertOpen] = useState(false);
   const canRevert = lastLoaded !== null;
@@ -124,6 +128,7 @@ export function HostActionBar({
       thumbnail,
       manifestStore?.getDraft().toArray() ?? [],
       handle.controller.scripting?.getScriptState(),
+      turns,
     );
   };
 
