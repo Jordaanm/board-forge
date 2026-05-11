@@ -54,7 +54,7 @@ function makeTexture(w: number, h: number, uuid: string): THREE.Texture {
   return tex;
 }
 
-const ctx = { markDirty: () => {} };
+const ctx = { markDirty: () => {}, addInputListener: () => () => {} };
 
 beforeEach(() => {
   originalGetContext = HTMLCanvasElement.prototype.getContext;
@@ -117,7 +117,7 @@ describe('ImageRuntime — asset subscription', () => {
       return () => {};
     });
     const markDirty = vi.fn();
-    const r = new ImageRuntime({ markDirty });
+    const r = new ImageRuntime({ markDirty, addInputListener: () => () => {} });
     r.mount(makeImg({ w: 100, h: 100, fit: 'stretch' }));
     expect(r.produceBitmap()).toBeNull();
     listener!(makeTexture(50, 50, 'tex-1'));

@@ -41,6 +41,7 @@ import {
 } from './SurfaceElement';
 import {
   type ElementRuntime,
+  type RuntimeContext,
   makeRuntime,
 } from './ElementRuntime';
 import type { InputEventPayload } from '../../input/inputEvents';
@@ -211,7 +212,7 @@ export class SurfaceComponent extends EntityComponent<SurfaceState> {
       const existing = this.runtimes.get(el.id);
       const prev     = this.snapshots.get(el.id);
       if (!existing) {
-        const fresh = makeRuntime(el, { markDirty: () => this.markDirty() });
+        const fresh = makeRuntime(el, this.makeRuntimeContext(el.id));
         this.runtimes.set(el.id, fresh);
         this.buses.set(el.id, this.buses.get(el.id) ?? new EntityEventBus());
         fresh.mount(el);
@@ -220,7 +221,7 @@ export class SurfaceComponent extends EntityComponent<SurfaceState> {
       }
       if (!prev || prev.kind !== el.kind) {
         existing.unmount();
-        const fresh = makeRuntime(el, { markDirty: () => this.markDirty() });
+        const fresh = makeRuntime(el, this.makeRuntimeContext(el.id));
         this.runtimes.set(el.id, fresh);
         fresh.mount(el);
         this.snapshots.set(el.id, el);
@@ -241,6 +242,16 @@ export class SurfaceComponent extends EntityComponent<SurfaceState> {
       typeId:   ctor.typeId,
       partial:  { elements: this.state.elements } as Record<string, unknown>,
     });
+  }
+
+  private makeRuntimeContext(elementId: string): RuntimeContext {
+    return {
+      markDirty: () => this.markDirty(),
+      addInputListener: (event, cb) => {
+        this.addElementListener(elementId, event, cb);
+        return () => this.removeElementListener(elementId, event, cb);
+      },
+    };
   }
 
   private busFor(id: string): EntityEventBus | null {
@@ -265,6 +276,7 @@ export class SurfaceComponent extends EntityComponent<SurfaceState> {
       { kind: 'button', id: 'add-image',        label: 'Add Image'          },
       { kind: 'button', id: 'add-shape-rect',   label: 'Add Rectangle'      },
       { kind: 'button', id: 'add-shape-circle', label: 'Add Circle'         },
+      { kind: 'button', id: 'add-button',       label: 'Add Button'         },
     ];
   }
 

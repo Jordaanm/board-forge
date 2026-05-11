@@ -22,7 +22,9 @@ import {
   type ShapeElement,
   type ImageElement,
   type RichElement,
+  type ButtonElement,
 } from './SurfaceElement';
+import type { Listener } from '../EntityEventBus';
 import type * as THREE from 'three';
 
 export interface ElementRuntime<T extends SurfaceElement = SurfaceElement> {
@@ -33,9 +35,12 @@ export interface ElementRuntime<T extends SurfaceElement = SurfaceElement> {
 }
 
 // Pluggable so a surface that wants to share a marker can mark itself dirty
-// when an async resource (asset, Satori render) resolves.
+// when an async resource (asset, Satori render) resolves. `addInputListener`
+// lets a runtime react to its own element's input bus (used by ButtonRuntime
+// to flip its visual state on hover/press). Returns an unsub.
 export interface RuntimeContext {
   markDirty: () => void;
+  addInputListener(event: string, cb: Listener): () => void;
 }
 
 // ── ShapeRuntime ────────────────────────────────────────────────────────────
@@ -460,12 +465,131 @@ function drawableImage(img: unknown): DrawableLike | null {
   return null;
 }
 
+// ── ButtonRuntime ───────────────────────────────────────────────────────────
+// Three image subs (normal / hovered / pressed) plus a bus subscription to
+// the element's own input events. produceBitmap picks the texture matching
+// the current input state and draws it with the shared `fit` mode. Missing
+// `hoveredRef` / `pressedRef` fall back to `normalRef`.
+
+type ButtonInputState = 'idle' | 'hover' | 'pressed';
+type ButtonSlot       = 'normal' | 'hovered' | 'pressed';
+
+interface ButtonImageSlot {
+  ref:     string;
+  unsub:   (() => void) | null;
+  texture: THREE.Texture | null;
+}
+
+export class ButtonRuntime implements ElementRuntime<ButtonElement> {
+  private state:      ButtonElement | null = null;
+  private inputState: ButtonInputState     = 'idle';
+  private slots:      Map<ButtonSlot, ButtonImageSlot> = new Map();
+  private busUnsubs:  Array<() => void>    = [];
+  private readonly ctx: RuntimeContext;
+
+  constructor(ctx: RuntimeContext) {
+    this.ctx = ctx;
+  }
+
+  mount(state: ButtonElement): void {
+    this.state = state;
+    this.subscribeSlot('normal',  state.normalRef);
+    this.subscribeSlot('hovered', state.hoveredRef ?? '');
+    this.subscribeSlot('pressed', state.pressedRef ?? '');
+    this.subscribeInput();
+  }
+
+  update(prev: ButtonElement, next: ButtonElement): void {
+    this.state = next;
+    if (prev.normalRef  !== next.normalRef)               this.subscribeSlot('normal',  next.normalRef);
+    if ((prev.hoveredRef ?? '') !== (next.hoveredRef ?? '')) this.subscribeSlot('hovered', next.hoveredRef ?? '');
+    if ((prev.pressedRef ?? '') !== (next.pressedRef ?? '')) this.subscribeSlot('pressed', next.pressedRef ?? '');
+  }
+
+  unmount(): void {
+    for (const slot of this.slots.values()) slot.unsub?.();
+    this.slots.clear();
+    for (const u of this.busUnsubs) u();
+    this.busUnsubs = [];
+    this.state      = null;
+    this.inputState = 'idle';
+  }
+
+  produceBitmap(): Bitmap | null {
+    const s = this.state;
+    if (!s) return null;
+    if (s.w <= 0 || s.h <= 0) return null;
+    const tex = this.activeTexture();
+    if (!tex) return null;
+    const source = drawableSource(tex);
+    if (!source) return null;
+
+    const key = `button:${tex.uuid}|${s.w}x${s.h}|${s.fit}`;
+    const hit = elementBitmapCache.get(key);
+    if (hit) return hit;
+    if (typeof document === 'undefined') return null;
+
+    const canvas  = document.createElement('canvas');
+    canvas.width  = Math.max(1, Math.round(s.w));
+    canvas.height = Math.max(1, Math.round(s.h));
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    drawWithFit(ctx, source, s.w, s.h, s.fit);
+    elementBitmapCache.set(key, canvas);
+    return canvas;
+  }
+
+  // ── Internals ───────────────────────────────────────────────────────────
+
+  // Resolves the texture for the current input state, falling back to
+  // `normal` when the state-specific asset is missing.
+  private activeTexture(): THREE.Texture | null {
+    const order: ButtonSlot[] = this.inputState === 'pressed'
+      ? ['pressed', 'normal']
+      : this.inputState === 'hover'
+        ? ['hovered', 'normal']
+        : ['normal'];
+    for (const slot of order) {
+      const tex = this.slots.get(slot)?.texture;
+      if (tex) return tex;
+    }
+    return null;
+  }
+
+  private subscribeSlot(slot: ButtonSlot, ref: string): void {
+    const existing = this.slots.get(slot);
+    if (existing) existing.unsub?.();
+    const entry: ButtonImageSlot = { ref, unsub: null, texture: null };
+    this.slots.set(slot, entry);
+    if (!ref) return;
+    entry.unsub = assetService.subscribe(ref, 'image', (tex) => {
+      entry.texture = tex;
+      this.ctx.markDirty();
+    });
+  }
+
+  private subscribeInput(): void {
+    const set = (next: ButtonInputState): void => {
+      if (this.inputState === next) return;
+      this.inputState = next;
+      this.ctx.markDirty();
+    };
+    this.busUnsubs.push(
+      this.ctx.addInputListener('hover-start', () => { if (this.inputState !== 'pressed') set('hover'); }),
+      this.ctx.addInputListener('hover-end',   () => set('idle')),
+      this.ctx.addInputListener('pressed',     () => set('pressed')),
+      this.ctx.addInputListener('released',    () => set('hover')),
+    );
+  }
+}
+
 // ── Factory ─────────────────────────────────────────────────────────────────
 
 export function makeRuntime(element: SurfaceElement, ctx: RuntimeContext): ElementRuntime {
   switch (element.kind) {
-    case 'shape': return new ShapeRuntime();
-    case 'image': return new ImageRuntime(ctx);
-    case 'rich':  return new RichRuntime(ctx);
+    case 'shape':  return new ShapeRuntime();
+    case 'image':  return new ImageRuntime(ctx);
+    case 'rich':   return new RichRuntime(ctx);
+    case 'button': return new ButtonRuntime(ctx);
   }
 }

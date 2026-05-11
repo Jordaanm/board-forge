@@ -27,6 +27,7 @@ import {
   type ShapeElement,
   type ImageElement,
   type RichElement,
+  type ButtonElement,
 } from './SurfaceElement';
 
 export interface ShapeMutationOpts {
@@ -35,6 +36,14 @@ export interface ShapeMutationOpts {
   stroke?:      string;
   strokeWidth?: number;
   radius?:      number;
+}
+
+export type ButtonImageSlot = 'normal' | 'hovered' | 'pressed';
+
+export interface ButtonImagesPatch {
+  normal?:  string;
+  hovered?: string;
+  pressed?: string;
 }
 
 export interface ElementHandleSurfaceLookup {
@@ -107,6 +116,53 @@ export class ElementHandle {
       return;
     }
     surface.mutateElement<ImageElement>(this.elementId, { fit });
+  }
+
+  // Batch set any subset of the three button image refs. Undefined entries
+  // are left untouched. Empty string clears that slot (the runtime will
+  // fall back to `normal` for hovered/pressed).
+  setButtonImages(images: ButtonImagesPatch): void {
+    const surface = this.surface();
+    if (!surface) return;
+    const el = surface.getElement(this.elementId);
+    if (!el) return;
+    if (el.kind !== 'button') {
+      this.warn(`setButtonImages: element is kind '${el.kind}', not 'button' — ignored`);
+      return;
+    }
+    const patch: Partial<ButtonElement> = {};
+    if (images.normal  !== undefined) patch.normalRef  = images.normal;
+    if (images.hovered !== undefined) patch.hoveredRef = images.hovered;
+    if (images.pressed !== undefined) patch.pressedRef = images.pressed;
+    surface.mutateElement<ButtonElement>(this.elementId, patch);
+  }
+
+  setButtonImage(slot: ButtonImageSlot, ref: string): void {
+    const surface = this.surface();
+    if (!surface) return;
+    const el = surface.getElement(this.elementId);
+    if (!el) return;
+    if (el.kind !== 'button') {
+      this.warn(`setButtonImage: element is kind '${el.kind}', not 'button' — ignored`);
+      return;
+    }
+    const patch: Partial<ButtonElement> =
+        slot === 'normal'  ? { normalRef:  ref }
+      : slot === 'hovered' ? { hoveredRef: ref }
+      :                      { pressedRef: ref };
+    surface.mutateElement<ButtonElement>(this.elementId, patch);
+  }
+
+  setButtonFit(fit: ImageFit): void {
+    const surface = this.surface();
+    if (!surface) return;
+    const el = surface.getElement(this.elementId);
+    if (!el) return;
+    if (el.kind !== 'button') {
+      this.warn(`setButtonFit: element is kind '${el.kind}', not 'button' — ignored`);
+      return;
+    }
+    surface.mutateElement<ButtonElement>(this.elementId, { fit });
   }
 
   setShape(opts: ShapeMutationOpts): void {

@@ -38,6 +38,14 @@ interface ShapeOpts {
     radius?: number;
 }
 
+type ButtonImageSlot = 'normal' | 'hovered' | 'pressed';
+
+interface ButtonImagesPatch {
+    normal?: string;
+    hovered?: string;
+    pressed?: string;
+}
+
 type StickerFace = 'top' | 'bottom' | 'front' | 'back' | 'left' | 'right';
 
 interface StickerOpts {
@@ -64,6 +72,13 @@ interface StickerOpts {
         fit?: ImageFit;
     } | {
         html: string;
+    } | {
+        button: {
+            normal: string;
+            hovered?: string;
+            pressed?: string;
+            fit?: ImageFit;
+        };
     };
 }
 
@@ -90,6 +105,9 @@ declare class ElementHandle {
   setImageRef(ref: string): void;
   setImageFit(fit: ImageFit): void;
   setShape(opts: ShapeOpts): void;
+  setButtonImages(images: ButtonImagesPatch): void;
+  setButtonImage(slot: ButtonImageSlot, ref: string): void;
+  setButtonFit(fit: ImageFit): void;
   addEventListener(event: string, cb: Listener): void;
   removeEventListener(event: string, cb: Listener): void;
 }

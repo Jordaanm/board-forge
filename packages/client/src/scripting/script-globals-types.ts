@@ -58,6 +58,14 @@ export interface EditorShapeOpts {
   radius?:      number;
 }
 
+export type EditorButtonImageSlot = 'normal' | 'hovered' | 'pressed';
+
+export interface EditorButtonImagesPatch {
+  normal?:  string;
+  hovered?: string;
+  pressed?: string;
+}
+
 export type EditorStickerFace = 'top' | 'bottom' | 'front' | 'back' | 'left' | 'right';
 
 export interface EditorStickerOpts {
@@ -68,7 +76,8 @@ export interface EditorStickerOpts {
   content:
     | { shape: { kind: EditorShapeKind; fill?: string; stroke?: string; strokeWidth?: number; radius?: number } }
     | { image: string; fit?: EditorImageFit }
-    | { html:  string };
+    | { html:  string }
+    | { button: { normal: string; hovered?: string; pressed?: string; fit?: EditorImageFit } };
 }
 
 export class EditorEntityFacade {
@@ -99,6 +108,9 @@ export class EditorElementHandle {
   setImageRef(ref: string): void { void ref; }
   setImageFit(fit: EditorImageFit): void { void fit; }
   setShape(opts: EditorShapeOpts): void { void opts; }
+  setButtonImages(images: EditorButtonImagesPatch): void { void images; }
+  setButtonImage(slot: EditorButtonImageSlot, ref: string): void { void slot; void ref; }
+  setButtonFit(fit: EditorImageFit): void { void fit; }
   addEventListener(event: string, cb: EditorListener): void { void event; void cb; }
   removeEventListener(event: string, cb: EditorListener): void { void event; void cb; }
 }

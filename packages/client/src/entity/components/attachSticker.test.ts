@@ -98,6 +98,44 @@ describe('attachSticker — return shape (issue #2 of refactor)', () => {
     if (el.kind === 'rich') expect(el.html).toBe('<div>hi</div>');
   });
 
+  test('button content produces a kind-button element with three image refs + fit', () => {
+    const scene = new SceneImpl();
+    const ctx = makeCtx(scene);
+    const parent = makeParent(scene, ctx);
+    const { surfaceEntity, elementHandle } = attachSticker(scene, ctx, parent, {
+      face: 'top',
+      content: { button: { normal: 'base:tex/n', hovered: 'base:tex/h', pressed: 'base:tex/p', fit: 'cover' } },
+    });
+    const surface = surfaceEntity.getComponent(SurfaceComponent)!;
+    const el = surface.state.elements[0];
+    expect(el.kind).toBe('button');
+    if (el.kind === 'button') {
+      expect(el.normalRef).toBe('base:tex/n');
+      expect(el.hoveredRef).toBe('base:tex/h');
+      expect(el.pressedRef).toBe('base:tex/p');
+      expect(el.fit).toBe('cover');
+    }
+    expect(elementHandle.elementId).toBe(el.id);
+  });
+
+  test('button content with only `normal` defaults fit to fit and leaves hovered/pressed undefined', () => {
+    const scene = new SceneImpl();
+    const ctx = makeCtx(scene);
+    const parent = makeParent(scene, ctx);
+    const { surfaceEntity } = attachSticker(scene, ctx, parent, {
+      face: 'top',
+      content: { button: { normal: 'base:tex/n' } },
+    });
+    const el = surfaceEntity.getComponent(SurfaceComponent)!.state.elements[0];
+    expect(el.kind).toBe('button');
+    if (el.kind === 'button') {
+      expect(el.normalRef).toBe('base:tex/n');
+      expect(el.hoveredRef).toBeUndefined();
+      expect(el.pressedRef).toBeUndefined();
+      expect(el.fit).toBe('fit');
+    }
+  });
+
   test('image content produces a kind-image element with textureRef + fit', () => {
     const scene = new SceneImpl();
     const ctx = makeCtx(scene);
@@ -310,7 +348,7 @@ describe('SurfaceComponent.onEditorTools', () => {
       recipientSeat: null, isHost: true, entity: surface,
     });
     const ids = tools.map(t => (t.kind === 'button' ? t.id : t.label));
-    expect(ids).toEqual(['add-rich', 'add-image', 'add-shape-rect', 'add-shape-circle']);
+    expect(ids).toEqual(['add-rich', 'add-image', 'add-shape-rect', 'add-shape-circle', 'add-button']);
   });
 });
 
@@ -464,6 +502,36 @@ describe('attachSticker — element handle round-trips through SurfaceComponent 
     // Dispatch a click via UV → pixel; default sticker covers full canvas.
     surface.onClick({ seat: 0, shiftKey: false, ctrlKey: false, altKey: false, surfaceUV: { u: 0.5, v: 0.5 } });
     expect(received).not.toBeNull();
+  });
+
+  test('elementHandle.setButtonImages patches each provided slot, leaves others alone', () => {
+    const scene = new SceneImpl();
+    const ctx = makeCtx(scene);
+    const parent = makeParent(scene, ctx);
+    const { surfaceEntity, elementHandle } = attachSticker(scene, ctx, parent, {
+      face: 'top',
+      content: { button: { normal: 'a', hovered: 'b', pressed: 'c' } },
+    });
+    elementHandle.setButtonImages({ hovered: 'b2' });
+    const el = surfaceEntity.getComponent(SurfaceComponent)!.state.elements[0];
+    expect(el.kind).toBe('button');
+    if (el.kind === 'button') {
+      expect(el.normalRef).toBe('a');
+      expect(el.hoveredRef).toBe('b2');
+      expect(el.pressedRef).toBe('c');
+    }
+  });
+
+  test('elementHandle.setButtonImage on a shape-kind element warns and no-ops', () => {
+    const scene = new SceneImpl();
+    const ctx = makeCtx(scene);
+    const parent = makeParent(scene, ctx);
+    const { surfaceEntity, elementHandle } = attachSticker(scene, ctx, parent, {
+      face: 'top',
+      content: { shape: { kind: 'rect' } },
+    });
+    elementHandle.setButtonImage('normal', 'x');
+    expect(surfaceEntity.getComponent(SurfaceComponent)!.state.elements[0].kind).toBe('shape');
   });
 
   test('elementHandle.setHtml on a shape-kind element warns and no-ops', () => {

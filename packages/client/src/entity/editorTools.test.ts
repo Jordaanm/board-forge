@@ -141,11 +141,12 @@ describe('dispatchEditorTool', () => {
 
   test('surface add-rich/image/shape-* route to hostLocal.attachElement with the right kind', () => {
     const e = new Entity({ id: 'surface-1', type: 's', name: 's' });
-    const cases: Array<[string, 'rich' | 'image' | 'shape-rect' | 'shape-circle']> = [
+    const cases: Array<[string, 'rich' | 'image' | 'shape-rect' | 'shape-circle' | 'button']> = [
       ['add-rich',         'rich'],
       ['add-image',        'image'],
       ['add-shape-rect',   'shape-rect'],
       ['add-shape-circle', 'shape-circle'],
+      ['add-button',       'button'],
     ];
     for (const [actionId, kind] of cases) {
       let calledWith: { id: string; kind: string } | null = null;

@@ -64,6 +64,7 @@ const SURFACE_ELEMENT_ACTIONS: Record<string, EditorElementKind> = {
   'add-image':        'image',
   'add-shape-rect':   'shape-rect',
   'add-shape-circle': 'shape-circle',
+  'add-button':       'button',
 };
 
 export function dispatchEditorTool(

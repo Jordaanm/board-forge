@@ -48,7 +48,16 @@ export interface RichContent {
   html: string;
 }
 
-export type StickerContent = ShapeContent | ImageContent | RichContent;
+export interface ButtonContent {
+  button: {
+    normal:   string;
+    hovered?: string;
+    pressed?: string;
+    fit?:     ImageFit;
+  };
+}
+
+export type StickerContent = ShapeContent | ImageContent | RichContent | ButtonContent;
 
 export interface StickerOpts {
   face:        StickerFace;
@@ -186,6 +195,17 @@ function makeElementFromContent(content: StickerContent, w: number, h: number): 
       x: 0, y: 0, w, h,
       textureRef: content.image,
       fit:        content.fit ?? 'fit',
+    };
+  }
+  if ('button' in content) {
+    return {
+      id:         newElementId(),
+      kind:       'button',
+      x: 0, y: 0, w, h,
+      normalRef:  content.button.normal,
+      hoveredRef: content.button.hovered,
+      pressedRef: content.button.pressed,
+      fit:        content.button.fit ?? 'fit',
     };
   }
   // Shape — fall back to a sensible fill if the author didn't supply one;

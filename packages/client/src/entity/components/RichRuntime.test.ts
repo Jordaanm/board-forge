@@ -82,7 +82,7 @@ describe('RichRuntime — subscriptions', () => {
   test('mount with no img refs subscribes to nothing; produceBitmap kicks off render', () => {
     const subSpy = vi.spyOn(assetService, 'subscribe').mockReturnValue(() => {});
     const renderer = makeRenderer();
-    const r = new RichRuntime({ markDirty: () => {} });
+    const r = new RichRuntime({ markDirty: () => {}, addInputListener: () => () => {} });
     r.renderer = renderer as any;
     r.mount(makeRich({ html: '<div>plain</div>' }));
     expect(subSpy).not.toHaveBeenCalled();
@@ -93,7 +93,7 @@ describe('RichRuntime — subscriptions', () => {
 
   test('mount with img refs subscribes once per unique ref', () => {
     const subSpy = vi.spyOn(assetService, 'subscribe').mockReturnValue(() => {});
-    const r = new RichRuntime({ markDirty: () => {} });
+    const r = new RichRuntime({ markDirty: () => {}, addInputListener: () => () => {} });
     r.renderer = makeRenderer() as any;
     r.mount(makeRich({ html: `<img src="a"><img src="b"><img src="a">` }));
     expect(subSpy).toHaveBeenCalledTimes(2);
@@ -104,7 +104,7 @@ describe('RichRuntime — subscriptions', () => {
     const unsubB = vi.fn();
     let count = 0;
     vi.spyOn(assetService, 'subscribe').mockImplementation(() => count++ === 0 ? unsubA : unsubB);
-    const r = new RichRuntime({ markDirty: () => {} });
+    const r = new RichRuntime({ markDirty: () => {}, addInputListener: () => () => {} });
     r.renderer = makeRenderer() as any;
     const a = makeRich({ html: `<img src="a">` });
     r.mount(a);
@@ -117,7 +117,7 @@ describe('RichRuntime — subscriptions', () => {
   test('unmount unsubscribes everything', () => {
     const unsub = vi.fn();
     vi.spyOn(assetService, 'subscribe').mockReturnValue(unsub);
-    const r = new RichRuntime({ markDirty: () => {} });
+    const r = new RichRuntime({ markDirty: () => {}, addInputListener: () => () => {} });
     r.renderer = makeRenderer() as any;
     r.mount(makeRich({ html: `<img src="a"><img src="b">` }));
     r.unmount();
@@ -128,7 +128,7 @@ describe('RichRuntime — subscriptions', () => {
 describe('RichRuntime — render flow', () => {
   test('produceBitmap returns null while any sub is pending', () => {
     vi.spyOn(assetService, 'subscribe').mockReturnValue(() => {});
-    const r = new RichRuntime({ markDirty: () => {} });
+    const r = new RichRuntime({ markDirty: () => {}, addInputListener: () => () => {} });
     r.renderer = makeRenderer() as any;
     r.mount(makeRich({ html: `<img src="a">` }));
     expect(r.produceBitmap()).toBeNull();
@@ -142,7 +142,7 @@ describe('RichRuntime — render flow', () => {
     });
     const renderer = makeRenderer();
     const markDirty = vi.fn();
-    const r = new RichRuntime({ markDirty });
+    const r = new RichRuntime({ markDirty, addInputListener: () => () => {} });
     r.renderer = renderer as any;
     r.mount(makeRich({ html: `<img src="a">` }));
 
@@ -161,7 +161,7 @@ describe('RichRuntime — render flow', () => {
     vi.spyOn(assetService, 'subscribe').mockReturnValue(() => {});
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const renderer = makeRenderer(async () => { throw new Error('boom'); });
-    const r = new RichRuntime({ markDirty: () => {} });
+    const r = new RichRuntime({ markDirty: () => {}, addInputListener: () => () => {} });
     r.renderer = renderer as any;
     r.mount(makeRich({ html: '<div/>' }));
     r.produceBitmap();  // kicks off render

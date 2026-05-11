@@ -4,13 +4,15 @@
 // element is now plain data on the surface, not a separate Entity.
 //
 // Discriminated union on `kind`:
-//   - 'shape' — Canvas2D rect / circle, no asset deps
-//   - 'image' — single asset ref + fit mode
-//   - 'rich'  — HTML rendered through SatoriRenderer with `<img>` asset subs
+//   - 'shape'  — Canvas2D rect / circle, no asset deps
+//   - 'image'  — single asset ref + fit mode
+//   - 'rich'   — HTML rendered through SatoriRenderer with `<img>` asset subs
+//   - 'button' — three image refs (normal/hovered/pressed); runtime swaps
+//                bitmaps based on the element's input state
 //
 // Bounds (`x, y, w, h`) are pixel coordinates inside the surface canvas.
 
-export type SurfaceElementKind = 'shape' | 'image' | 'rich';
+export type SurfaceElementKind = 'shape' | 'image' | 'rich' | 'button';
 
 export type ShapeShape = 'rect' | 'circle';
 
@@ -44,7 +46,18 @@ export interface RichElement extends ElementBoundsBase {
   html: string;
 }
 
-export type SurfaceElement = ShapeElement | ImageElement | RichElement;
+// Three image refs cover the visual states. `hoveredRef` / `pressedRef` are
+// optional — the runtime falls back to `normalRef` when a state-specific
+// asset is missing.
+export interface ButtonElement extends ElementBoundsBase {
+  kind:        'button';
+  normalRef:   string;
+  hoveredRef?: string;
+  pressedRef?: string;
+  fit:         ImageFit;
+}
+
+export type SurfaceElement = ShapeElement | ImageElement | RichElement | ButtonElement;
 
 // `crypto.randomUUID()` with the same fallback the rest of the codebase uses.
 // Element ids are GUIDs so they're stable across save/load and replication.
@@ -63,7 +76,7 @@ export function newElementId(): string {
 // produces a `SurfaceElement` of the matching kind with default state. Shape-
 // rect / shape-circle both produce `kind: 'shape'` elements; the discriminator
 // difference is in the element's `shape` field.
-export type EditorElementKind = 'rich' | 'image' | 'shape-rect' | 'shape-circle';
+export type EditorElementKind = 'rich' | 'image' | 'shape-rect' | 'shape-circle' | 'button';
 
 export function makeDefaultElement(kind: EditorElementKind, w: number, h: number): SurfaceElement {
   const id = newElementId();
@@ -76,6 +89,9 @@ export function makeDefaultElement(kind: EditorElementKind, w: number, h: number
   }
   if (kind === 'image') {
     return { id, kind: 'image', x: 0, y: 0, w, h, textureRef: '', fit: 'fit' };
+  }
+  if (kind === 'button') {
+    return { id, kind: 'button', x: 0, y: 0, w, h, normalRef: '', fit: 'fit' };
   }
   return {
     id, kind: 'shape',

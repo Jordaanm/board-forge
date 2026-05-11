@@ -905,7 +905,7 @@ function SurfaceElementsSection({
       <div style={SECTION_LABEL}>Surface Elements ({surface.elements.length})</div>
       {surface.elements.length === 0 && (
         <div style={{ color: '#666', fontSize: 12 }}>
-          Use the Tools section below to add Rich UI / Image / Shape elements.
+          Use the Tools section below to add Rich UI / Image / Shape / Button elements.
         </div>
       )}
       {surface.elements.map((el) => (
@@ -1003,6 +1003,9 @@ function SurfaceElementCard({
       {element.kind === 'rich' && (
         <RichKindRow element={element} onMutate={onMutate} />
       )}
+      {element.kind === 'button' && (
+        <ButtonKindRow element={element} manifestStore={manifestStore} onMutate={onMutate} />
+      )}
     </div>
   );
 }
@@ -1092,6 +1095,59 @@ function ImageKindRow({
           value={element.textureRef}
           manifestStore={manifestStore}
           onChange={(v) => onMutate({ textureRef: v })}
+        />
+      </div>
+      <div style={{ marginBottom: 0 }}>
+        <label style={PAIR_LABEL}>Fit</label>
+        <select
+          style={INPUT}
+          value={element.fit}
+          onChange={e => onMutate({ fit: e.target.value })}
+        >
+          <option value="fit">Fit (letterbox)</option>
+          <option value="cover">Cover (crop)</option>
+          <option value="stretch">Stretch</option>
+          <option value="none">None (native size)</option>
+        </select>
+      </div>
+    </>
+  );
+}
+
+function ButtonKindRow({
+  element, manifestStore, onMutate,
+}: {
+  element:       SurfaceElement & { kind: 'button' };
+  manifestStore: ManifestStore | null;
+  onMutate:      (patch: Record<string, unknown>) => void;
+}) {
+  return (
+    <>
+      <div style={{ marginBottom: 6 }}>
+        <label style={PAIR_LABEL}>Normal</label>
+        <AssetField
+          assetType="image"
+          value={element.normalRef}
+          manifestStore={manifestStore}
+          onChange={(v) => onMutate({ normalRef: v })}
+        />
+      </div>
+      <div style={{ marginBottom: 6 }}>
+        <label style={PAIR_LABEL}>Hovered</label>
+        <AssetField
+          assetType="image"
+          value={element.hoveredRef ?? ''}
+          manifestStore={manifestStore}
+          onChange={(v) => onMutate({ hoveredRef: v })}
+        />
+      </div>
+      <div style={{ marginBottom: 6 }}>
+        <label style={PAIR_LABEL}>Pressed</label>
+        <AssetField
+          assetType="image"
+          value={element.pressedRef ?? ''}
+          manifestStore={manifestStore}
+          onChange={(v) => onMutate({ pressedRef: v })}
         />
       </div>
       <div style={{ marginBottom: 0 }}>
