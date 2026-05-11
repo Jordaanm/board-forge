@@ -11,6 +11,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { useAnchorTarget } from './AnchorLayout';
 import { type ManifestStore } from '../assets/ManifestStore';
 import { type AssetEntry, type AssetType } from '../assets/Manifest';
+import { parseRef, serializeSpriteRef } from '../assets/spriteRef';
 import { BASE_MANIFEST, PRIMITIVE_MANIFEST } from '../assets/baseManifest';
 
 interface Props {
@@ -221,25 +222,35 @@ const PREVIEW_IMG: React.CSSProperties = {
   objectFit: 'contain',
 };
 
+type PickerMode = { kind: 'list' } | { kind: 'sheet'; sheet: AssetEntry };
+
 export function AssetPicker({ open, onClose, onSelect, type, store, currentRef }: Props) {
   const centerAnchor   = useAnchorTarget('center');
   const [tab, setTab]  = useState<TabId>('custom');
   const [query, setQuery] = useState('');
   const [pasted, setPasted] = useState('');
-
-  // Reset transient state when the modal opens.
-  useEffect(() => {
-    if (open) {
-      setQuery('');
-      setPasted('');
-      setTab('custom');
-    }
-  }, [open]);
+  const [mode,   setMode]   = useState<PickerMode>({ kind: 'list' });
 
   const draft = useSyncExternalStore(
     (cb) => store?.subscribe(cb) ?? (() => {}),
     () => store?.getDraft() ?? null,
   );
+
+  // Reset transient state when the modal opens. If currentRef is a sprite
+  // ref, jump straight into the drill-in for that sheet so the host lands on
+  // their existing selection without an extra click.
+  useEffect(() => {
+    if (!open) return;
+    setQuery('');
+    setPasted('');
+    setTab('custom');
+    const parsed = currentRef ? parseRef(currentRef) : null;
+    if (parsed?.kind === 'sprite') {
+      const sheet = findSheet(draft?.toArray() ?? [], parsed.sheetSlug);
+      if (sheet) { setMode({ kind: 'sheet', sheet }); return; }
+    }
+    setMode({ kind: 'list' });
+  }, [open]);
 
   const primitiveEntries = useMemo(
     () => filterEntries(PRIMITIVE_MANIFEST.toArray(), type, query),
@@ -258,17 +269,30 @@ export function AssetPicker({ open, onClose, onSelect, type, store, currentRef }
     [draft, type, query],
   );
 
-  const pick = (slug: string) => {
-    onSelect(slug);
+  const pick = (ref: string) => {
+    onSelect(ref);
     onClose();
+  };
+
+  // Sheet tiles drill in instead of emitting — a single-asset slot can't
+  // accept a 2-segment sheet slug.
+  const pickEntry = (entry: AssetEntry) => {
+    if (entry.type === 'spritesheet') {
+      setMode({ kind: 'sheet', sheet: entry });
+      return;
+    }
+    pick(entry.slug);
   };
 
   const commitUrl = () => {
     const v = pasted.trim();
     if (!v) return;
+    // URL tab continues to emit raw URLs only — never a sheet ref.
     onSelect(v);
     onClose();
   };
+
+  const inSheet = mode.kind === 'sheet';
 
   return (
     <Dialog.Root open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
@@ -276,18 +300,31 @@ export function AssetPicker({ open, onClose, onSelect, type, store, currentRef }
         <Dialog.Overlay style={OVERLAY} />
         <Dialog.Content style={CONTENT} aria-describedby={undefined}>
           <div style={HEADER}>
-            <Dialog.Title style={TITLE}>Pick {type} asset</Dialog.Title>
+            <Dialog.Title style={TITLE}>
+              {inSheet ? (
+                <span>
+                  <button
+                    type="button"
+                    style={BREADCRUMB_BTN}
+                    onClick={() => setMode({ kind: 'list' })}
+                  >‹ Pick {type} asset</button>
+                  <span style={{ color: '#888' }}> / {mode.sheet.name}</span>
+                </span>
+              ) : `Pick ${type} asset`}
+            </Dialog.Title>
             <Dialog.Close asChild>
               <button style={CLOSE_BTN} type="button" aria-label="Close">×</button>
             </Dialog.Close>
           </div>
-          <div style={TAB_BAR}>
-            <button type="button" style={tab === 'primitives' ? TAB_BTN_ACTIVE : TAB_BTN} onClick={() => setTab('primitives')}>Primitives</button>
-            <button type="button" style={tab === 'base'       ? TAB_BTN_ACTIVE : TAB_BTN} onClick={() => setTab('base')}>Base</button>
-            <button type="button" style={tab === 'custom'     ? TAB_BTN_ACTIVE : TAB_BTN} onClick={() => setTab('custom')}>Custom</button>
-            <button type="button" style={tab === 'url'        ? TAB_BTN_ACTIVE : TAB_BTN} onClick={() => setTab('url')}>URL</button>
-          </div>
-          {tab !== 'url' && (
+          {!inSheet && (
+            <div style={TAB_BAR}>
+              <button type="button" style={tab === 'primitives' ? TAB_BTN_ACTIVE : TAB_BTN} onClick={() => setTab('primitives')}>Primitives</button>
+              <button type="button" style={tab === 'base'       ? TAB_BTN_ACTIVE : TAB_BTN} onClick={() => setTab('base')}>Base</button>
+              <button type="button" style={tab === 'custom'     ? TAB_BTN_ACTIVE : TAB_BTN} onClick={() => setTab('custom')}>Custom</button>
+              <button type="button" style={tab === 'url'        ? TAB_BTN_ACTIVE : TAB_BTN} onClick={() => setTab('url')}>URL</button>
+            </div>
+          )}
+          {!inSheet && tab !== 'url' && (
             <div style={SEARCH_ROW}>
               <input
                 type="text"
@@ -299,10 +336,11 @@ export function AssetPicker({ open, onClose, onSelect, type, store, currentRef }
             </div>
           )}
           <div style={BODY}>
-            {tab === 'primitives' && <Grid entries={primitiveEntries} currentRef={currentRef} onPick={pick} />}
-            {tab === 'base'       && <Grid entries={baseEntries}      currentRef={currentRef} onPick={pick} />}
-            {tab === 'custom'     && <Grid entries={customEntries}    currentRef={currentRef} onPick={pick} />}
-            {tab === 'url'        && (
+            {inSheet && <SpriteGrid sheet={mode.sheet} currentRef={currentRef} onPick={pick} />}
+            {!inSheet && tab === 'primitives' && <Grid entries={primitiveEntries} currentRef={currentRef} onPick={pickEntry} />}
+            {!inSheet && tab === 'base'       && <Grid entries={baseEntries}      currentRef={currentRef} onPick={pickEntry} />}
+            {!inSheet && tab === 'custom'     && <Grid entries={customEntries}    currentRef={currentRef} onPick={pickEntry} />}
+            {!inSheet && tab === 'url'        && (
               <UrlTab
                 pasted={pasted}
                 setPasted={setPasted}
@@ -312,7 +350,7 @@ export function AssetPicker({ open, onClose, onSelect, type, store, currentRef }
           </div>
           <div style={FOOTER}>
             <button type="button" style={BTN} onClick={onClose}>Cancel</button>
-            {tab === 'url' && (
+            {!inSheet && tab === 'url' && (
               <button
                 type="button"
                 style={pasted.trim() ? BTN_PRIMARY : BTN_DISABLED}
@@ -329,26 +367,44 @@ export function AssetPicker({ open, onClose, onSelect, type, store, currentRef }
   );
 }
 
+const BREADCRUMB_BTN: React.CSSProperties = {
+  background:   'none',
+  border:       'none',
+  color:        '#e8e8e8',
+  cursor:       'pointer',
+  fontSize:     14,
+  fontWeight:   600,
+  padding:      0,
+  font:         'inherit',
+};
+
+function findSheet(entries: AssetEntry[], slug: string): AssetEntry | null {
+  return entries.find((e) => e.slug === slug && e.type === 'spritesheet') ?? null;
+}
+
 function Grid({
   entries, currentRef, onPick,
-}: { entries: AssetEntry[]; currentRef: string | undefined; onPick: (slug: string) => void }) {
+}: { entries: AssetEntry[]; currentRef: string | undefined; onPick: (entry: AssetEntry) => void }) {
   if (entries.length === 0) {
     return <div style={{ color: '#666', fontSize: 12, padding: 16 }}>No matching entries.</div>;
   }
+  // A sprite ref like `custom:deck:5` highlights the sheet tile `custom:deck`.
+  const parsedCurrent = currentRef ? parseRef(currentRef) : null;
+  const sheetSlugForCurrent = parsedCurrent?.kind === 'sprite' ? parsedCurrent.sheetSlug : null;
   return (
     <div style={GRID}>
       {entries.map((e) => {
-        const selected = e.slug === currentRef;
+        const selected = e.slug === currentRef || e.slug === sheetSlugForCurrent;
         return (
           <div
             key={e.slug}
             style={selected ? TILE_SELECTED : TILE}
-            onClick={() => onPick(e.slug)}
+            onClick={() => onPick(e)}
             title={e.description ?? e.slug}
           >
             <Thumbnail entry={e} />
             <div style={TILE_NAME}>{e.name}</div>
-            <div style={TILE_SLUG}>{e.slug}</div>
+            <div style={TILE_SLUG}>{e.slug}{e.type === 'spritesheet' ? ` (${e.cols}×${e.rows})` : ''}</div>
           </div>
         );
       })}
@@ -357,7 +413,7 @@ function Grid({
 }
 
 function Thumbnail({ entry }: { entry: AssetEntry }) {
-  if (entry.type === 'image' && !isSyntheticUrl(entry.url)) {
+  if ((entry.type === 'image' || entry.type === 'spritesheet') && !isSyntheticUrl(entry.url)) {
     return (
       <div style={THUMB_BOX}>
         <img src={entry.url} alt={entry.name} style={THUMB_IMG} loading="lazy" />
@@ -365,6 +421,54 @@ function Thumbnail({ entry }: { entry: AssetEntry }) {
     );
   }
   return <div style={THUMB_BOX}>{entry.type}</div>;
+}
+
+// Sub-grid drill-in for a single spritesheet. Each cell uses CSS background
+// positioning of the sheet URL — no per-cell canvas/draw work — so the grid
+// appears instantly once the sheet image is in the browser cache.
+function SpriteGrid({
+  sheet, currentRef, onPick,
+}: { sheet: AssetEntry; currentRef: string | undefined; onPick: (ref: string) => void }) {
+  const cols = sheet.cols ?? 1;
+  const rows = sheet.rows ?? 1;
+  const total = cols * rows;
+  const parsed = currentRef ? parseRef(currentRef) : null;
+  const selectedIndex = parsed?.kind === 'sprite' && parsed.sheetSlug === sheet.slug ? parsed.index : -1;
+
+  // Min tile size ~70px; cap to keep huge sheets manageable.
+  const cells: number[] = [];
+  for (let i = 0; i < total; i++) cells.push(i);
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, minmax(48px, 1fr))`, gap: 4 }}>
+      {cells.map((i) => {
+        const col       = i % cols;
+        const row       = Math.floor(i / cols);
+        const bgPosX    = cols === 1 ? '50%' : `${(col / (cols - 1)) * 100}%`;
+        const bgPosY    = rows === 1 ? '50%' : `${(row / (rows - 1)) * 100}%`;
+        const isSelected = i === selectedIndex;
+        return (
+          <div
+            key={i}
+            onClick={() => onPick(serializeSpriteRef(sheet.slug, i))}
+            title={`${sheet.slug}:${i}`}
+            style={{
+              aspectRatio:        '1 / 1',
+              backgroundImage:    `url("${sheet.url}")`,
+              backgroundSize:     `${cols * 100}% ${rows * 100}%`,
+              backgroundPosition: `${bgPosX} ${bgPosY}`,
+              backgroundRepeat:   'no-repeat',
+              border:             isSelected
+                ? '2px solid rgba(120,180,240,0.85)'
+                : '1px solid rgba(255,255,255,0.12)',
+              borderRadius:       3,
+              cursor:             'pointer',
+            }}
+          />
+        );
+      })}
+    </div>
+  );
 }
 
 function UrlTab({
@@ -394,7 +498,12 @@ function UrlTab({
 function filterEntries(entries: AssetEntry[], type: AssetType, query: string): AssetEntry[] {
   const q = query.trim().toLowerCase();
   return entries.filter((e) => {
-    if (e.type !== type) return false;
+    // Spritesheets surface in the image picker as drill-in tiles. Other
+    // types (model, sound) match exactly.
+    const matches = type === 'image'
+      ? (e.type === 'image' || e.type === 'spritesheet')
+      : e.type === type;
+    if (!matches) return false;
     if (!q) return true;
     if (e.name.toLowerCase().includes(q)) return true;
     if (e.slug.toLowerCase().includes(q)) return true;

@@ -139,7 +139,7 @@ Extend the Custom tab in [AssetManagerModal](../packages/client/src/components/A
 
 ---
 
-## Issue 5 — AssetPicker drill-in for spritesheet sub-grid
+## Issue 5 — AssetPicker drill-in for spritesheet sub-grid ✅ DONE
 
 **Type:** AFK
 **Blocked by:** #3, #4
@@ -159,13 +159,13 @@ Add an in-place drill-in mode to [AssetPicker](../packages/client/src/components
 
 ### Acceptance criteria
 
-- [ ] Clicking a sheet tile in the top-level grid swaps the picker body to the sub-grid without closing the dialog
-- [ ] Sub-grid tiles render via CSS `background-image` + `background-position` on the sheet URL (no per-cell canvas/draw work)
-- [ ] Breadcrumb header navigates back to the top-level list
-- [ ] Clicking a sprite tile calls `onSelect('custom:deck:N')` and closes the picker
-- [ ] Reopening the picker with `currentRef='custom:deck:5'` highlights both the sheet (top-level) and sprite 5 (drill-in)
-- [ ] Single-asset property pickers refuse a 2-segment sheet slug as a selection (cannot bind a card face to a whole sheet)
-- [ ] URL tab continues to emit raw URLs only — verified by inspection
+- [x] Clicking a sheet tile in the top-level grid swaps the picker body to the sub-grid without closing the dialog
+- [x] Sub-grid tiles render via CSS `background-image` + `background-position` on the sheet URL (no per-cell canvas/draw work)
+- [x] Breadcrumb header navigates back to the top-level list
+- [x] Clicking a sprite tile calls `onSelect('custom:deck:N')` and closes the picker
+- [x] Reopening the picker with `currentRef='custom:deck:5'` highlights both the sheet (top-level) and sprite 5 (drill-in)
+- [x] Single-asset property pickers refuse a 2-segment sheet slug as a selection (cannot bind a card face to a whole sheet)
+- [x] URL tab continues to emit raw URLs only — verified by inspection
 
 ### Blocked by
 
