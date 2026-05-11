@@ -1,8 +1,9 @@
-// Top-center action bar visible only to the host. Day-one contents: a single
-// "Spawn Object" trigger. Pattern accommodates future host actions (Reset
-// Scene, Save Layout, etc.) without rearchitecting.
+// Top-center action bar visible only to the host. Renders a single "Tools"
+// dropdown grouping all host actions (spawn, save / load, scripting, asset
+// manager, turn order, etc). Each leaf flips a controlled-open flag on the
+// corresponding modal; modals themselves stay fully self-contained.
 
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { SpawnObjectModal } from './SpawnObjectModal';
 import { LoadSceneModal } from './LoadSceneModal';
 import { RevertConfirmModal } from './RevertConfirmModal';
@@ -10,6 +11,9 @@ import { HistoryModal } from './HistoryModal';
 import { ScriptEditorModal } from './ScriptEditorModal';
 import { ScriptConsoleModal } from './ScriptConsoleModal';
 import { AssetManagerModal } from './AssetManagerModal';
+import { GenerateDeckModal, type GenerateDeckRequest } from './GenerateDeckModal';
+import { HostToolsMenu, type MenuEntry } from './HostToolsMenu';
+import { CardComponent } from '../entity/components/CardComponent';
 import { type SaveEnvelope } from '../entity/SaveFile';
 import { downloadSceneFile } from '../entity/downloadSceneFile';
 import { type LastLoaded, type SceneHistoryService } from '../entity/SceneHistoryService';
@@ -32,9 +36,10 @@ interface Props {
   scriptErrorLog:       ScriptErrorLog | null;
   manifestStore:        ManifestStore | null;
   onPushManifest:       () => void;
-  // Optional slot for the turn-tracker controls dropdown — rendered alongside
-  // the other bar buttons.
-  turnControls?:        ReactNode;
+  // Render-prop that supplies the turn-controls panel with controlled-open
+  // wiring. HostActionBar owns the open flag so the panel toggles from the
+  // Tools menu.
+  turnControls?:        (controlled: { open: boolean; onOpenChange: (o: boolean) => void; hideTrigger: boolean }) => ReactNode;
   // Current turn-tracker state, embedded in the save envelope.
   turns?:               TurnState;
 }
@@ -43,41 +48,6 @@ const BAR: React.CSSProperties = {
   display:    'flex',
   alignItems: 'center',
   gap:        8,
-};
-
-const TOGGLE: React.CSSProperties = {
-  display:      'inline-flex',
-  alignItems:   'center',
-  gap:          6,
-  background:   'rgba(20,20,32,0.92)',
-  border:       '1px solid rgba(255,255,255,0.2)',
-  color:        '#e8e8e8',
-  padding:      '8px 12px',
-  borderRadius: 6,
-  cursor:       'pointer',
-  fontFamily:   'sans-serif',
-  fontSize:     12,
-  boxShadow:    '0 4px 20px rgba(0,0,0,0.5)',
-  userSelect:   'none',
-};
-
-const BUTTON: React.CSSProperties = {
-  background:   'rgba(20,20,32,0.92)',
-  border:       '1px solid rgba(255,255,255,0.2)',
-  color:        '#e8e8e8',
-  padding:      '8px 12px',
-  borderRadius: 6,
-  cursor:       'pointer',
-  fontFamily:   'sans-serif',
-  fontSize:     12,
-  boxShadow:    '0 4px 20px rgba(0,0,0,0.5)',
-  userSelect:   'none',
-};
-
-const BUTTON_DISABLED: React.CSSProperties = {
-  ...BUTTON,
-  opacity: 0.45,
-  cursor:  'not-allowed',
 };
 
 const FILE_LABEL: React.CSSProperties = {
@@ -117,12 +87,31 @@ export function HostActionBar({
   turnControls,
   turns,
 }: Props) {
-  const [revertOpen, setRevertOpen] = useState(false);
+  const [spawnOpen,   setSpawnOpen]   = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [scriptOpen,  setScriptOpen]  = useState(false);
+  const [consoleOpen, setConsoleOpen] = useState(false);
+  const [assetsOpen,  setAssetsOpen]  = useState(false);
+  const [deckOpen,    setDeckOpen]    = useState(false);
+  const [revertOpen,  setRevertOpen]  = useState(false);
+  const [turnsOpen,   setTurnsOpen]   = useState(false);
+  const loadTriggerRef = useRef<{ open: () => void } | null>(null);
+
   const canRevert = lastLoaded !== null;
+  const scriptingAvailable = handle.controller.scripting !== null;
+
+  const handleGenerateDeck = (req: GenerateDeckRequest) => {
+    for (const faceRef of req.faceRefs) {
+      const h = handle.controller.spawn('card');
+      const card = h.entity.getComponent(CardComponent);
+      if (card) card.setState({ face: faceRef, back: req.backRef });
+      if (req.tag) {
+        handle.controller.updateEntityField(h.id, 'tags', [...h.entity.tags, req.tag]);
+      }
+    }
+  };
 
   const handleSave = () => {
-    // Capture thumbnail through the handle (renderer concern), then compose
-    // the envelope from controller state and trigger the file download.
     const thumbnail = handle.captureThumbnail();
     downloadSceneFile(
       handle.controller.snapshot(),
@@ -133,20 +122,66 @@ export function HostActionBar({
     );
   };
 
+  const entries: MenuEntry[] = [
+    { label: 'Spawn', onClick: () => setSpawnOpen(true) },
+    {
+      label: 'Game State',
+      items: [
+        { label: 'Save',    onClick: handleSave },
+        { label: 'Load',    onClick: () => loadTriggerRef.current?.open() },
+        { label: 'Revert',  onClick: () => setRevertOpen(true), disabled: !canRevert },
+        { label: 'History', onClick: () => setHistoryOpen(true) },
+      ],
+    },
+    {
+      label: 'Assets',
+      items: [
+        { label: 'Asset Manager',  onClick: () => setAssetsOpen(true), disabled: !manifestStore },
+        { label: 'Generate Deck',  onClick: () => setDeckOpen(true),   disabled: !manifestStore },
+      ],
+    },
+    {
+      label: 'Code',
+      items: [
+        { label: 'Script',  onClick: () => setScriptOpen(true) },
+        { label: 'Console', onClick: () => setConsoleOpen(true), disabled: !scriptingAvailable },
+      ],
+    },
+    {
+      label: 'Other',
+      items: [
+        ...(turnControls ? [{ label: 'Turn Order', onClick: () => setTurnsOpen(true) }] : []),
+        {
+          label:   'Show all zones',
+          onClick: () => onToggleShowAllZones(!showAllZones),
+          checked: showAllZones,
+        },
+      ],
+    },
+  ];
+
   return (
     <div style={BAR}>
-      <SpawnObjectModal onSpawn={(type) => { handle.controller.spawn(type); }} />
-      <button type="button" style={BUTTON} onClick={handleSave}>Save</button>
-      <LoadSceneModal currentEntityCount={currentEntityCount} onConfirmLoad={onLoad} />
-      <button
-        type="button"
-        style={canRevert ? BUTTON : BUTTON_DISABLED}
-        onClick={() => canRevert && setRevertOpen(true)}
-        disabled={!canRevert}
-      >
-        Revert
-      </button>
-      <HistoryModal service={historyService} />
+      <HostToolsMenu label="Tools" entries={entries} />
+
+      <SpawnObjectModal
+        onSpawn={(type) => { handle.controller.spawn(type); }}
+        open={spawnOpen}
+        onOpenChange={setSpawnOpen}
+        hideTrigger
+      />
+      <LoadSceneModal
+        currentEntityCount={currentEntityCount}
+        onConfirmLoad={onLoad}
+        triggerRef={loadTriggerRef}
+        hideTrigger
+      />
+      <HistoryModal
+        service={historyService}
+        open={historyOpen}
+        onOpenChange={setHistoryOpen}
+        hideTrigger
+      />
       <ScriptEditorModal
         source={scriptSource}
         onChange={onScriptChange}
@@ -158,30 +193,42 @@ export function HostActionBar({
         }}
         getSavedSource={() => handle.controller.scripting?.getScriptState().source ?? ''}
         errorLog={scriptErrorLog}
+        open={scriptOpen}
+        onOpenChange={setScriptOpen}
+        hideTrigger
       />
-      <AssetManagerModal store={manifestStore} onPush={onPushManifest} />
+      <AssetManagerModal
+        store={manifestStore}
+        onPush={onPushManifest}
+        open={assetsOpen}
+        onOpenChange={setAssetsOpen}
+        hideTrigger
+      />
+      <GenerateDeckModal
+        store={manifestStore}
+        onGenerate={handleGenerateDeck}
+        open={deckOpen}
+        onOpenChange={setDeckOpen}
+        hideTrigger
+      />
       <ScriptConsoleModal
         onRun={
           handle.controller.scripting
             ? (src) => handle.controller.scripting!.runOneShot(src)
             : null
         }
+        open={consoleOpen}
+        onOpenChange={setConsoleOpen}
+        hideTrigger
       />
-      {turnControls}
+      {turnControls?.({ open: turnsOpen, onOpenChange: setTurnsOpen, hideTrigger: true })}
+
       {lastLoaded && (
         <span style={FILE_LABEL}>
           <span style={FILE_NAME}>{lastLoaded.filename}</span>
           <span style={FILE_TIMESTAMP}>{formatLoadedAt(lastLoaded.savedAt)}</span>
         </span>
       )}
-      <label style={TOGGLE}>
-        <input
-          type="checkbox"
-          checked={showAllZones}
-          onChange={e => onToggleShowAllZones(e.target.checked)}
-        />
-        Show All Zones
-      </label>
       <RevertConfirmModal
         open={revertOpen}
         filename={lastLoaded?.filename ?? ''}

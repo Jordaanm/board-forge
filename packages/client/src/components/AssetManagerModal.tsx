@@ -13,7 +13,7 @@
 // "slug is immutable after an asset is created"). New entries default to
 // `preload: true` (PRD § Defaults).
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useAnchorTarget } from './AnchorLayout';
 import { type ManifestStore } from '../assets/ManifestStore';
@@ -23,8 +23,11 @@ import { assetService, type AssetStatus } from '../assets/AssetService';
 import { probe, type ProbeResult } from '../assets/corsPreflight';
 
 interface Props {
-  store:  ManifestStore | null;
-  onPush: () => void;
+  store:         ManifestStore | null;
+  onPush:        () => void;
+  open?:         boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideTrigger?:  boolean;
 }
 
 type TabId = 'primitives' | 'base' | 'custom';
@@ -110,13 +113,43 @@ const BODY: React.CSSProperties = {
 
 const ROW: React.CSSProperties = {
   display:      'grid',
-  gridTemplateColumns: '1fr 70px 60px',
+  gridTemplateColumns: '40px 1fr 70px 60px',
   alignItems:   'center',
   gap:          8,
   padding:      '6px 8px',
   borderRadius: 4,
   border:       '1px solid rgba(255,255,255,0.06)',
   marginBottom: 4,
+};
+
+const PREVIEW_BOX: React.CSSProperties = {
+  width:          40,
+  height:         40,
+  borderRadius:   3,
+  background:     'rgba(0,0,0,0.4)',
+  border:         '1px solid rgba(255,255,255,0.06)',
+  display:        'flex',
+  alignItems:     'center',
+  justifyContent: 'center',
+  overflow:       'hidden',
+};
+
+const PREVIEW_IMG: React.CSSProperties = {
+  width:     '100%',
+  height:    '100%',
+  objectFit: 'cover',
+};
+
+const PREVIEW_PLAY_BTN: React.CSSProperties = {
+  background:   'none',
+  border:       'none',
+  color:        '#e8e8e8',
+  cursor:       'pointer',
+  fontSize:     16,
+  padding:      0,
+  lineHeight:   1,
+  width:        '100%',
+  height:       '100%',
 };
 
 const ROW_LABEL: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 };
@@ -244,16 +277,23 @@ const WARNING_BADGE: React.CSSProperties = {
   flexShrink:     0,
 };
 
-export function AssetManagerModal({ store, onPush }: Props) {
+export function AssetManagerModal({ store, onPush, open: controlledOpen, onOpenChange, hideTrigger }: Props) {
   const centerAnchor    = useAnchorTarget('center');
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = controlledOpen ?? uncontrolledOpen;
+  const setOpen = (next: boolean) => {
+    if (controlledOpen === undefined) setUncontrolledOpen(next);
+    onOpenChange?.(next);
+  };
   const [tab, setTab]   = useState<TabId>('custom');
 
   return (
     <>
-      <button type="button" style={TRIGGER_BTN} onClick={() => setOpen(true)} disabled={!store}>
-        Assets
-      </button>
+      {!hideTrigger && (
+        <button type="button" style={TRIGGER_BTN} onClick={() => setOpen(true)} disabled={!store}>
+          Assets
+        </button>
+      )}
       <Dialog.Root open={open} onOpenChange={setOpen}>
         <Dialog.Portal container={centerAnchor ?? undefined}>
           <Dialog.Overlay style={OVERLAY} />
@@ -290,16 +330,70 @@ function ReadOnlyList({ entries }: { entries: AssetEntry[] }) {
     <>
       {entries.map((e) => (
         <div key={e.slug} style={ROW}>
+          <RowPreview entry={e} />
           <div style={ROW_LABEL}>
             <div style={ROW_NAME}>{e.name}</div>
             <div style={ROW_SLUG}>{e.slug}</div>
           </div>
-          <div style={ROW_TYPE}>{e.type}</div>
+          <div style={ROW_TYPE}>{typeLabel(e.type)}</div>
           <div />
         </div>
       ))}
     </>
   );
+}
+
+function typeLabel(t: AssetType): string {
+  return t === 'spritesheet' ? 'sprite' : t;
+}
+
+function RowPreview({ entry }: { entry: AssetEntry }) {
+  if ((entry.type === 'image' || entry.type === 'spritesheet') && !isSyntheticUrl(entry.url)) {
+    return (
+      <div style={PREVIEW_BOX}>
+        <img src={entry.url} alt={entry.name} style={PREVIEW_IMG} loading="lazy" />
+      </div>
+    );
+  }
+  if (entry.type === 'sound' && !isSyntheticUrl(entry.url)) {
+    return <div style={PREVIEW_BOX}><SoundPreview url={entry.url} /></div>;
+  }
+  return <div style={PREVIEW_BOX} />;
+}
+
+function SoundPreview({ url }: { url: string }) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [playing, setPlaying] = useState(false);
+
+  useEffect(() => () => { audioRef.current?.pause(); }, []);
+
+  const toggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!audioRef.current || audioRef.current.src !== url) {
+      audioRef.current?.pause();
+      const a = new Audio(url);
+      a.addEventListener('ended', () => setPlaying(false));
+      audioRef.current = a;
+    }
+    if (playing) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      setPlaying(false);
+    } else {
+      audioRef.current.play().catch(() => setPlaying(false));
+      setPlaying(true);
+    }
+  };
+
+  return (
+    <button type="button" style={PREVIEW_PLAY_BTN} onClick={toggle} aria-label={playing ? 'Stop' : 'Play'}>
+      {playing ? '■' : '▶'}
+    </button>
+  );
+}
+
+function isSyntheticUrl(url: string): boolean {
+  return url.startsWith('placeholder://') || url.startsWith('primitive://');
 }
 
 function CustomTab({ store }: { store: ManifestStore }) {
@@ -335,6 +429,7 @@ function CustomRow({ entry, onEdit, onDelete }: { entry: AssetEntry; onEdit: () 
   const status = useAssetStatus(entry);
   return (
     <div style={ROW}>
+      <RowPreview entry={entry} />
       <div style={ROW_LABEL}>
         <div style={ROW_NAME}>
           {entry.name}
@@ -344,7 +439,7 @@ function CustomRow({ entry, onEdit, onDelete }: { entry: AssetEntry; onEdit: () 
         </div>
         <div style={ROW_SLUG}>{entry.slug}{entry.preload ? ' · preload' : ''}</div>
       </div>
-      <div style={ROW_TYPE}>{entry.type}</div>
+      <div style={ROW_TYPE}>{typeLabel(entry.type)}</div>
       <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
         <button type="button" style={SMALL_BTN}  onClick={onEdit}>Edit</button>
         <button type="button" style={DANGER_BTN} onClick={onDelete}>×</button>
@@ -545,7 +640,7 @@ function AddRow({ store }: { store: ManifestStore }) {
             <option value="image">image</option>
             <option value="model">model</option>
             <option value="sound">sound</option>
-            <option value="spritesheet">spritesheet</option>
+            <option value="spritesheet">sprite</option>
           </select>
           <div style={FIELD_LABEL}>Preload</div>
           <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

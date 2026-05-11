@@ -14,7 +14,10 @@ import { type SceneHistoryService, type UndoEntry } from '../entity/SceneHistory
 import { useAnchorTarget } from './AnchorLayout';
 
 interface Props {
-  service: SceneHistoryService | null;
+  service:       SceneHistoryService | null;
+  open?:         boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideTrigger?:  boolean;
 }
 
 const TRIGGER_BTN: React.CSSProperties = {
@@ -146,9 +149,14 @@ const CURRENT_BADGE: React.CSSProperties = {
   color:     '#bdbdc0',
 };
 
-export function HistoryModal({ service }: Props) {
+export function HistoryModal({ service, open: controlledOpen, onOpenChange, hideTrigger }: Props) {
   const centerAnchor = useAnchorTarget('center');
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = controlledOpen ?? uncontrolledOpen;
+  const setOpen = (next: boolean) => {
+    if (controlledOpen === undefined) setUncontrolledOpen(next);
+    onOpenChange?.(next);
+  };
 
   // On open, push a "Current" anchor so click-to-restore can always return
   // to where the user was when they opened the modal.
@@ -158,7 +166,9 @@ export function HistoryModal({ service }: Props) {
 
   return (
     <>
-      <button type="button" style={TRIGGER_BTN} onClick={() => setOpen(true)}>History</button>
+      {!hideTrigger && (
+        <button type="button" style={TRIGGER_BTN} onClick={() => setOpen(true)}>History</button>
+      )}
       <Dialog.Root open={open} onOpenChange={setOpen}>
         <Dialog.Portal container={centerAnchor ?? undefined}>
           <Dialog.Overlay style={OVERLAY} />

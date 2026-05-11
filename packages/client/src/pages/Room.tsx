@@ -507,7 +507,7 @@ export function Room({ roomId, isHost }: Props) {
                 const snapshot = store.push();
                 sendRef.current({ type: 'manifest-publish', snapshot });
               }}
-              turnControls={
+              turnControls={(controlled) => (
                 <TurnControlsPanel
                   snapshot={roomSnapshot}
                   onEnable={() => dispatchTurnRef.current({ kind: 'enable' })}
@@ -523,8 +523,9 @@ export function Room({ roomId, isHost }: Props) {
                   }}
                   onJumpToSeat={(seat) => dispatchTurnRef.current({ kind: 'setActive', seat, endedBy: 'host' })}
                   onSetOrder={(order) => dispatchTurnRef.current({ kind: 'setOrder', order })}
+                  {...controlled}
                 />
-              }
+              )}
               turns={roomSnapshot?.turns}
             />
           </UIPanel>

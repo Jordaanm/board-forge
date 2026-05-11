@@ -6,7 +6,7 @@
 // filename, save date, entity count, and a replace-warning. Confirming the
 // preview calls onConfirmLoad with the parsed envelope; cancelling discards.
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { decodeSaveFile, SaveFileError, type SaveEnvelope } from '../entity/SaveFile';
 import { useAnchorTarget } from './AnchorLayout';
@@ -16,6 +16,11 @@ interface Props {
   // replace-warning copy in the preview modal.
   currentEntityCount: number;
   onConfirmLoad:     (envelope: SaveEnvelope, filename: string) => void;
+  // When provided, the modal populates this ref with an `open()` function
+  // that fires the file picker. The host action menu calls it to drive the
+  // flow without rendering the built-in trigger button.
+  triggerRef?:       React.MutableRefObject<{ open: () => void } | null>;
+  hideTrigger?:      boolean;
 }
 
 interface PendingPreview {
@@ -127,7 +132,7 @@ const FOOTER_BTN_PRIMARY: React.CSSProperties = {
   border:     '1px solid rgba(120,180,240,0.6)',
 };
 
-export function LoadSceneModal({ currentEntityCount, onConfirmLoad }: Props) {
+export function LoadSceneModal({ currentEntityCount, onConfirmLoad, triggerRef, hideTrigger }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<PendingPreview | null>(null);
   const [error, setError]     = useState<string | null>(null);
@@ -136,6 +141,12 @@ export function LoadSceneModal({ currentEntityCount, onConfirmLoad }: Props) {
   const openPicker = () => {
     inputRef.current?.click();
   };
+
+  useEffect(() => {
+    if (!triggerRef) return;
+    triggerRef.current = { open: openPicker };
+    return () => { triggerRef.current = null; };
+  }, [triggerRef]);
 
   const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -169,7 +180,9 @@ export function LoadSceneModal({ currentEntityCount, onConfirmLoad }: Props) {
 
   return (
     <>
-      <button type="button" style={BUTTON} onClick={openPicker}>Load</button>
+      {!hideTrigger && (
+        <button type="button" style={BUTTON} onClick={openPicker}>Load</button>
+      )}
       <input
         ref={inputRef}
         type="file"

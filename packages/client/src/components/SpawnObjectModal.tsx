@@ -10,7 +10,10 @@ import { useAnchorTarget } from './AnchorLayout';
 import './SpawnObjectModal.css';
 
 interface Props {
-  onSpawn: (type: string) => void;
+  onSpawn:       (type: string) => void;
+  open?:         boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideTrigger?:  boolean;
 }
 
 const TRIGGER_BTN: React.CSSProperties = {
@@ -116,13 +119,21 @@ const EMPTY: React.CSSProperties = {
   padding:    '24px 16px',
 };
 
-export function SpawnObjectModal({ onSpawn }: Props) {
+export function SpawnObjectModal({ onSpawn, open: controlledOpen, onOpenChange, hideTrigger }: Props) {
   const centerAnchor = useAnchorTarget('center');
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = controlledOpen ?? uncontrolledOpen;
+  const setOpen = (next: boolean) => {
+    if (controlledOpen === undefined) setUncontrolledOpen(next);
+    onOpenChange?.(next);
+  };
   return (
-    <Dialog.Root>
-      <Dialog.Trigger asChild>
-        <button style={TRIGGER_BTN} type="button">+ Spawn Object</button>
-      </Dialog.Trigger>
+    <Dialog.Root open={open} onOpenChange={setOpen}>
+      {!hideTrigger && (
+        <Dialog.Trigger asChild>
+          <button style={TRIGGER_BTN} type="button">+ Spawn Object</button>
+        </Dialog.Trigger>
+      )}
       <Dialog.Portal container={centerAnchor ?? undefined}>
         <Dialog.Overlay style={OVERLAY} />
         <Dialog.Content style={CONTENT} aria-describedby={undefined}>

@@ -20,6 +20,9 @@ interface Props {
   onEndCurrent:    () => void;
   onJumpToSeat:    (seat: SeatIndex) => void;
   onSetOrder:      (order: SeatIndex[]) => void;
+  open?:           boolean;
+  onOpenChange?:   (open: boolean) => void;
+  hideTrigger?:    boolean;
 }
 
 const PANEL_BUTTON: React.CSSProperties = {
@@ -35,20 +38,35 @@ const PANEL_BUTTON: React.CSSProperties = {
   userSelect:   'none',
 };
 
-const DROPDOWN: React.CSSProperties = {
-  position:   'absolute',
-  top:        'calc(100% + 4px)',
-  right:      0,
-  background: '#1e1e2e',
-  border:     '1px solid rgba(255,255,255,0.15)',
+const DROPDOWN_BASE: React.CSSProperties = {
+  background:   '#1e1e2e',
+  border:       '1px solid rgba(255,255,255,0.15)',
   borderRadius: 6,
-  padding:    8,
-  minWidth:   260,
-  boxShadow:  '0 4px 20px rgba(0,0,0,0.6)',
-  zIndex:     200,
-  fontFamily: 'sans-serif',
-  fontSize:   12,
-  color:      '#e8e8e8',
+  padding:      8,
+  minWidth:     260,
+  boxShadow:    '0 4px 20px rgba(0,0,0,0.6)',
+  zIndex:       200,
+  fontFamily:   'sans-serif',
+  fontSize:     12,
+  color:        '#e8e8e8',
+};
+
+const DROPDOWN_ANCHORED: React.CSSProperties = {
+  ...DROPDOWN_BASE,
+  position: 'absolute',
+  top:      'calc(100% + 4px)',
+  right:    0,
+};
+
+// Used when the trigger button is hidden (panel opened from the Tools menu).
+// Centers horizontally just below the top bar so it doesn't pop off-screen
+// when the wrapper has zero width.
+const DROPDOWN_FLOATING: React.CSSProperties = {
+  ...DROPDOWN_BASE,
+  position:  'fixed',
+  top:       58,
+  left:      '50%',
+  transform: 'translateX(-50%)',
 };
 
 const ROW: React.CSSProperties = {
@@ -93,27 +111,35 @@ const ICON_BTN_DISABLED: React.CSSProperties = {
 
 export function TurnControlsPanel({
   snapshot, onEnable, onDisable, onEndCurrent, onJumpToSeat, onSetOrder,
+  open: controlledOpen, onOpenChange, hideTrigger,
 }: Props) {
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = controlledOpen ?? uncontrolledOpen;
+  const setOpen = (next: boolean) => {
+    if (controlledOpen === undefined) setUncontrolledOpen(next);
+    onOpenChange?.(next);
+  };
   if (!snapshot) return null;
   const turns = snapshot.turns;
 
   return (
     <div style={{ position: 'relative' }}>
-      <button
-        type="button"
-        style={PANEL_BUTTON}
-        onClick={() => setOpen(o => !o)}
-      >
-        Turn Order{turns.enabled ? ` · seat ${turns.activeSeat ?? '—'}` : ' · off'} ▾
-      </button>
+      {!hideTrigger && (
+        <button
+          type="button"
+          style={PANEL_BUTTON}
+          onClick={() => setOpen(!open)}
+        >
+          Turn Order{turns.enabled ? ` · seat ${turns.activeSeat ?? '—'}` : ' · off'} ▾
+        </button>
+      )}
       {open && (
         <>
           <div
             style={{ position: 'fixed', inset: 0, zIndex: 199 }}
             onClick={() => setOpen(false)}
           />
-          <div style={DROPDOWN}>
+          <div style={hideTrigger ? DROPDOWN_FLOATING : DROPDOWN_ANCHORED}>
             <div style={ROW}>
               <label>
                 <input

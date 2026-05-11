@@ -27,7 +27,10 @@ function preloadScriptEditor(): void {
 interface Props {
   // When null, the trigger button is disabled — there's no ScriptHost
   // (guest seat or before world init).
-  onRun: ((source: string) => Promise<OneShotResult>) | null;
+  onRun:         ((source: string) => Promise<OneShotResult>) | null;
+  open?:         boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideTrigger?:  boolean;
 }
 
 const TRIGGER_BTN: React.CSSProperties = {
@@ -221,9 +224,14 @@ interface OutputState {
   result: OneShotResult | null;
 }
 
-export function ScriptConsoleModal({ onRun }: Props) {
+export function ScriptConsoleModal({ onRun, open: controlledOpen, onOpenChange, hideTrigger }: Props) {
   const centerAnchor          = useAnchorTarget('center');
-  const [open, setOpen]       = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = controlledOpen ?? uncontrolledOpen;
+  const setOpen = (next: boolean) => {
+    if (controlledOpen === undefined) setUncontrolledOpen(next);
+    onOpenChange?.(next);
+  };
   const [source, setSource]   = useState(SEED_SOURCE);
   const [running, setRunning] = useState(false);
   const [output, setOutput]   = useState<OutputState>({ result: null });
@@ -253,16 +261,18 @@ export function ScriptConsoleModal({ onRun }: Props) {
 
   return (
     <>
-      <button
-        type="button"
-        style={disabled ? TRIGGER_BTN_DISABLED : TRIGGER_BTN}
-        onClick={() => setOpen(true)}
-        disabled={disabled}
-        onMouseEnter={preloadScriptEditor}
-        onFocus={preloadScriptEditor}
-      >
-        Console
-      </button>
+      {!hideTrigger && (
+        <button
+          type="button"
+          style={disabled ? TRIGGER_BTN_DISABLED : TRIGGER_BTN}
+          onClick={() => setOpen(true)}
+          disabled={disabled}
+          onMouseEnter={preloadScriptEditor}
+          onFocus={preloadScriptEditor}
+        >
+          Console
+        </button>
+      )}
       <Dialog.Root open={open} onOpenChange={setOpen}>
         <Dialog.Portal container={centerAnchor ?? undefined}>
           <Dialog.Overlay style={OVERLAY} />

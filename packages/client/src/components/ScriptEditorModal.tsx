@@ -31,6 +31,9 @@ interface Props {
   // the baseline in React.
   getSavedSource: () => string;
   errorLog?:      ScriptErrorLog | null;
+  open?:          boolean;
+  onOpenChange?:  (open: boolean) => void;
+  hideTrigger?:   boolean;
 }
 
 const TRIGGER_BTN: React.CSSProperties = {
@@ -285,9 +288,17 @@ const SEED_SOURCE = `// Edit and click Run.
 // }
 `;
 
-export function ScriptEditorModal({ source, onChange, onSave, onRun, getSavedSource, errorLog }: Props) {
+export function ScriptEditorModal({
+  source, onChange, onSave, onRun, getSavedSource, errorLog,
+  open: controlledOpen, onOpenChange, hideTrigger,
+}: Props) {
   const centerAnchor              = useAnchorTarget('center');
-  const [open, setOpen]           = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = controlledOpen ?? uncontrolledOpen;
+  const setOpen = (next: boolean) => {
+    if (controlledOpen === undefined) setUncontrolledOpen(next);
+    onOpenChange?.(next);
+  };
   const [running, setRunning]     = useState(false);
   // When set, an inline confirm overlay covers the dialog body. The host
   // chose to close while dirty; clearing this either closes or cancels.
@@ -333,18 +344,20 @@ export function ScriptEditorModal({ source, onChange, onSave, onRun, getSavedSou
     }
   };
 
-  // Trigger handler. Seeds the editor with the commented example when both
-  // the live source and the persisted source are empty — first-time open
-  // for a brand-new room. If the host re-opens with a stale unedited seed,
-  // the close path below has reverted source to '' so the seed fires again
-  // consistently.
-  const handleOpenClick = () => {
+  // Seed the editor with the commented example when both the live source
+  // and the persisted source are empty — first-time open for a brand-new
+  // room. Fires on every open transition (false → true), regardless of
+  // whether the open was triggered by the built-in button or externally
+  // (e.g. the host action menu). If the host re-opens with a stale
+  // unedited seed, the close path below has reverted source to '' so the
+  // seed fires again consistently.
+  useEffect(() => {
+    if (!open) return;
     if (source === '' && getSavedSource() === '') {
       onChange(SEED_SOURCE);
       setSeedActive(true);
     }
-    setOpen(true);
-  };
+  }, [open]);
 
   // Forwards textarea/Monaco edits to the parent. Any keystroke means the
   // host engaged with the seed, so dirty-tracking should now treat the
@@ -400,15 +413,17 @@ export function ScriptEditorModal({ source, onChange, onSave, onRun, getSavedSou
 
   return (
     <>
-      <button
-        type="button"
-        style={TRIGGER_BTN}
-        onClick={handleOpenClick}
-        onMouseEnter={preloadScriptEditor}
-        onFocus={preloadScriptEditor}
-      >
-        Edit Script
-      </button>
+      {!hideTrigger && (
+        <button
+          type="button"
+          style={TRIGGER_BTN}
+          onClick={() => setOpen(true)}
+          onMouseEnter={preloadScriptEditor}
+          onFocus={preloadScriptEditor}
+        >
+          Edit Script
+        </button>
+      )}
       <Dialog.Root open={open} onOpenChange={handleOpenChange}>
         <Dialog.Portal container={centerAnchor ?? undefined}>
           <Dialog.Overlay style={OVERLAY} />
