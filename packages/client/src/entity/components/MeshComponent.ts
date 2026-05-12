@@ -110,6 +110,11 @@ export class MeshComponent extends EntityComponent<MeshState> {
       changed.depth   !== undefined
     ) {
       this.rebuild();
+      // Keep the sibling physics body's hitbox in sync with the new visible
+      // dimensions / shape. Duck-typed to avoid a MeshComponent → PhysicsComponent
+      // import cycle (PhysicsComponent imports MeshComponent).
+      const phys = this.entity.components.get('physics') as { rebuildShape?: () => void } | undefined;
+      phys?.rebuildShape?.();
     } else if (changed.textureRefs !== undefined || changed.color !== undefined) {
       this.applyMaterialAttributes();
     }
