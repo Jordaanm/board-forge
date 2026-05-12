@@ -31,11 +31,11 @@ export function registerCorePrimitives(): void {
   if (!componentRegistry.has('value'))     componentRegistry.register(ValueComponent);
   if (!componentRegistry.has('dice'))      componentRegistry.register(DiceComponent);
   if (!componentRegistry.has('flatview'))  componentRegistry.register(FlatViewComponent);
+  if (!componentRegistry.has('tween'))        componentRegistry.register(TweenComponent);
   if (!componentRegistry.has('card'))      componentRegistry.register(CardComponent);
   if (!componentRegistry.has('deck'))      componentRegistry.register(DeckComponent);
   if (!componentRegistry.has('zone'))         componentRegistry.register(ZoneComponent);
   if (!componentRegistry.has('snap-points'))  componentRegistry.register(SnapPointsComponent);
-  if (!componentRegistry.has('tween'))        componentRegistry.register(TweenComponent);
   if (!componentRegistry.has('hand'))      componentRegistry.register(HandComponent);
   if (!componentRegistry.has('table'))     componentRegistry.register(TableComponent);
   if (!componentRegistry.has('skydome'))   componentRegistry.register(SkydomeComponent);
@@ -67,6 +67,7 @@ export function registerCorePrimitives(): void {
       { typeId: 'transform', state: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } },
       { typeId: 'mesh',      state: { meshRef: 'prim:cube', textureRefs: { default: '' }, color: '#2d5a27', width: 4, height: 0.05, depth: 3 } },
       { typeId: 'physics',   state: { mass: 0.5, friction: 0.5, restitution: 0.3, isLocked: false } },
+      { typeId: 'tween',     state: {} },
     ],
   });
 

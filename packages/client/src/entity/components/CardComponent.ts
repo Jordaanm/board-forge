@@ -4,13 +4,9 @@
 // so 2D surfaces (hand panels, search) display the correct side.
 // Slice 4 of issues--card.md.
 
-import * as THREE from 'three';
 import {
   EntityComponent,
   type SpawnContext,
-  type MenuContext,
-  type MenuItem,
-  type ActionContext,
 } from '../EntityComponent';
 import { type PropertyDef } from '../propertySchema';
 import { TransformComponent } from './TransformComponent';
@@ -28,7 +24,7 @@ export interface CardState {
 export class CardComponent extends EntityComponent<CardState> {
   static typeId   = 'card';
   static label    = 'Card';
-  static requires = ['transform', 'mesh', 'physics', 'flatview'] as const;
+  static requires = ['transform', 'mesh', 'physics', 'flatview', 'tween'] as const;
   static propertySchema: readonly PropertyDef<CardState>[] = [
     { key: 'face', label: 'Face', type: 'asset:image' },
     { key: 'back', label: 'Back', type: 'asset:image' },
@@ -56,36 +52,6 @@ export class CardComponent extends EntityComponent<CardState> {
     if (changed.face !== undefined || changed.back !== undefined) {
       this.pushTexturesToMesh();
       this.syncFlatView();
-    }
-  }
-
-  onContextMenu(_ctx: MenuContext): MenuItem[] {
-    return [{ kind: 'action', id: 'flip', label: 'Flip' }];
-  }
-
-  onAction(actionId: string, _args: object | undefined, _ctx: ActionContext): void {
-    if (actionId === 'flip') this.flip();
-  }
-
-  // Rotate 180° around the card's local Z axis (its long edge). Snaps the
-  // sibling PhysicsComponent body to match so the next physics tick doesn't
-  // overwrite the new pose.
-  private flip(): void {
-    const transform = this.entity.getComponent(TransformComponent);
-    if (!transform) return;
-    const [qx, qy, qz, qw] = transform.state.rotation;
-    const cur = new THREE.Quaternion(qx, qy, qz, qw);
-    const dq  = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI);
-    const target = cur.clone().multiply(dq);
-    transform.setState({
-      position: transform.state.position,
-      rotation: [target.x, target.y, target.z, target.w],
-      scale:    transform.state.scale,
-    });
-    const phys = this.entity.getComponent(PhysicsComponent);
-    if (phys?.body) {
-      phys.body.quaternion.set(target.x, target.y, target.z, target.w);
-      phys.body.angularVelocity.setZero();
     }
   }
 

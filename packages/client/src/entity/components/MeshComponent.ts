@@ -33,6 +33,7 @@ import { EntityComponent, type SpawnContext, type MenuContext, type MenuItem, ty
 import { type PropertyDef } from '../propertySchema';
 import { type EditorToolItem } from '../editorTools';
 import { TransformComponent } from './TransformComponent';
+import { TweenComponent } from './TweenComponent';
 import { assetService } from '../../assets/AssetService';
 import {
   D20_VERTICES,
@@ -162,7 +163,13 @@ export class MeshComponent extends EntityComponent<MeshState> {
   }
 
   onContextMenu(_ctx: MenuContext): MenuItem[] {
-    return [{ kind: 'colorpicker', id: 'set-tint', label: 'Tint', value: this.state.color || '#ffffff' }];
+    const items: MenuItem[] = [
+      { kind: 'colorpicker', id: 'set-tint', label: 'Tint', value: this.state.color || '#ffffff' },
+    ];
+    if (this.entity.components.has('tween')) {
+      items.push({ kind: 'action', id: 'flip', label: 'Flip' });
+    }
+    return items;
   }
 
   onEditorTools(ctx: MenuContext): EditorToolItem[] {
@@ -180,10 +187,33 @@ export class MeshComponent extends EntityComponent<MeshState> {
   }
 
   onAction(actionId: string, args: object | undefined, _ctx: ActionContext): void {
-    if (actionId !== 'set-tint') return;
-    const value = (args as { value?: unknown } | undefined)?.value;
-    if (typeof value !== 'string') return;
-    this.setState({ color: value });
+    if (actionId === 'set-tint') {
+      const value = (args as { value?: unknown } | undefined)?.value;
+      if (typeof value !== 'string') return;
+      this.setState({ color: value });
+      return;
+    }
+    if (actionId === 'flip') {
+      this.flip();
+      return;
+    }
+  }
+
+  // Rotate 180° around the entity's local Z axis via the sibling
+  // TweenComponent. 0.2s ease-out; tween kinematicises the physics body for
+  // the duration so the rotation isn't fought by gravity / contacts.
+  private flip(): void {
+    const transform = this.entity.getComponent(TransformComponent);
+    const tween     = this.entity.getComponent(TweenComponent);
+    if (!transform || !tween) return;
+    const [qx, qy, qz, qw] = transform.state.rotation;
+    const cur    = new THREE.Quaternion(qx, qy, qz, qw);
+    const dq     = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI);
+    const target = cur.multiply(dq);
+    tween.tweenTo({
+      position: transform.state.position,
+      rotation: [target.x, target.y, target.z, target.w],
+    }, 200);
   }
 
   private rebuild(): void {

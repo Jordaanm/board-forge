@@ -74,6 +74,7 @@ describe('CardComponent — initial FlatView from orientation', () => {
         physics:   { mass: 0.05, friction: 0.6, restitution: 0.1, isLocked: false },
         value:     { value: '', isNumeric: false },
         flatview:  { textureRef: '' },
+        tween:     {},
         card:      { face: 'face.png', back: 'back.png', category: '' },
       },
     };
