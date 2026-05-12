@@ -52,13 +52,32 @@ export class DiceComponent extends EntityComponent<DiceState> {
   onContextMenu(_ctx: MenuContext): MenuItem[] {
     const value = this.entity.getComponent(ValueComponent)?.state.value ?? '?';
     return [
-      { kind: 'action', id: 'roll',  label: 'Roll' },
-      { kind: 'action', id: 'value', label: `Value: ${value}`, disabled: true },
+      { kind: 'action', id: 'roll',       label: 'Roll' },
+      { kind: 'action', id: 'rotate-cw',  label: 'Rotate' },
+      { kind: 'action', id: 'rotate-ccw', label: 'Rotate Counter Clockwise' },
+      { kind: 'action', id: 'value',      label: `Value: ${value}`, disabled: true },
     ];
   }
 
   onAction(actionId: string, _args: object | undefined, _ctx: ActionContext): void {
-    if (actionId === 'roll') this.roll();
+    if (actionId === 'roll')        { this.roll();           return; }
+    if (actionId === 'rotate-cw')   { this.stepValue(+1);    return; }
+    if (actionId === 'rotate-ccw')  { this.stepValue(-1);    return; }
+  }
+
+  // Increment / decrement the die's face value with wraparound across
+  // [1, maxValue]. Reuses setValue so the model snaps to the orientation
+  // matching the new face.
+  private stepValue(delta: number): void {
+    const valueComp = this.entity.getComponent(ValueComponent);
+    if (!valueComp) return;
+    const max = this.state.maxValue;
+    if (!Number.isFinite(max) || max < 1) return;
+    const current = Number(valueComp.state.value);
+    const base    = Number.isFinite(current) ? current : 1;
+    // Map 1..max → 0..max-1, step, wrap, map back.
+    const next = ((base - 1 + delta) % max + max) % max + 1;
+    this.setValue(next);
   }
 
   // ── Public API ─────────────────────────────────────────────────────────

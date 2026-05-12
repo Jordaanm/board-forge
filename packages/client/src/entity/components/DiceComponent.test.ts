@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach } from 'vitest';
 import * as THREE from 'three';
 import { SceneImpl } from '../Scene';
-import { type SpawnContext } from '../EntityComponent';
+import { type SpawnContext, type ActionContext } from '../EntityComponent';
 import { aggregateContextMenu } from '../contextMenu';
 import { TransformComponent } from './TransformComponent';
 import { PhysicsComponent } from './PhysicsComponent';
@@ -118,18 +118,22 @@ describe('DiceComponent — onDespawn', () => {
 });
 
 describe('DiceComponent — context menu', () => {
-  test('returns Roll action and disabled "Value: N" reading from ValueComponent', () => {
+  test('returns Roll, Rotate, Rotate CCW, and a disabled "Value: N" reading from ValueComponent', () => {
     const e = scene.spawn('die', ctx);
     e.getComponent(ValueComponent)!.setState({ value: '4', isNumeric: true });
 
     const items = aggregateContextMenu(e, { recipientSeat: 0, isHost: true, entity: e });
     const dice  = items.filter(i => i.kind === 'action' && (i as { componentTypeId?: string }).componentTypeId === 'dice');
 
-    expect(dice).toHaveLength(2);
-    const [roll, info] = dice as Array<{ kind: 'action'; id: string; label: string; disabled?: boolean }>;
+    expect(dice).toHaveLength(4);
+    const [roll, cw, ccw, info] = dice as Array<{ kind: 'action'; id: string; label: string; disabled?: boolean }>;
     expect(roll.id).toBe('roll');
     expect(roll.label).toBe('Roll');
     expect(roll.disabled).toBeFalsy();
+    expect(cw.id).toBe('rotate-cw');
+    expect(cw.label).toBe('Rotate');
+    expect(ccw.id).toBe('rotate-ccw');
+    expect(ccw.label).toBe('Rotate Counter Clockwise');
     expect(info.id).toBe('value');
     expect(info.label).toBe('Value: 4');
     expect(info.disabled).toBe(true);
@@ -143,6 +147,56 @@ describe('DiceComponent — context menu', () => {
         && (i as { componentTypeId?: string }).componentTypeId === 'value',
     );
     expect(valueItems).toEqual([]);
+  });
+});
+
+describe('DiceComponent — rotate steps the value', () => {
+  function dispatch(e: ReturnType<SceneImpl['spawn']>, actionId: string): void {
+    const dice = e.getComponent(DiceComponent)!;
+    const actionCtx: ActionContext = { recipientSeat: null, isHost: true, entity: e };
+    dice.onAction(actionId, undefined, actionCtx);
+  }
+
+  test('rotate-cw increments value, wraps from 6 to 1 on a D6', () => {
+    const e = scene.spawn('die', ctx);
+    const value = e.getComponent(ValueComponent)!;
+    value.setState({ value: '5', isNumeric: true });
+
+    dispatch(e, 'rotate-cw');
+    expect(value.state.value).toBe('6');
+    dispatch(e, 'rotate-cw');
+    expect(value.state.value).toBe('1');
+  });
+
+  test('rotate-ccw decrements value, wraps from 1 to 6 on a D6', () => {
+    const e = scene.spawn('die', ctx);
+    const value = e.getComponent(ValueComponent)!;
+    value.setState({ value: '2', isNumeric: true });
+
+    dispatch(e, 'rotate-ccw');
+    expect(value.state.value).toBe('1');
+    dispatch(e, 'rotate-ccw');
+    expect(value.state.value).toBe('6');
+  });
+
+  test('rotate-cw on a D20 wraps from 20 to 1', () => {
+    const e = scene.spawn('d20', ctx);
+    const value = e.getComponent(ValueComponent)!;
+    value.setState({ value: '20', isNumeric: true });
+
+    dispatch(e, 'rotate-cw');
+    expect(value.state.value).toBe('1');
+  });
+
+  test('rotate snaps physics orientation to match the new face', () => {
+    const e = scene.spawn('die', ctx);
+    const phys = e.getComponent(PhysicsComponent)!;
+    const dice = e.getComponent(DiceComponent)!;
+    e.getComponent(ValueComponent)!.setState({ value: '1', isNumeric: true });
+
+    dispatch(e, 'rotate-cw');
+    const q = phys.body.quaternion;
+    expect(resolveFaceFromOrientation(q.x, q.y, q.z, q.w, dice.state.faceMap)).toBe(2);
   });
 });
 

@@ -35,6 +35,7 @@ import { type EditorToolItem } from '../editorTools';
 import { TransformComponent } from './TransformComponent';
 import { TweenComponent } from './TweenComponent';
 import { assetService } from '../../assets/AssetService';
+import { load as loadPreferences } from '../../preferences/storage';
 import {
   D20_VERTICES,
   D20_FACES,
@@ -168,6 +169,16 @@ export class MeshComponent extends EntityComponent<MeshState> {
     ];
     if (this.entity.components.has('tween')) {
       items.push({ kind: 'action', id: 'flip', label: 'Flip' });
+      // Rotate items are suppressed when a DiceComponent is attached — the dice
+      // emits its own Rotate / Rotate Counter Clockwise entries that increment
+      // / decrement the die value instead of altering yaw.
+      if (!this.entity.components.has('dice')) {
+        const amountDeg = loadPreferences().rotateAmount;
+        items.push(
+          { kind: 'action', id: 'rotate-cw',  label: 'Rotate',                   args: { amountDeg } },
+          { kind: 'action', id: 'rotate-ccw', label: 'Rotate Counter Clockwise', args: { amountDeg } },
+        );
+      }
     }
     return items;
   }
@@ -197,6 +208,31 @@ export class MeshComponent extends EntityComponent<MeshState> {
       this.flip();
       return;
     }
+    if (actionId === 'rotate-cw' || actionId === 'rotate-ccw') {
+      const amountDeg = (args as { amountDeg?: number } | undefined)?.amountDeg;
+      if (typeof amountDeg !== 'number' || !Number.isFinite(amountDeg)) return;
+      const sign = actionId === 'rotate-cw' ? -1 : 1;
+      this.rotateYaw(sign * amountDeg);
+      return;
+    }
+  }
+
+  // Rotate around world +Y by `amountDeg` via the sibling TweenComponent.
+  // Positive = CCW when viewed from above; negative = CW. Premultiplies the
+  // rotation onto current orientation so the axis stays world-Y regardless of
+  // the entity's current tilt.
+  private rotateYaw(amountDeg: number): void {
+    const transform = this.entity.getComponent(TransformComponent);
+    const tween     = this.entity.getComponent(TweenComponent);
+    if (!transform || !tween) return;
+    const [qx, qy, qz, qw] = transform.state.rotation;
+    const cur    = new THREE.Quaternion(qx, qy, qz, qw);
+    const dq     = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), amountDeg * Math.PI / 180);
+    const target = cur.premultiply(dq);
+    tween.tweenTo({
+      position: transform.state.position,
+      rotation: [target.x, target.y, target.z, target.w],
+    }, 200);
   }
 
   // Rotate 180° around the entity's local Z axis via the sibling
