@@ -61,7 +61,8 @@
       "Bash(cmd *)",
       "Bash(grep -i \"\\\\.tsx\\\\|\\\\.ts$\")",
       "Bash(Get-ChildItem -Force)",
-      "Bash(grep -E \"\\\\.\\(ts|tsx|js|vue\\)$\")"
+      "Bash(grep -E \"\\\\.\\(ts|tsx|js|vue\\)$\")",
+      "Bash(powershell -NoProfile -Command \"\\(Get-Content packages/client/src/entity/editorTools.test.ts -Raw\\) -replace 'hostLocal: \\\\{ attachSurface: \\\\\\(\\\\\\) => \\\\{\\\\}, attachElement: \\\\\\(\\\\\\) => \\\\{\\\\} \\\\}', 'hostLocal: { attachSurface: \\(\\) => {}, attachElement: \\(\\) => {}, attachSnapPoints: \\(\\) => {} }' | Set-Content -Encoding utf8 packages/client/src/entity/editorTools.test.ts\")"
     ]
   }
 }
