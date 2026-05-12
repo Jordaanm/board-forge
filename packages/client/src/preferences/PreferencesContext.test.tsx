@@ -4,7 +4,7 @@ import { act, cleanup, render } from '@testing-library/react';
 import { PreferencesProvider } from './PreferencesContext';
 import { usePreferences } from './usePreferences';
 import { STORAGE_KEY } from './storage';
-import { DEFAULT_PREFERENCES, type Preferences } from './types';
+import { DEFAULT_HOTKEYS, DEFAULT_PREFERENCES, type Preferences } from './types';
 
 interface FakeMQ {
   matches: boolean;
@@ -88,12 +88,31 @@ describe('PreferencesProvider / usePreferences', () => {
   });
 
   test('mounts with stored values when present', () => {
-    const stored: Preferences = { version: 1, darkMode: 'light', rotateAmount: 90 };
+    const stored: Preferences = {
+      version: 1, darkMode: 'light', rotateAmount: 90,
+      hotkeys: { ...DEFAULT_HOTKEYS },
+    };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
     const probe: Probe = { current: null };
     mount(probe);
     expect(probe.current?.darkMode).toBe('light');
     expect(probe.current?.rotateAmount).toBe(90);
+  });
+
+  test('exposes hotkeys from storage (read-only)', () => {
+    const probe: Probe = { current: null };
+    mount(probe);
+    expect(probe.current?.hotkeys).toEqual(DEFAULT_HOTKEYS);
+  });
+
+  test('hotkeys are populated from stored blob on mount', () => {
+    const custom = { ...DEFAULT_HOTKEYS, flip: 'g' };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      version: 1, darkMode: 'light', rotateAmount: 90, hotkeys: custom,
+    }));
+    const probe: Probe = { current: null };
+    mount(probe);
+    expect(probe.current?.hotkeys.flip).toBe('g');
   });
 
   test('setDarkMode mutates state and persists', () => {

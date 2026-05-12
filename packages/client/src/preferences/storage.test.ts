@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import { load, save, STORAGE_KEY } from './storage';
-import { DEFAULT_PREFERENCES, type Preferences } from './types';
+import { DEFAULT_HOTKEYS, DEFAULT_PREFERENCES, type Preferences } from './types';
 
 describe('preferences storage', () => {
   let warnSpy: ReturnType<typeof vi.spyOn>;
@@ -53,9 +53,59 @@ describe('preferences storage', () => {
   });
 
   test('save() then load() round-trips a valid blob', () => {
-    const prefs: Preferences = { version: 1, darkMode: 'light', rotateAmount: 30 };
+    const prefs: Preferences = {
+      version: 1, darkMode: 'light', rotateAmount: 30,
+      hotkeys: { ...DEFAULT_HOTKEYS },
+    };
     save(prefs);
     expect(load()).toEqual(prefs);
+  });
+
+  test('load() on a pre-hotkeys blob fills in the default hotkeys map', () => {
+    // Simulates a stored blob written before issue #2 — no `hotkeys` key.
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      version: 1, darkMode: 'dark', rotateAmount: 90,
+    }));
+    const prefs = load();
+    expect(prefs.darkMode).toBe('dark');
+    expect(prefs.rotateAmount).toBe(90);
+    expect(prefs.hotkeys).toEqual(DEFAULT_HOTKEYS);
+  });
+
+  test('load() round-trips a custom hotkeys map written by save()', () => {
+    const prefs: Preferences = {
+      version: 1, darkMode: 'dark', rotateAmount: 45,
+      hotkeys: {
+        'flip':        'g',
+        'rotate-cw':   'r',
+        'rotate-ccw':  't',
+        'lock-toggle': 'k',
+        'roll':        '',
+      },
+    };
+    save(prefs);
+    expect(load()).toEqual(prefs);
+  });
+
+  test('load() sanitises invalid hotkey values back to defaults per-key', () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      version: 1, darkMode: 'dark', rotateAmount: 45,
+      hotkeys: {
+        'flip':        'ff',       // too long → default
+        'rotate-cw':   42,         // wrong type → default
+        'rotate-ccw':  'Q',        // valid single char (lower-cased)
+        'lock-toggle': '',         // valid unbound
+        'roll':        'r',        // valid override
+      },
+    }));
+    const prefs = load();
+    expect(prefs.hotkeys).toEqual({
+      'flip':        DEFAULT_HOTKEYS.flip,
+      'rotate-cw':   DEFAULT_HOTKEYS['rotate-cw'],
+      'rotate-ccw':  'q',
+      'lock-toggle': '',
+      'roll':        'r',
+    });
   });
 
   test('load() swallows localStorage.getItem throw', () => {
@@ -73,7 +123,10 @@ describe('preferences storage', () => {
     const orig = Storage.prototype.setItem;
     Storage.prototype.setItem = function () { throw new Error('quota'); };
     try {
-      expect(() => save({ version: 1, darkMode: 'dark', rotateAmount: 15 })).not.toThrow();
+      expect(() => save({
+        version: 1, darkMode: 'dark', rotateAmount: 15,
+        hotkeys: { ...DEFAULT_HOTKEYS },
+      })).not.toThrow();
       expect(warnSpy).toHaveBeenCalled();
     } finally {
       Storage.prototype.setItem = orig;

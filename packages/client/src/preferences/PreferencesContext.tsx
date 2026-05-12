@@ -1,10 +1,14 @@
 import { createContext, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { load, save } from './storage';
-import { DEFAULT_PREFERENCES, type DarkMode, type Preferences, type RotateAmount } from './types';
+import { DEFAULT_HOTKEYS, DEFAULT_PREFERENCES, type DarkMode, type HotkeyMap, type Preferences, type RotateAmount } from './types';
 
 export interface PreferencesContextValue {
   darkMode:        DarkMode;
   rotateAmount:    RotateAmount;
+  // Read-only this pass — no setter. The hotkey-remapping UI is out of scope
+  // for the current PRD (planning/prd--hotkeys.md § Out of Scope); landing the
+  // schema lets the HotkeyDispatcher (issue #3) read bindings cleanly.
+  hotkeys:         HotkeyMap;
   resolvedTheme:   'light' | 'dark';
   setDarkMode:     (mode: DarkMode) => void;
   setRotateAmount: (amount: RotateAmount) => void;
@@ -57,7 +61,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const reset = useCallback(() => {
-    const next: Preferences = { ...DEFAULT_PREFERENCES };
+    const next: Preferences = { ...DEFAULT_PREFERENCES, hotkeys: { ...DEFAULT_HOTKEYS } };
     save(next);
     setPrefs(next);
   }, []);
@@ -65,11 +69,12 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   const value = useMemo<PreferencesContextValue>(() => ({
     darkMode:      prefs.darkMode,
     rotateAmount:  prefs.rotateAmount,
+    hotkeys:       prefs.hotkeys,
     resolvedTheme: deriveResolvedTheme(prefs.darkMode, systemTheme),
     setDarkMode,
     setRotateAmount,
     reset,
-  }), [prefs.darkMode, prefs.rotateAmount, systemTheme, setDarkMode, setRotateAmount, reset]);
+  }), [prefs.darkMode, prefs.rotateAmount, prefs.hotkeys, systemTheme, setDarkMode, setRotateAmount, reset]);
 
   return (
     <PreferencesContext.Provider value={value}>
