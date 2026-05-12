@@ -1,5 +1,6 @@
 import { Landing } from './pages/Landing';
 import { Room } from './pages/Room';
+import { PreferencesProvider } from './preferences/PreferencesContext';
 
 function parseUrl() {
   const p = new URLSearchParams(window.location.search);
@@ -10,6 +11,9 @@ function parseUrl() {
 
 export function App() {
   const { roomId, isHost } = parseUrl();
-  if (roomId) return <Room roomId={roomId} isHost={isHost} />;
-  return <Landing />;
+  return (
+    <PreferencesProvider>
+      {roomId ? <Room roomId={roomId} isHost={isHost} /> : <Landing />}
+    </PreferencesProvider>
+  );
 }

@@ -12,6 +12,7 @@ import { HostActionBar } from '../components/HostActionBar';
 import { AnchorLayout } from '../components/AnchorLayout';
 import { UIPanel } from '../components/UIPanel';
 import { HandPanel } from '../components/HandPanel';
+import { PreferencesTrigger } from '../components/PreferencesTrigger';
 import { TOOL_CATALOGUE } from '../input/tools';
 import { type ContextMenuRequest, dispatchMenuAction } from '../input/ContextMenuController';
 import { type MenuItem } from '../entity/EntityComponent';
@@ -572,6 +573,10 @@ export function Room({ roomId, isHost }: Props) {
             selfSeat={getSelfSeatRef.current()}
             onEndTurn={() => endTurnRef.current()}
           />
+        </UIPanel>
+
+        <UIPanel anchor="top-right" order={0}>
+          <PreferencesTrigger />
         </UIPanel>
 
         <UIPanel anchor="top-right" order={10}>
