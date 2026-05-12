@@ -379,8 +379,9 @@ export function Room({ roomId, isHost }: Props) {
     dispatchEditorTool(item, value, selectedId, {
       entity:    handle.controller.get(selectedId)?.entity,
       hostLocal: {
-        attachSurface: (id) => { handle.controller.attachSurface(id); },
-        attachElement: (id, kind) => { handle.controller.attachElement(id, kind); },
+        attachSurface:    (id) => { handle.controller.attachSurface(id); },
+        attachElement:    (id, kind) => { handle.controller.attachElement(id, kind); },
+        attachSnapPoints: (id) => { handle.controller.attachSnapPoints(id); },
       },
       notify: () => handle.controller.requestRefresh(),
     });

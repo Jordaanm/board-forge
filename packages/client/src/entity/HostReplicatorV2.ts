@@ -6,6 +6,7 @@
 
 import { type ReplicationChannel, type ComponentReplicator } from './EntityComponent';
 import {
+  type AttachComponent,
   type ComponentPatch,
   type ComponentPatchesMessage,
   type EntityFieldsPartial,
@@ -103,6 +104,10 @@ export class HostReplicatorV2 implements ComponentReplicator {
 
   enqueueEntitySpawn(entity: EntitySerialized): void {
     this.reliableMessages.push({ type: 'entity-spawn', entity });
+  }
+
+  enqueueAttachComponent(msg: Omit<AttachComponent, 'type'>): void {
+    this.reliableMessages.push({ type: 'attach-component', ...msg });
   }
 
   enqueueDespawn(entityIds: string[]): void {

@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach } from 'vitest';
+﻿import { describe, test, expect, beforeEach } from 'vitest';
 import { SceneImpl } from './Scene';
 import { Entity } from './Entity';
 import { EntityComponent, type MenuContext, type ActionContext } from './EntityComponent';
@@ -100,7 +100,7 @@ describe('aggregateEditorTools', () => {
     expect(b.componentTypeId).toBe('b');
   });
 
-  test('entity with no components → empty list', () => {
+  test('entity with no components â†’ empty list', () => {
     const e = new Entity({ id: 'lonely', type: 't', name: 'lonely' });
     scene.add(e);
     expect(aggregateEditorTools(e, { recipientSeat: 0, isHost: true, entity: e })).toEqual([]);
@@ -118,7 +118,7 @@ describe('dispatchEditorTool', () => {
     let attachCalls = 0;
     dispatchEditorTool(item, undefined, e.id, {
       entity:    e,
-      hostLocal: { attachSurface: () => { attachCalls++; }, attachElement: () => {} },
+      hostLocal: { attachSurface: () => { attachCalls++; }, attachElement: () => {}, attachSnapPoints: () => {} },
     });
     expect(attachCalls).toBe(0);
     expect(tracker.calls).toHaveLength(1);
@@ -134,7 +134,7 @@ describe('dispatchEditorTool', () => {
     const e = new Entity({ id: 'parent-1', type: 't', name: 'p' });
     dispatchEditorTool(item, undefined, e.id, {
       entity:    e,
-      hostLocal: { attachSurface: (id) => { calledWith = id; }, attachElement: () => {} },
+      hostLocal: { attachSurface: (id) => { calledWith = id; }, attachElement: () => {}, attachSnapPoints: () => {} },
     });
     expect(calledWith).toBe('parent-1');
   });
@@ -156,12 +156,30 @@ describe('dispatchEditorTool', () => {
       dispatchEditorTool(item, undefined, e.id, {
         entity:    e,
         hostLocal: {
-          attachSurface: () => {},
-          attachElement: (id, k) => { calledWith = { id, kind: k }; },
+          attachSurface:    () => {},
+          attachElement:    (id, k) => { calledWith = { id, kind: k }; },
+          attachSnapPoints: () => {},
         },
       });
       expect(calledWith).toEqual({ id: 'surface-1', kind });
     }
+  });
+
+  test('mesh add-snap-markers routes to hostLocal.attachSnapPoints, not onAction', () => {
+    let calledWith: string | null = null;
+    const item: EditorToolItem & { kind: 'button' } = {
+      kind: 'button', id: 'add-snap-markers', label: 'Add Snap Markers', componentTypeId: 'mesh',
+    };
+    const e = new Entity({ id: 'card-7', type: 't', name: 'p' });
+    dispatchEditorTool(item, undefined, e.id, {
+      entity:    e,
+      hostLocal: {
+        attachSurface:    () => {},
+        attachElement:    () => {},
+        attachSnapPoints: (id) => { calledWith = id; },
+      },
+    });
+    expect(calledWith).toBe('card-7');
   });
 
   test('number kind dispatches with value merged into args', () => {
@@ -173,7 +191,7 @@ describe('dispatchEditorTool', () => {
     };
     dispatchEditorTool(item, 3.5, e.id, {
       entity:    e,
-      hostLocal: { attachSurface: () => {}, attachElement: () => {} },
+      hostLocal: { attachSurface: () => {}, attachElement: () => {}, attachSnapPoints: () => {} },
     });
     expect(tracker.calls).toHaveLength(1);
     expect(tracker.calls[0].actionId).toBe('edit-x');
@@ -189,7 +207,7 @@ describe('dispatchEditorTool', () => {
     };
     dispatchEditorTool(item, true, e.id, {
       entity:    e,
-      hostLocal: { attachSurface: () => {}, attachElement: () => {} },
+      hostLocal: { attachSurface: () => {}, attachElement: () => {}, attachSnapPoints: () => {} },
     });
     expect(tracker.calls[0].args).toEqual({ pointId: 'p1', value: true });
   });
@@ -201,10 +219,10 @@ describe('dispatchEditorTool', () => {
     const heading: EditorToolItem = { kind: 'heading', label: 'X' };
     const row: EditorToolItem = { kind: 'row', items: [] };
     dispatchEditorTool(heading, undefined, e.id, {
-      entity: e, hostLocal: { attachSurface: () => {}, attachElement: () => {} },
+      entity: e, hostLocal: { attachSurface: () => {}, attachElement: () => {}, attachSnapPoints: () => {} },
     });
     dispatchEditorTool(row, undefined, e.id, {
-      entity: e, hostLocal: { attachSurface: () => {}, attachElement: () => {} },
+      entity: e, hostLocal: { attachSurface: () => {}, attachElement: () => {}, attachSnapPoints: () => {} },
     });
     expect(tracker.calls).toHaveLength(0);
   });
@@ -216,7 +234,7 @@ describe('dispatchEditorTool', () => {
     let notifyCount = 0;
     dispatchEditorTool(item, undefined, e.id, {
       entity:    e,
-      hostLocal: { attachSurface: () => {}, attachElement: () => {} },
+      hostLocal: { attachSurface: () => {}, attachElement: () => {}, attachSnapPoints: () => {} },
       notify:    () => { notifyCount++; },
     });
     expect(notifyCount).toBe(1);
@@ -256,8 +274,9 @@ describe('dispatchEditorTool', () => {
     let attachCalls = 0;
     dispatchEditorTool(item, undefined, 'e', {
       entity:    undefined,
-      hostLocal: { attachSurface: () => { attachCalls++; }, attachElement: () => {} },
+      hostLocal: { attachSurface: () => { attachCalls++; }, attachElement: () => {}, attachSnapPoints: () => {} },
     });
     expect(attachCalls).toBe(0);
   });
 });
+

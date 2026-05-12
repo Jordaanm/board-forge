@@ -54,6 +54,17 @@ export interface EntitySpawn {
   entity: EntitySerialized;
 }
 
+// Attaches a fresh component to an already-spawned entity (e.g. host clicks
+// "Add Snap Markers" on a card). Guests look up the component class in the
+// registry, fromJSON `state`, attach, and onSpawn. Idempotent — guests skip
+// when the entity already has the typeId. Always reliable.
+export interface AttachComponent {
+  type:     'attach-component';
+  entityId: string;
+  typeId:   string;
+  state:    object;
+}
+
 // Late-join payload (issue #8 of issues--arch.md) — host's complete scene
 // shipped to a freshly-connected guest in one envelope. Guests apply via
 // SceneImpl.load so two-phase construction (all entities materialised before
@@ -226,6 +237,7 @@ export interface ManifestPublishMessage {
 export type SceneMessage =
   | ComponentPatchesMessage
   | EntitySpawn
+  | AttachComponent
   | SceneSnapshot
   | SceneReplace
   | EntityPatch

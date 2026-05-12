@@ -95,6 +95,12 @@ export interface World {
   // tool. Defaults to the parent's +Y face sized to its mesh footprint.
   attachSurface(parentId: string, opts?: import('../components/attachSticker').SurfaceChildOpts): string | null;
 
+  // Host-only — attach a fresh SnapPointsComponent (one default point) to an
+  // existing entity. Backs the Mesh component's "Add Snap Markers" editor-
+  // panel tool. No-op when the entity is unknown or already carries the
+  // component.
+  attachSnapPoints(entityId: string): void;
+
   // Host-only — append one element (Rich / Image / Shape) to a surface's
   // `state.elements` array. Backs the Surface component's editor-panel
   // "Add … Element" buttons. Returns the new element id.

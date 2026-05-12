@@ -27,6 +27,7 @@ import { type SceneMessage, type EntityFieldsPartial } from '../wire';
 import { TransformComponent } from '../components/TransformComponent';
 import { PhysicsComponent } from '../components/PhysicsComponent';
 import { MeshComponent } from '../components/MeshComponent';
+import { SnapPointsComponent } from '../components/SnapPointsComponent';
 import { ZoneComponent } from '../components/ZoneComponent';
 import { TweenComponent } from '../components/TweenComponent';
 import { HandComponent } from '../components/HandComponent';
@@ -233,6 +234,37 @@ class WorldImpl implements World, HandleRouter {
 
   private spawnEntityAt(type: string, position: [number, number, number]): Entity {
     return this.spawnEntity(type, { position });
+  }
+
+  // Host-only — attach a fresh SnapPointsComponent (with one default point)
+  // to an existing entity and replicate via the `attach-component` wire.
+  // Backs the Mesh component's "Add Snap Markers" editor-panel tool.
+  // No-op if the entity is unknown or already carries snap-points.
+  attachSnapPoints(entityId: string): void {
+    if (this.role !== 'host') throw new Error('World.attachSnapPoints is host-only');
+    const entity = this.scene.getEntity(entityId);
+    if (!entity) return;
+    if (entity.hasComponent(SnapPointsComponent)) return;
+    this.history_?.push('attach snap points');
+    const comp = new SnapPointsComponent();
+    comp.fromJSON({ points: [{
+      id:           'default',
+      localPos:     [0, 0, 0],
+      localYaw:     0,
+      snapRotation: false,
+      radius:       0.4,
+    }] });
+    entity.attachComponent(comp);
+    const ctx: SpawnContext = { scene: this.threeScene, physics: this.physics, entityScene: this.scene };
+    comp.onSpawn(ctx);
+    if (this.replicator) {
+      this.replicator.enqueueAttachComponent({
+        entityId,
+        typeId: SnapPointsComponent.typeId,
+        state:  comp.toJSON(),
+      });
+    }
+    this.notify();
   }
 
   // Host-only — spawn a child surface entity (prim:plane + SurfaceComponent)
@@ -1056,6 +1088,21 @@ class WorldImpl implements World, HandleRouter {
         if (this.scene.has(msg.entity.id)) return;
         const ctx: SpawnContext = { scene: this.threeScene, physics: this.physics, entityScene: this.scene };
         this.scene.load([msg.entity], ctx);
+        this.notify();
+        return;
+      }
+
+      case 'attach-component': {
+        const entity = this.scene.getEntity(msg.entityId);
+        if (!entity) return;
+        if (entity.components.has(msg.typeId)) return;
+        const cls = componentRegistry.get(msg.typeId);
+        if (!cls) return;
+        const comp = new cls();
+        comp.fromJSON(msg.state);
+        entity.attachComponent(comp);
+        const ctx: SpawnContext = { scene: this.threeScene, physics: this.physics, entityScene: this.scene };
+        comp.onSpawn(ctx);
         this.notify();
         return;
       }

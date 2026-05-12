@@ -390,6 +390,27 @@ describe('World — host→guest round-trip', () => {
     expect(calls).toBeGreaterThan(0);
   });
 
+  test('attachSnapPoints attaches the component on host and replicates to guest', () => {
+    pair = setup();
+    pair.host.spawn('token', { id: 'tok-1' });
+    pair.host.tick(0.016);
+    expect(pair.guest.get('tok-1')!.entity.components.has('snap-points')).toBe(false);
+
+    pair.host.attachSnapPoints('tok-1');
+    expect(pair.host.get('tok-1')!.entity.components.has('snap-points')).toBe(true);
+
+    pair.host.tick(0.016);
+    expect(pair.guest.get('tok-1')!.entity.components.has('snap-points')).toBe(true);
+  });
+
+  test('attachSnapPoints is idempotent — second call is a no-op', () => {
+    pair = setup();
+    pair.host.spawn('token', { id: 'tok-1' });
+    pair.host.attachSnapPoints('tok-1');
+    pair.host.attachSnapPoints('tok-1');
+    expect(pair.host.get('tok-1')!.entity.components.has('snap-points')).toBe(true);
+  });
+
   test('broadcastPlaySound fires local subscribers and replicates to guest (issue #11)', () => {
     pair = setup();
     const hostSeen:  string[] = [];

@@ -157,8 +157,18 @@ export class MeshComponent extends EntityComponent<MeshState> {
     return [{ kind: 'colorpicker', id: 'set-tint', label: 'Tint', value: this.state.color || '#ffffff' }];
   }
 
-  onEditorTools(_ctx: MenuContext): EditorToolItem[] {
-    return [{ kind: 'button', id: 'add-surface', label: 'Add Surface' }];
+  onEditorTools(ctx: MenuContext): EditorToolItem[] {
+    const items: EditorToolItem[] = [
+      { kind: 'button', id: 'add-surface', label: 'Add Surface' },
+    ];
+    // "Add Snap Markers" attaches a SnapPointsComponent to this entity so
+    // the host can configure per-point snap behaviour without spawning a
+    // child SnapMarker. Hidden when the entity already carries the
+    // component — attachComponent is single-instance.
+    if (!ctx.entity.components.has('snap-points')) {
+      items.push({ kind: 'button', id: 'add-snap-markers', label: 'Add Snap Markers' });
+    }
+    return items;
   }
 
   onAction(actionId: string, args: object | undefined, _ctx: ActionContext): void {

@@ -81,8 +81,9 @@ import { type EditorElementKind } from './components/SurfaceElement';
 export interface EditorToolDeps {
   entity:    Entity | undefined;
   hostLocal: {
-    attachSurface: (parentId: string) => void;
-    attachElement: (surfaceId: string, kind: EditorElementKind) => void;
+    attachSurface:    (parentId: string) => void;
+    attachElement:    (surfaceId: string, kind: EditorElementKind) => void;
+    attachSnapPoints: (entityId: string) => void;
   };
   // Optional. Fired after `onAction` so the React panel can refresh —
   // `comp.setState` replicates and updates view artefacts but does not by
@@ -109,6 +110,10 @@ export function dispatchEditorTool(
 
   if (item.kind === 'button' && item.componentTypeId === 'mesh' && item.id === 'add-surface') {
     deps.hostLocal.attachSurface(entityId);
+    return;
+  }
+  if (item.kind === 'button' && item.componentTypeId === 'mesh' && item.id === 'add-snap-markers') {
+    deps.hostLocal.attachSnapPoints(entityId);
     return;
   }
   if (item.kind === 'button' && item.componentTypeId === 'surface') {
