@@ -82,6 +82,19 @@ export interface EditorStickerOpts {
     | { button: { normal: string; hovered?: string; pressed?: string; fit?: EditorImageFit } };
 }
 
+// Valid event names dispatched on an entity's bus. Sourced from
+// `InputEventName` (pressed/released/click/hover-*) plus per-component
+// domain events (`value-changed` from ValueComponent). Keep in sync with
+// the dispatchers — see docs/scripting.md "Events".
+export type EditorEntityEvent =
+  | 'pressed'
+  | 'released'
+  | 'click'
+  | 'hover-start'
+  | 'hover-move'
+  | 'hover-end'
+  | 'value-changed';
+
 export class EditorEntityFacade {
   declare readonly id:    string;
   declare readonly type:  string;
@@ -90,13 +103,24 @@ export class EditorEntityFacade {
   declare readonly tags:  string[];
 
   getComponent(typeId: string): EditorReadOnlyComponentView | undefined { void typeId; return undefined; }
-  addEventListener(event: string, cb: EditorListener): void { void event; void cb; }
-  removeEventListener(event: string, cb: EditorListener): void { void event; void cb; }
+  addEventListener(event: EditorEntityEvent, cb: EditorListener): void { void event; void cb; }
+  removeEventListener(event: EditorEntityEvent, cb: EditorListener): void { void event; void cb; }
   setValue(value: string): void { void value; }
   setData(key: string, value: string): void { void key; void value; }
   getData(key: string): string | undefined { void key; return undefined; }
   deleteData(key: string): boolean { void key; return false; }
 }
+
+// Valid event names dispatched on a SurfaceComponent's per-element bus
+// (SurfaceComponent only forwards pressed/released/click + hover-start/end
+// to the element under the hit; entity-level `hover-move` and
+// `value-changed` don't propagate to elements).
+export type EditorElementEvent =
+  | 'pressed'
+  | 'released'
+  | 'click'
+  | 'hover-start'
+  | 'hover-end';
 
 // Handle for one element living inside a SurfaceComponent's `state.elements`
 // array. Returned by `scene.attachSticker` and `scene.getElement`. Replaces
@@ -113,8 +137,8 @@ export class EditorElementHandle {
   setButtonImages(images: EditorButtonImagesPatch): void { void images; }
   setButtonImage(slot: EditorButtonImageSlot, ref: string): void { void slot; void ref; }
   setButtonFit(fit: EditorImageFit): void { void fit; }
-  addEventListener(event: string, cb: EditorListener): void { void event; void cb; }
-  removeEventListener(event: string, cb: EditorListener): void { void event; void cb; }
+  addEventListener(event: EditorElementEvent, cb: EditorListener): void { void event; void cb; }
+  removeEventListener(event: EditorElementEvent, cb: EditorListener): void { void event; void cb; }
 }
 
 export type EditorEndedBy = 'player' | 'host' | 'script';

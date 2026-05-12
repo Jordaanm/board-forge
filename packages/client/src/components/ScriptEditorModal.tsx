@@ -284,7 +284,7 @@ const EMPTY_ENTRIES: ScriptErrorEntry[] = [];
 const SEED_SOURCE = `// Edit and click Run.
 //
 // export default class extends Game {
-//   onScriptLoaded(scene) { console.log('hi') }
+//   onScriptLoaded(scene: SceneFacade) { console.log('hi') }
 // }
 `;
 

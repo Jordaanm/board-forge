@@ -84,6 +84,8 @@ interface StickerOpts {
     };
 }
 
+type EntityEvent = 'pressed' | 'released' | 'click' | 'hover-start' | 'hover-move' | 'hover-end' | 'value-changed';
+
 declare class EntityFacade {
   readonly id: string;
   readonly type: string;
@@ -91,13 +93,15 @@ declare class EntityFacade {
   readonly owner: SeatIndex | null;
   readonly tags: string[];
   getComponent(typeId: string): ReadOnlyComponentView | undefined;
-  addEventListener(event: string, cb: Listener): void;
-  removeEventListener(event: string, cb: Listener): void;
+  addEventListener(event: EntityEvent, cb: Listener): void;
+  removeEventListener(event: EntityEvent, cb: Listener): void;
   setValue(value: string): void;
   setData(key: string, value: string): void;
   getData(key: string): string | undefined;
   deleteData(key: string): boolean;
 }
+
+type ElementEvent = 'pressed' | 'released' | 'click' | 'hover-start' | 'hover-end';
 
 declare class ElementHandle {
   readonly surfaceId: string;
@@ -110,8 +114,8 @@ declare class ElementHandle {
   setButtonImages(images: ButtonImagesPatch): void;
   setButtonImage(slot: ButtonImageSlot, ref: string): void;
   setButtonFit(fit: ImageFit): void;
-  addEventListener(event: string, cb: Listener): void;
-  removeEventListener(event: string, cb: Listener): void;
+  addEventListener(event: ElementEvent, cb: Listener): void;
+  removeEventListener(event: ElementEvent, cb: Listener): void;
 }
 
 type EndedBy = 'player' | 'host' | 'script';
