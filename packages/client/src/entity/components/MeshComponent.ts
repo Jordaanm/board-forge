@@ -29,13 +29,12 @@
 
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
-import { EntityComponent, type SpawnContext, type MenuContext, type MenuItem, type ActionContext } from '../EntityComponent';
+import { EntityComponent, type SpawnContext, type MenuContext, type MenuItem, type ActionContext, type ActionDefinition } from '../EntityComponent';
 import { type PropertyDef } from '../propertySchema';
 import { type EditorToolItem } from '../editorTools';
 import { TransformComponent } from './TransformComponent';
 import { TweenComponent } from './TweenComponent';
 import { assetService } from '../../assets/AssetService';
-import { load as loadPreferences } from '../../preferences/storage';
 import {
   D20_VERTICES,
   D20_FACES,
@@ -163,24 +162,25 @@ export class MeshComponent extends EntityComponent<MeshState> {
     return 'unknown';
   }
 
-  onContextMenu(_ctx: MenuContext): MenuItem[] {
-    const items: MenuItem[] = [
+  getActions(_ctx: ActionContext): ActionDefinition[] {
+    if (!this.entity.components.has('tween')) return [];
+    const defs: ActionDefinition[] = [{ name: 'flip', label: 'Flip' }];
+    // Rotate is suppressed when a DiceComponent is attached — the dice emits
+    // its own rotate-cw / rotate-ccw entries that step the die value instead
+    // of yawing the entity.
+    if (!this.entity.components.has('dice')) {
+      defs.push(
+        { name: 'rotate-cw',  label: 'Rotate' },
+        { name: 'rotate-ccw', label: 'Rotate Counter Clockwise' },
+      );
+    }
+    return defs;
+  }
+
+  getMenuControls(_ctx: ActionContext): MenuItem[] {
+    return [
       { kind: 'colorpicker', id: 'set-tint', label: 'Tint', value: this.state.color || '#ffffff' },
     ];
-    if (this.entity.components.has('tween')) {
-      items.push({ kind: 'action', id: 'flip', label: 'Flip' });
-      // Rotate items are suppressed when a DiceComponent is attached — the dice
-      // emits its own Rotate / Rotate Counter Clockwise entries that increment
-      // / decrement the die value instead of altering yaw.
-      if (!this.entity.components.has('dice')) {
-        const amountDeg = loadPreferences().rotateAmount;
-        items.push(
-          { kind: 'action', id: 'rotate-cw',  label: 'Rotate',                   args: { amountDeg } },
-          { kind: 'action', id: 'rotate-ccw', label: 'Rotate Counter Clockwise', args: { amountDeg } },
-        );
-      }
-    }
-    return items;
   }
 
   onEditorTools(ctx: MenuContext): EditorToolItem[] {
@@ -197,22 +197,26 @@ export class MeshComponent extends EntityComponent<MeshState> {
     return items;
   }
 
-  onAction(actionId: string, args: object | undefined, _ctx: ActionContext): void {
+  onAction(name: string, ctx: ActionContext): void {
+    if (name === 'flip') {
+      this.flip();
+      return;
+    }
+    if (name === 'rotate-cw' || name === 'rotate-ccw') {
+      const amountDeg = ctx.preferences.rotateAmount;
+      const sign = name === 'rotate-cw' ? -1 : 1;
+      this.rotateYaw(sign * amountDeg);
+      return;
+    }
+  }
+
+  // Tint is a menu-control item (colorpicker), not a pure action. Dispatched
+  // via the colorpicker branch which keeps its own `{ value }` arg flow.
+  onEditorAction(actionId: string, args: object | undefined, _ctx: ActionContext): void {
     if (actionId === 'set-tint') {
       const value = (args as { value?: unknown } | undefined)?.value;
       if (typeof value !== 'string') return;
       this.setState({ color: value });
-      return;
-    }
-    if (actionId === 'flip') {
-      this.flip();
-      return;
-    }
-    if (actionId === 'rotate-cw' || actionId === 'rotate-ccw') {
-      const amountDeg = (args as { amountDeg?: number } | undefined)?.amountDeg;
-      if (typeof amountDeg !== 'number' || !Number.isFinite(amountDeg)) return;
-      const sign = actionId === 'rotate-cw' ? -1 : 1;
-      this.rotateYaw(sign * amountDeg);
       return;
     }
   }

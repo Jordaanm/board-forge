@@ -73,17 +73,6 @@ describe('wire encode/decode round-trip', () => {
       entityId: 'e1',
       componentTypeId: 'die',
       actionId: 'roll',
-      args: { count: 2 },
-    };
-    expect(roundTrip(m)).toEqual(m);
-  });
-
-  test('InvokeAction without args', () => {
-    const m: InvokeAction = {
-      type: 'invoke-action',
-      entityId: 'e1',
-      componentTypeId: 'die',
-      actionId: 'roll',
     };
     expect(roundTrip(m)).toEqual(m);
   });

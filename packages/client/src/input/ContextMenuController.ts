@@ -4,10 +4,11 @@ import { TransformComponent } from '../entity/components/TransformComponent';
 import { TableComponent } from '../entity/components/TableComponent';
 import { aggregateContextMenu } from '../entity/contextMenu';
 import { type Entity } from '../entity/Entity';
-import { type MenuContext, type MenuItem, type ActionContext } from '../entity/EntityComponent';
+import { type MenuItem, type ActionContext } from '../entity/EntityComponent';
 import { type ChannelMessage } from '../net/SceneState';
 import { type SeatIndex } from '../seats/SeatLayout';
 import { canManipulate } from '../seats/OwnershipPolicy';
+import { load as loadPreferences } from '../preferences/storage';
 
 export interface ContextMenuRequest {
   x:          number;
@@ -72,7 +73,12 @@ export class ContextMenuController {
     if (entity.hasComponent(TableComponent)) return;
 
     const seat = this.getSelfSeat();
-    const ctx: MenuContext = { recipientSeat: seat, isHost: this.isHost, entity };
+    const ctx: ActionContext = {
+      recipientSeat: seat,
+      isHost:        this.isHost,
+      entity,
+      preferences:   loadPreferences(),
+    };
     const items = aggregateContextMenu(entity, ctx);
 
     // Append host-only built-ins (Delete always; Roll for dice).
@@ -194,23 +200,71 @@ export function dispatchMenuAction(
   }
 
   if (!item.componentTypeId) return; // unknown action — drop
-  if (deps.isHost && deps.entity) {
-    // Host runs onAction locally without a round-trip RPC.
+
+  // Colorpicker (and any future menu-control) ships an args payload through
+  // its own host-local branch, separate from the pure-action path. Hits
+  // `onEditorAction` so the component's args-bearing handler runs. Guests do
+  // not currently invoke menu controls — colorpicker UX is host-only — but
+  // the shape is preserved for symmetry.
+  if (item.kind === 'colorpicker') {
+    if (deps.isHost && deps.entity) {
+      if (!canManipulate({ peerSeat: deps.selfSeat, isHost: true }, deps.entity.owner)) return;
+      const comp = deps.entity.components.get(item.componentTypeId);
+      if (!comp) return;
+      const actionCtx: ActionContext = {
+        recipientSeat: deps.selfSeat, isHost: true, entity: deps.entity,
+        preferences:   loadPreferences(),
+      };
+      comp.onEditorAction(item.id, args, actionCtx);
+    }
+    return;
+  }
+
+  dispatchAction(entityId, item.componentTypeId, item.id, {
+    isHost:   deps.isHost,
+    entity:   deps.entity,
+    send:     deps.send,
+    selfSeat: deps.selfSeat,
+  });
+}
+
+// Host/guest routing for a pure component action. Called by both the
+// context-menu dispatcher (above) and the HotkeyDispatcher (issue #3). On
+// host: gates on `canManipulate`, snapshots Preferences, invokes
+// `comp.onAction(name, ctx)`. On guest: emits an `invoke-action` RPC with no
+// `args` field.
+export interface DispatchActionDeps {
+  isHost:   boolean;
+  entity:   Entity | undefined;
+  send:     (msg: ChannelMessage) => void;
+  selfSeat: SeatIndex | null;
+}
+
+export function dispatchAction(
+  entityId:        string,
+  componentTypeId: string,
+  actionName:      string,
+  deps:            DispatchActionDeps,
+): void {
+  if (deps.isHost) {
+    if (!deps.entity) return;
     if (!canManipulate({ peerSeat: deps.selfSeat, isHost: true }, deps.entity.owner)) return;
-    const comp = deps.entity.components.get(item.componentTypeId);
+    const comp = deps.entity.components.get(componentTypeId);
     if (!comp) return;
-    const actionCtx: ActionContext = {
-      recipientSeat: deps.selfSeat, isHost: true, entity: deps.entity,
+    const ctx: ActionContext = {
+      recipientSeat: deps.selfSeat,
+      isHost:        true,
+      entity:        deps.entity,
+      preferences:   loadPreferences(),
     };
-    comp.onAction(item.id, args, actionCtx);
+    comp.onAction(actionName, ctx);
     return;
   }
 
   deps.send({
     type: 'invoke-action',
     entityId,
-    componentTypeId: item.componentTypeId,
-    actionId: item.id,
-    ...(args !== undefined ? { args } : {}),
+    componentTypeId,
+    actionId: actionName,
   });
 }

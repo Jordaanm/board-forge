@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { SceneImpl } from '../Scene';
 import { type SpawnContext, type ActionContext } from '../EntityComponent';
 import { aggregateContextMenu } from '../contextMenu';
+import { DEFAULT_PREFERENCES } from '../../preferences/types';
 import { TransformComponent } from './TransformComponent';
 import { PhysicsComponent } from './PhysicsComponent';
 import { ValueComponent } from './ValueComponent';
@@ -122,7 +123,10 @@ describe('DiceComponent — context menu', () => {
     const e = scene.spawn('die', ctx);
     e.getComponent(ValueComponent)!.setState({ value: '4', isNumeric: true });
 
-    const items = aggregateContextMenu(e, { recipientSeat: 0, isHost: true, entity: e });
+    const items = aggregateContextMenu(e, {
+      recipientSeat: 0, isHost: true, entity: e,
+      preferences:   DEFAULT_PREFERENCES,
+    });
     const dice  = items.filter(i => i.kind === 'action' && (i as { componentTypeId?: string }).componentTypeId === 'dice');
 
     expect(dice).toHaveLength(4);
@@ -141,7 +145,10 @@ describe('DiceComponent — context menu', () => {
 
   test('ValueComponent contributes no items to the menu', () => {
     const e = scene.spawn('die', ctx);
-    const items = aggregateContextMenu(e, { recipientSeat: 0, isHost: true, entity: e });
+    const items = aggregateContextMenu(e, {
+      recipientSeat: 0, isHost: true, entity: e,
+      preferences:   DEFAULT_PREFERENCES,
+    });
     const valueItems = items.filter(
       i => (i.kind === 'action' || i.kind === 'colorpicker')
         && (i as { componentTypeId?: string }).componentTypeId === 'value',
@@ -153,8 +160,11 @@ describe('DiceComponent — context menu', () => {
 describe('DiceComponent — rotate steps the value', () => {
   function dispatch(e: ReturnType<SceneImpl['spawn']>, actionId: string): void {
     const dice = e.getComponent(DiceComponent)!;
-    const actionCtx: ActionContext = { recipientSeat: null, isHost: true, entity: e };
-    dice.onAction(actionId, undefined, actionCtx);
+    const actionCtx: ActionContext = {
+      recipientSeat: null, isHost: true, entity: e,
+      preferences:   DEFAULT_PREFERENCES,
+    };
+    dice.onAction(actionId, actionCtx);
   }
 
   test('rotate-cw increments value, wraps from 6 to 1 on a D6', () => {

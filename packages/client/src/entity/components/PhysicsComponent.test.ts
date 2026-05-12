@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { SceneImpl } from '../Scene';
 import { Entity } from '../Entity';
 import { type SpawnContext, type ActionContext } from '../EntityComponent';
+import { DEFAULT_PREFERENCES } from '../../preferences/types';
 import { ComponentRegistry } from '../ComponentRegistry';
 import { HostReplicatorV2, type ReplicatorPolicy } from '../HostReplicatorV2';
 import { HoldService } from '../HoldService';
@@ -161,38 +162,48 @@ describe('PhysicsComponent — context menu toggle', () => {
   test('label flips between "Lock movement" and "Unlock movement"', () => {
     const e = scene.spawn('die', ctx);
     const phys = e.getComponent(PhysicsComponent)!;
-    const menuCtx = { recipientSeat: 0 as SeatIndex, isHost: true, entity: e };
+    const actCtx: ActionContext = {
+      recipientSeat: 0 as SeatIndex, isHost: true, entity: e,
+      preferences:   DEFAULT_PREFERENCES,
+    };
 
-    let items = phys.onContextMenu(menuCtx);
-    expect(items).toHaveLength(1);
-    expect((items[0] as { label: string }).label).toBe('Lock movement');
+    let defs = phys.getActions(actCtx);
+    expect(defs).toHaveLength(1);
+    expect(defs[0].name).toBe('lock-toggle');
+    expect(defs[0].label).toBe('Lock movement');
 
     phys.setState({ isLocked: true });
-    items = phys.onContextMenu(menuCtx);
-    expect((items[0] as { label: string }).label).toBe('Unlock movement');
+    defs = phys.getActions(actCtx);
+    expect(defs[0].label).toBe('Unlock movement');
   });
 
   test('aggregateContextMenu surfaces the toggle tagged with physics typeId', () => {
     const e = scene.spawn('die', ctx);
-    const items = aggregateContextMenu(e, { recipientSeat: 0, isHost: true, entity: e });
+    const items = aggregateContextMenu(e, {
+      recipientSeat: 0, isHost: true, entity: e,
+      preferences:   DEFAULT_PREFERENCES,
+    });
     const physItems = items.filter(
       i => i.kind === 'action'
         && (i as { componentTypeId?: string }).componentTypeId === 'physics',
     );
     expect(physItems).toHaveLength(1);
     const toggle = physItems[0] as { id: string; label: string };
-    expect(toggle.id).toBe('toggle-lock');
+    expect(toggle.id).toBe('lock-toggle');
     expect(toggle.label).toBe('Lock movement');
   });
 
-  test('onAction(toggle-lock) flips state via setState', () => {
+  test('onAction(lock-toggle) flips state via setState', () => {
     const e = scene.spawn('die', ctx);
     const phys = e.getComponent(PhysicsComponent)!;
-    const actCtx: ActionContext = { recipientSeat: 0, isHost: true, entity: e };
-    phys.onAction('toggle-lock', undefined, actCtx);
+    const actCtx: ActionContext = {
+      recipientSeat: 0, isHost: true, entity: e,
+      preferences:   DEFAULT_PREFERENCES,
+    };
+    phys.onAction('lock-toggle', actCtx);
     expect(phys.state.isLocked).toBe(true);
     expect(phys.body.mass).toBe(0);
-    phys.onAction('toggle-lock', undefined, actCtx);
+    phys.onAction('lock-toggle', actCtx);
     expect(phys.state.isLocked).toBe(false);
     expect(phys.body.mass).toBe(0.2);
   });
@@ -224,7 +235,7 @@ describe('PhysicsComponent — lock toggle authority (via HostInputDispatcher)',
   function invokeToggle(peerId: string, entityId: string): boolean {
     return dispatcher.handleInvokeAction(peerId, {
       type: 'invoke-action', entityId,
-      componentTypeId: 'physics', actionId: 'toggle-lock',
+      componentTypeId: 'physics', actionId: 'lock-toggle',
     });
   }
 
@@ -297,7 +308,7 @@ describe('PhysicsComponent — lock toggle authority (via dispatchMenuAction hos
     e.owner = 1;
     const phys = e.getComponent(PhysicsComponent)!;
     dispatchMenuAction(
-      { kind: 'action', id: 'toggle-lock', label: 'Lock movement', componentTypeId: 'physics' },
+      { kind: 'action', id: 'lock-toggle', label: 'Lock movement', componentTypeId: 'physics' },
       undefined,
       e.id,
       {

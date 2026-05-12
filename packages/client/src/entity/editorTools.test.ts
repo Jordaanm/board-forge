@@ -40,7 +40,7 @@ class Dispatcher extends EntityComponent<object> {
   onEditorTools(): EditorToolItem[] {
     return [{ kind: 'button', id: 'do-thing', label: 'Do Thing' }];
   }
-  onAction(actionId: string, args: object | undefined, ctx: ActionContext) {
+  onEditorAction(actionId: string, args: object | undefined, ctx: ActionContext) {
     this.calls.push({ actionId, args, ctx });
   }
 }
@@ -108,7 +108,7 @@ describe('aggregateEditorTools', () => {
 });
 
 describe('dispatchEditorTool', () => {
-  test('component-defined buttons fall through to onAction on the owning component', () => {
+  test('component-defined buttons fall through to onEditorAction on the owning component', () => {
     componentRegistry.register(Dispatcher);
     const e = spawn('e1', Dispatcher);
     const tracker = e.components.get('dispatcher') as Dispatcher;
@@ -126,7 +126,7 @@ describe('dispatchEditorTool', () => {
     expect(tracker.calls[0].ctx.isHost).toBe(true);
   });
 
-  test('mesh add-surface routes to hostLocal.attachSurface, not onAction', () => {
+  test('mesh add-surface routes to hostLocal.attachSurface, not onEditorAction', () => {
     let calledWith: string | null = null;
     const item: EditorToolItem & { kind: 'button' } = {
       kind: 'button', id: 'add-surface', label: 'Add Surface', componentTypeId: 'mesh',
@@ -165,7 +165,7 @@ describe('dispatchEditorTool', () => {
     }
   });
 
-  test('mesh add-snap-markers routes to hostLocal.attachSnapPoints, not onAction', () => {
+  test('mesh add-snap-markers routes to hostLocal.attachSnapPoints, not onEditorAction', () => {
     let calledWith: string | null = null;
     const item: EditorToolItem & { kind: 'button' } = {
       kind: 'button', id: 'add-snap-markers', label: 'Add Snap Markers', componentTypeId: 'mesh',
@@ -227,7 +227,7 @@ describe('dispatchEditorTool', () => {
     expect(tracker.calls).toHaveLength(0);
   });
 
-  test('deps.notify fires after onAction dispatch', () => {
+  test('deps.notify fires after onEditorAction dispatch', () => {
     componentRegistry.register(Dispatcher);
     const e = spawn('e1', Dispatcher);
     const item: EditorToolItem = { kind: 'button', id: 'do-thing', label: 'X', componentTypeId: 'dispatcher' };

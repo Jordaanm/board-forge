@@ -93,7 +93,6 @@ export interface InvokeAction {
   entityId:        string;
   componentTypeId: string;
   actionId:        string;
-  args?:           object;
 }
 
 export interface HoldClaim {

@@ -10,9 +10,8 @@ import * as THREE from 'three';
 import {
   EntityComponent,
   type SpawnContext,
-  type MenuContext,
-  type MenuItem,
   type ActionContext,
+  type ActionDefinition,
 } from '../EntityComponent';
 import { type PropertyDef } from '../propertySchema';
 import { type Entity } from '../Entity';
@@ -120,12 +119,12 @@ export class HandComponent extends EntityComponent<HandState> {
   }
 
   // ── Context menu ───────────────────────────────────────────────────────
-  onContextMenu(_ctx: MenuContext): MenuItem[] {
-    return [{ kind: 'action', id: 'tidy-hand', label: 'Tidy hand' }];
+  getActions(_ctx: ActionContext): ActionDefinition[] {
+    return [{ name: 'tidy-hand', label: 'Tidy hand' }];
   }
 
-  onAction(actionId: string, _args: object | undefined, _ctx: ActionContext): void {
-    if (actionId === 'tidy-hand') this.arrangeContents();
+  onAction(name: string, _ctx: ActionContext): void {
+    if (name === 'tidy-hand') this.arrangeContents();
   }
 
   // ── Zone subscription handlers (host-only) ────────────────────────────

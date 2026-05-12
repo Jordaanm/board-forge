@@ -18,6 +18,7 @@ import { type DeckService } from './DeckService';
 import { type SceneHistoryService } from './SceneHistoryService';
 import { type HoldClaim, type HoldRelease, type InvokeAction, type RequestUpdate, type ApplyImpulse, type PlayCardToTable, type ReorderHand, type TweenIntoHand, type DrawFromDeck, type ShuffleDeck, type DealFromDeck, type SpreadDeck } from './wire';
 import { type ActionContext } from './EntityComponent';
+import { load as loadPreferences } from '../preferences/storage';
 import { PhysicsComponent } from './components/PhysicsComponent';
 import { TweenComponent } from './components/TweenComponent';
 import { ZoneComponent } from './components/ZoneComponent';
@@ -87,8 +88,10 @@ export class HostInputDispatcher {
     return true;
   }
 
-  // Slice #7 — guest clicks an entity's context-menu action. Host validates
-  // ownership, looks up the targeted component, runs `onAction(...)` on it.
+  // Guest-fired action (menu click or hotkey). Host validates ownership,
+  // looks up the targeted component, snapshots the host's local preferences
+  // (so guest-originated dispatches see consistent values), runs
+  // `onAction(name, ctx)` on it.
   handleInvokeAction(peerId: string, msg: InvokeAction): boolean {
     const entity = this.scene.getEntity(msg.entityId);
     if (!entity) return false;
@@ -96,8 +99,13 @@ export class HostInputDispatcher {
     if (!canManipulate({ peerSeat: senderSeat, isHost: false }, entity.owner)) return false;
     const comp = entity.components.get(msg.componentTypeId);
     if (!comp) return false;
-    const ctx: ActionContext = { recipientSeat: senderSeat, isHost: false, entity };
-    comp.onAction(msg.actionId, msg.args, ctx);
+    const ctx: ActionContext = {
+      recipientSeat: senderSeat,
+      isHost:        false,
+      entity,
+      preferences:   loadPreferences(),
+    };
+    comp.onAction(msg.actionId, ctx);
     return true;
   }
 

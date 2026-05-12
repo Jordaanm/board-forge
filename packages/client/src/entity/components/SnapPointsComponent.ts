@@ -116,7 +116,7 @@ export class SnapPointsComponent extends EntityComponent<SnapPointsState> {
     return items;
   }
 
-  onAction(actionId: string, args: object | undefined, _ctx: ActionContext): void {
+  onEditorAction(actionId: string, args: object | undefined, _ctx: ActionContext): void {
     if (actionId === 'add-point') {
       const next: SnapPoint = {
         id:           newElementId(),

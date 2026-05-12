@@ -13,6 +13,7 @@ import { AnchorLayout } from '../components/AnchorLayout';
 import { UIPanel } from '../components/UIPanel';
 import { HandPanel } from '../components/HandPanel';
 import { PreferencesTrigger } from '../components/PreferencesTrigger';
+import { load as loadPreferences } from '../preferences/storage';
 import { TOOL_CATALOGUE } from '../input/tools';
 import { type ContextMenuRequest, dispatchMenuAction } from '../input/ContextMenuController';
 import { type MenuItem } from '../entity/EntityComponent';
@@ -438,6 +439,7 @@ export function Room({ roomId, isHost }: Props) {
     const seat = getSelfSeatRef.current();
     const items = aggregateContextMenu(entity, {
       recipientSeat: seat, isHost, entity,
+      preferences:   loadPreferences(),
     });
     if (items.length === 0) return;
     setContextMenu({

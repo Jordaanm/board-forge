@@ -22,11 +22,11 @@ interface ValueState { v: number }
 class ValueComp extends EntityComponent<ValueState> {
   static typeId = 'value';
   applied: Partial<ValueState>[] = [];
-  invocations: Array<{ actionId: string; args?: object }> = [];
+  invocations: Array<{ name: string }> = [];
   onSpawn() {}
   onPropertiesChanged(p: Partial<ValueState>) { this.applied.push(p); }
-  onAction(actionId: string, args: object | undefined) {
-    this.invocations.push({ actionId, args });
+  onAction(name: string) {
+    this.invocations.push({ name });
   }
 }
 
@@ -140,10 +140,10 @@ describe('HostInputDispatcher.handleInvokeAction — slice #7', () => {
     PEERS.set('p1', 1);
     expect(dispatcher.handleInvokeAction('p1', {
       type: 'invoke-action', entityId: 'a', componentTypeId: 'value',
-      actionId: 'roll', args: { count: 2 },
+      actionId: 'roll',
     })).toBe(true);
     const tracker = e.components.get('value') as ValueComp;
-    expect(tracker.invocations).toEqual([{ actionId: 'roll', args: { count: 2 } }]);
+    expect(tracker.invocations).toEqual([{ name: 'roll' }]);
   });
 
   test('non-owner invocation is refused', () => {

@@ -12,6 +12,7 @@ import { type PhysicsWorld } from '../physics/PhysicsWorld';
 import { type ComponentPatch, type EntityFieldsPartial } from './wire';
 import { type InputEventPayload } from '../input/inputEvents';
 import type { EditorToolItem } from './editorTools';
+import { type Preferences } from '../preferences/types';
 
 export type ReplicationChannel = 'reliable' | 'unreliable';
 
@@ -90,6 +91,25 @@ export interface ActionContext {
   recipientSeat: SeatIndex | null;
   isHost:        boolean;
   entity:        Entity;
+  // Snapshot of user preferences at dispatch time. Components that need a
+  // pref value (e.g. `MeshComponent.onAction('rotate-cw')` reading
+  // `rotateAmount`) read it from here rather than calling loadPreferences()
+  // directly, so the action stays pure and the dispatcher controls when the
+  // snapshot is taken.
+  preferences:   Preferences;
+}
+
+// Pure declaration of a component-level action. Returned from
+// `EntityComponent.getActions(ctx)`. Both the context menu renderer and the
+// hotkey dispatcher consume this shape — no `args` field because actions
+// read everything they need from `ActionContext`.
+export interface ActionDefinition {
+  name:     string;
+  label:    string;
+  icon?:    string;
+  // Optional opt-out — defaults to true. When false the menu shows the row
+  // greyed out; the hotkey dispatcher skips it.
+  enabled?: boolean;
 }
 
 export type ComponentClass<T extends EntityComponent<any> = EntityComponent<any>> = {
@@ -119,17 +139,30 @@ export abstract class EntityComponent<TState extends object> {
   abstract onPropertiesChanged(changed: Partial<TState>): void;
 
   onDespawn            (_ctx: SpawnContext):                                                  void { }
-  onContextMenu        (_ctx: MenuContext):                                                   MenuItem[] { return []; }
+  // Pure actions surface — the context menu and the hotkey dispatcher both
+  // consume this. Return only the actions that are valid right now (use
+  // `ctx.entity.components.has(...)` to self-gate). No args carried — actions
+  // read everything from `ActionContext` at dispatch time.
+  getActions           (_ctx: ActionContext):                                                 ActionDefinition[] { return []; }
+  // Non-action menu surface — colorpickers, numeric inputs, submenus (deck
+  // draw/deal). The context menu renderer concatenates these after the
+  // pure-actions group; the hotkey dispatcher ignores them entirely.
+  getMenuControls      (_ctx: ActionContext):                                                 MenuItem[] { return []; }
   // Component-driven editor-panel tool aggregation. Each component returns a
   // flat list of buttons (or headings) to render in the host editor panel for
-  // the selected entity. Buttons dispatch through `onAction` like context-menu
-  // actions, but the panel is host-only so there's no invoke-action RPC path.
+  // the selected entity. Buttons dispatch through `onEditorAction`, separate
+  // from the menu/hotkey action path. The panel is host-only so there's no
+  // invoke-action RPC path.
   onEditorTools        (_ctx: MenuContext):                                                   EditorToolItem[] { return []; }
   onCollision          (_other: Entity, _event: CollisionEvent):                              void { }
   onParentChanged      (_newParentId: string | null, _oldParentId: string | null):            void { }
   onOwnerChanged       (_newOwner: SeatIndex | null, _oldOwner: SeatIndex | null):            void { }
   onIsContainedChanged (_isContained: boolean):                                               void { }
-  onAction             (_actionId: string, _args: object | undefined, _ctx: ActionContext):   void { }
+  onAction             (_name: string, _ctx: ActionContext):                                  void { }
+  // Editor-tool dispatch. Editor tools carry args (e.g. SnapPointsComponent's
+  // per-point pose edits target a specific point via `args.pointId`); the
+  // menu/hotkey action path does not.
+  onEditorAction       (_actionId: string, _args: object | undefined, _ctx: ActionContext):   void { }
 
   // Per-entity input lifecycle hooks (issue #3 of issues--interaction.md).
   // Subclasses override these to react to bus events without writing

@@ -8,6 +8,7 @@
 import { type Entity } from './Entity';
 import { type MenuContext, type ActionContext } from './EntityComponent';
 import { componentRegistry } from './ComponentRegistry';
+import { load as loadPreferences } from '../preferences/storage';
 
 export type EditorToolItem =
   | {
@@ -127,7 +128,12 @@ export function dispatchEditorTool(
   if (!item.componentTypeId || !deps.entity) return;
   const comp = deps.entity.components.get(item.componentTypeId);
   if (!comp) return;
-  const ctx: ActionContext = { recipientSeat: null, isHost: true, entity: deps.entity };
+  const ctx: ActionContext = {
+    recipientSeat: null,
+    isHost:        true,
+    entity:        deps.entity,
+    preferences:   loadPreferences(),
+  };
 
   let args: object | undefined;
   if (item.kind === 'number' || item.kind === 'boolean') {
@@ -135,6 +141,6 @@ export function dispatchEditorTool(
   } else {
     args = item.args;
   }
-  comp.onAction(item.id, args, ctx);
+  comp.onEditorAction(item.id, args, ctx);
   deps.notify?.();
 }

@@ -166,9 +166,12 @@ describe('MeshComponent — rotate actions', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
   });
 
-  test('context menu includes Rotate / Rotate Counter Clockwise items carrying rotateAmount from prefs', () => {
+  test('context menu includes Rotate / Rotate Counter Clockwise items', () => {
     const e = scene.spawn('card', ctx);
-    const items = aggregateContextMenu(e, { recipientSeat: 0, isHost: true, entity: e });
+    const items = aggregateContextMenu(e, {
+      recipientSeat: 0, isHost: true, entity: e,
+      preferences:   DEFAULT_PREFERENCES,
+    });
     const meshItems = items.filter(
       i => i.kind === 'action' && (i as { componentTypeId?: string }).componentTypeId === 'mesh',
     ) as Array<MenuItem & { kind: 'action' }>;
@@ -176,13 +179,14 @@ describe('MeshComponent — rotate actions', () => {
     const ccw = meshItems.find(i => i.id === 'rotate-ccw')!;
     expect(cw.label).toBe('Rotate');
     expect(ccw.label).toBe('Rotate Counter Clockwise');
-    expect(cw.args).toEqual({ amountDeg: DEFAULT_PREFERENCES.rotateAmount });
-    expect(ccw.args).toEqual({ amountDeg: DEFAULT_PREFERENCES.rotateAmount });
   });
 
   test('rotate items suppressed when a DiceComponent is attached', () => {
     const e = scene.spawn('die', ctx);
-    const items = aggregateContextMenu(e, { recipientSeat: 0, isHost: true, entity: e });
+    const items = aggregateContextMenu(e, {
+      recipientSeat: 0, isHost: true, entity: e,
+      preferences:   DEFAULT_PREFERENCES,
+    });
     const meshRotates = items.filter(
       i => i.kind === 'action'
         && (i as { componentTypeId?: string }).componentTypeId === 'mesh'
@@ -191,7 +195,7 @@ describe('MeshComponent — rotate actions', () => {
     expect(meshRotates).toEqual([]);
   });
 
-  test('rotate items omitted when the entity has no TweenComponent', () => {
+  test('rotate items omitted from getActions when the entity has no TweenComponent', () => {
     // prim:cube spawnable (token has tween; we hand-build an entity with no tween).
     const entity = new Entity({ id: 'mesh-only', type: 'thing', name: 'thing' });
     const transform = new TransformComponent();
@@ -203,18 +207,24 @@ describe('MeshComponent — rotate actions', () => {
       width: 1, height: 1, depth: 1,
     });
     entity.attachComponent(mesh);
-    const out = mesh.onContextMenu({ recipientSeat: 0, isHost: true, entity });
-    const ids = out.filter(i => i.kind === 'action').map(i => (i as { id: string }).id);
-    expect(ids).not.toContain('rotate-cw');
-    expect(ids).not.toContain('rotate-ccw');
+    const out = mesh.getActions({
+      recipientSeat: 0, isHost: true, entity,
+      preferences:   DEFAULT_PREFERENCES,
+    });
+    const names = out.map(d => d.name);
+    expect(names).not.toContain('rotate-cw');
+    expect(names).not.toContain('rotate-ccw');
   });
 
-  test('rotate-cw rotates clockwise about world +Y by amountDeg (negative angle)', () => {
+  test('rotate-cw rotates clockwise about world +Y by ctx.preferences.rotateAmount (negative angle)', () => {
     const e = scene.spawn('card', ctx);
     const mesh      = e.getComponent(MeshComponent)!;
     const transform = e.getComponent(TransformComponent)!;
-    const actionCtx: ActionContext = { recipientSeat: null, isHost: true, entity: e };
-    mesh.onAction('rotate-cw', { amountDeg: 90 }, actionCtx);
+    const actionCtx: ActionContext = {
+      recipientSeat: null, isHost: true, entity: e,
+      preferences:   { ...DEFAULT_PREFERENCES, rotateAmount: 90 },
+    };
+    mesh.onAction('rotate-cw', actionCtx);
     // Tween snaps to its target via World during snapshot; force it here.
     e.getComponent(TweenComponent)!.snapToTarget();
     const [qx, qy, qz, qw] = transform.state.rotation;
@@ -230,26 +240,17 @@ describe('MeshComponent — rotate actions', () => {
     const e = scene.spawn('card', ctx);
     const mesh      = e.getComponent(MeshComponent)!;
     const transform = e.getComponent(TransformComponent)!;
-    const actionCtx: ActionContext = { recipientSeat: null, isHost: true, entity: e };
-    mesh.onAction('rotate-ccw', { amountDeg: 90 }, actionCtx);
+    const actionCtx: ActionContext = {
+      recipientSeat: null, isHost: true, entity: e,
+      preferences:   { ...DEFAULT_PREFERENCES, rotateAmount: 90 },
+    };
+    mesh.onAction('rotate-ccw', actionCtx);
     e.getComponent(TweenComponent)!.snapToTarget();
     const [qx, qy, qz, qw] = transform.state.rotation;
     const v = new THREE.Vector3(1, 0, 0).applyQuaternion(new THREE.Quaternion(qx, qy, qz, qw));
     expect(v.x).toBeCloseTo( 0, 5);
     expect(v.y).toBeCloseTo( 0, 5);
     expect(v.z).toBeCloseTo(-1, 5);
-  });
-
-  test('rotate ignored when args.amountDeg is missing or non-numeric', () => {
-    const e = scene.spawn('card', ctx);
-    const mesh      = e.getComponent(MeshComponent)!;
-    const transform = e.getComponent(TransformComponent)!;
-    const before    = [...transform.state.rotation] as [number, number, number, number];
-    const actionCtx: ActionContext = { recipientSeat: null, isHost: true, entity: e };
-    mesh.onAction('rotate-cw', undefined,                actionCtx);
-    mesh.onAction('rotate-cw', { amountDeg: 'huh' as unknown as number }, actionCtx);
-    expect(e.getComponent(TweenComponent)!.isActive()).toBe(false);
-    expect(transform.state.rotation).toEqual(before);
   });
 });
 

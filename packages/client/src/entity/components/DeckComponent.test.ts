@@ -1,7 +1,8 @@
 import { describe, test, expect, beforeEach } from 'vitest';
 import * as THREE from 'three';
 import { SceneImpl } from '../Scene';
-import { type SpawnContext } from '../EntityComponent';
+import { type SpawnContext, type MenuItem } from '../EntityComponent';
+import { DEFAULT_PREFERENCES } from '../../preferences/types';
 import { registerCorePrimitives } from '../spawnables';
 import { PhysicsWorld } from '../../physics/PhysicsWorld';
 import { CardComponent } from './CardComponent';
@@ -69,16 +70,17 @@ describe('DeckComponent — patches mesh on cards change', () => {
 describe('DeckComponent — context menu', () => {
   test('returns "Draw" action greyed out when caller has no main hand, plus Shuffle', () => {
     const deck = scene.spawn('deck', ctx);
-    const items = deck.getComponent(DeckComponent)!.onContextMenu({
+    const items = deck.getComponent(DeckComponent)!.getMenuControls({
       recipientSeat: 0, isHost: true, entity: deck,
+      preferences:   DEFAULT_PREFERENCES,
     });
-    const draw = items.find(i => i.kind === 'action' && (i as { id: string }).id === 'draw') as
-      | { kind: string; id: string; label: string; disabled?: boolean }
+    const draw = items.find((i: MenuItem) => i.kind === 'action' && i.id === 'draw') as
+      | (MenuItem & { kind: 'action' })
       | undefined;
     expect(draw).toBeDefined();
     expect(draw!.label).toBe('Draw');
     expect(draw!.disabled).toBe(true);
-    expect(items.some(i => i.kind === 'action' && (i as { id: string }).id === 'shuffle')).toBe(true);
+    expect(items.some((i: MenuItem) => i.kind === 'action' && i.id === 'shuffle')).toBe(true);
   });
 
   test('"Draw" is a submenu (not a disabled action) when caller has a main hand', () => {
@@ -86,33 +88,36 @@ describe('DeckComponent — context menu', () => {
     hand.owner = 0;
     hand.getComponent(HandComponent)!.setState({ isMainHand: true });
     const deck = scene.spawn('deck', ctx);
-    const items = deck.getComponent(DeckComponent)!.onContextMenu({
+    const items = deck.getComponent(DeckComponent)!.getMenuControls({
       recipientSeat: 0, isHost: true, entity: deck,
+      preferences:   DEFAULT_PREFERENCES,
     });
-    const drawSub = items.find(i => i.kind === 'submenu' && (i as { label: string }).label === 'Draw');
+    const drawSub = items.find((i: MenuItem) => i.kind === 'submenu' && i.label === 'Draw');
     expect(drawSub).toBeDefined();
-    const sub = drawSub as { kind: string; label: string; items: Array<{ kind: string; id: string; label: string }> };
-    expect(sub.items.map(i => i.label)).toEqual(['1', '2', '3', '5', 'Other…']);
+    const sub = drawSub as MenuItem & { kind: 'submenu' };
+    expect(sub.items.map(i => (i as { label: string }).label)).toEqual(['1', '2', '3', '5', 'Other…']);
   });
 
   test('"Draw" is greyed out when recipientSeat is null', () => {
     const deck = scene.spawn('deck', ctx);
-    const items = deck.getComponent(DeckComponent)!.onContextMenu({
+    const items = deck.getComponent(DeckComponent)!.getMenuControls({
       recipientSeat: null, isHost: true, entity: deck,
+      preferences:   DEFAULT_PREFERENCES,
     });
-    const draw = items.find(i => i.kind === 'action' && (i as { id: string }).id === 'draw') as
-      | { disabled?: boolean }
+    const draw = items.find((i: MenuItem) => i.kind === 'action' && i.id === 'draw') as
+      | (MenuItem & { kind: 'action' })
       | undefined;
     expect(draw?.disabled).toBe(true);
   });
 
   test('always includes a "Shuffle" action', () => {
     const deck = scene.spawn('deck', ctx);
-    const items = deck.getComponent(DeckComponent)!.onContextMenu({
+    const items = deck.getComponent(DeckComponent)!.getMenuControls({
       recipientSeat: null, isHost: true, entity: deck,
+      preferences:   DEFAULT_PREFERENCES,
     });
-    const shuf = items.find(i => i.kind === 'action' && (i as { id: string }).id === 'shuffle') as
-      | { label: string }
+    const shuf = items.find((i: MenuItem) => i.kind === 'action' && i.id === 'shuffle') as
+      | (MenuItem & { kind: 'action' })
       | undefined;
     expect(shuf?.label).toBe('Shuffle');
   });

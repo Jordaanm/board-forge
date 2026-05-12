@@ -10,9 +10,8 @@ import {
   type SpawnContext,
   type CollisionEvent,
   type EntityScene,
-  type MenuContext,
-  type MenuItem,
   type ActionContext,
+  type ActionDefinition,
 } from '../EntityComponent';
 import { type Entity } from '../Entity';
 import { TransformComponent } from './TransformComponent';
@@ -195,19 +194,18 @@ export class PhysicsComponent extends EntityComponent<PhysicsState> {
   }
 
   // ── Context menu ───────────────────────────────────────────────────────
-  // Lock toggle. Authority is enforced by dispatchMenuAction (host) and
+  // Lock toggle. Authority is enforced by dispatchAction (host) and
   // HostInputDispatcher.handleInvokeAction (guest RPC) — both gate on
   // canManipulate, so the action body can flip state unconditionally.
-  onContextMenu(_ctx: MenuContext): MenuItem[] {
+  getActions(_ctx: ActionContext): ActionDefinition[] {
     return [{
-      kind:  'action',
-      id:    'toggle-lock',
+      name:  'lock-toggle',
       label: this.state.isLocked ? 'Unlock movement' : 'Lock movement',
     }];
   }
 
-  onAction(actionId: string, _args: object | undefined, _ctx: ActionContext): void {
-    if (actionId === 'toggle-lock') {
+  onAction(name: string, _ctx: ActionContext): void {
+    if (name === 'lock-toggle') {
       this.setState({ isLocked: !this.state.isLocked } as Partial<PhysicsState>);
     }
   }

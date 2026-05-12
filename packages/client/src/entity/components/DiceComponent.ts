@@ -6,9 +6,9 @@
 import {
   EntityComponent,
   type SpawnContext,
-  type MenuContext,
   type MenuItem,
   type ActionContext,
+  type ActionDefinition,
 } from '../EntityComponent';
 import { TransformComponent } from './TransformComponent';
 import { PhysicsComponent } from './PhysicsComponent';
@@ -49,20 +49,27 @@ export class DiceComponent extends EntityComponent<DiceState> {
 
   onPropertiesChanged(_changed: Partial<DiceState>): void { /* state is immutable */ }
 
-  onContextMenu(_ctx: MenuContext): MenuItem[] {
-    const value = this.entity.getComponent(ValueComponent)?.state.value ?? '?';
+  getActions(_ctx: ActionContext): ActionDefinition[] {
     return [
-      { kind: 'action', id: 'roll',       label: 'Roll' },
-      { kind: 'action', id: 'rotate-cw',  label: 'Rotate' },
-      { kind: 'action', id: 'rotate-ccw', label: 'Rotate Counter Clockwise' },
-      { kind: 'action', id: 'value',      label: `Value: ${value}`, disabled: true },
+      { name: 'roll',       label: 'Roll' },
+      { name: 'rotate-cw',  label: 'Rotate' },
+      { name: 'rotate-ccw', label: 'Rotate Counter Clockwise' },
     ];
   }
 
-  onAction(actionId: string, _args: object | undefined, _ctx: ActionContext): void {
-    if (actionId === 'roll')        { this.roll();           return; }
-    if (actionId === 'rotate-cw')   { this.stepValue(+1);    return; }
-    if (actionId === 'rotate-ccw')  { this.stepValue(-1);    return; }
+  // Read-only "Value: N" surfaces the current face on the menu without being
+  // an action — lives on the menu-controls track as a disabled action item.
+  getMenuControls(_ctx: ActionContext): MenuItem[] {
+    const value = this.entity.getComponent(ValueComponent)?.state.value ?? '?';
+    return [
+      { kind: 'action', id: 'value', label: `Value: ${value}`, disabled: true },
+    ];
+  }
+
+  onAction(name: string, _ctx: ActionContext): void {
+    if (name === 'roll')        { this.roll();           return; }
+    if (name === 'rotate-cw')   { this.stepValue(+1);    return; }
+    if (name === 'rotate-ccw')  { this.stepValue(-1);    return; }
   }
 
   // Increment / decrement the die's face value with wraparound across

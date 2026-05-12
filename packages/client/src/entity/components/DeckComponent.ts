@@ -10,8 +10,8 @@
 import {
   EntityComponent,
   type SpawnContext,
-  type MenuContext,
   type MenuItem,
+  type ActionContext,
 } from '../EntityComponent';
 import { MeshComponent } from './MeshComponent';
 import { PhysicsComponent } from './PhysicsComponent';
@@ -44,7 +44,11 @@ export class DeckComponent extends EntityComponent<DeckState> {
     }
   }
 
-  onContextMenu(ctx: MenuContext): MenuItem[] {
+  // Deck items use submenus and args (draw/deal counts), so they don't fit
+  // the pure-action shape and live on the menu-controls track. The
+  // `draw-from-deck` / `shuffle-deck` / `deal-from-deck` / `spread-deck`
+  // RPCs short-circuit in `dispatchMenuAction` before reaching `onAction`.
+  getMenuControls(ctx: ActionContext): MenuItem[] {
     const handId = ctx.recipientSeat !== null
       ? findMainHandId(this.entity.scene, ctx.recipientSeat)
       : null;

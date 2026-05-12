@@ -2,6 +2,7 @@ import { describe, test, expect, beforeEach } from 'vitest';
 import * as THREE from 'three';
 import { SceneImpl } from '../Scene';
 import { type SpawnContext } from '../EntityComponent';
+import { DEFAULT_PREFERENCES } from '../../preferences/types';
 import { TransformComponent } from './TransformComponent';
 import { SnapPointsComponent, type SnapPoint } from './SnapPointsComponent';
 import { type EditorToolItem } from '../editorTools';
@@ -226,7 +227,10 @@ describe('SnapPointsComponent — editor numeric form', () => {
     const e = scene.spawn('snap-marker', ctx);
     const comp = e.getComponent(SnapPointsComponent)!;
     const before = comp.state.points.length;
-    comp.onAction('add-point', undefined, { recipientSeat: null, isHost: true, entity: e });
+    comp.onEditorAction('add-point', undefined, {
+      recipientSeat: null, isHost: true, entity: e,
+      preferences:   DEFAULT_PREFERENCES,
+    });
     expect(comp.state.points.length).toBe(before + 1);
     const added = comp.state.points[comp.state.points.length - 1];
     expect(added.localPos).toEqual([0, 0, 0]);
@@ -240,7 +244,10 @@ describe('SnapPointsComponent — editor numeric form', () => {
     const e = scene.spawn('snap-marker', ctx);
     const comp = e.getComponent(SnapPointsComponent)!;
     comp.setState({ points: [pt({ id: 'a' }), pt({ id: 'b' })] });
-    comp.onAction('delete-point', { pointId: 'a' }, { recipientSeat: null, isHost: true, entity: e });
+    comp.onEditorAction('delete-point', { pointId: 'a' }, {
+      recipientSeat: null, isHost: true, entity: e,
+      preferences:   DEFAULT_PREFERENCES,
+    });
     expect(comp.state.points.map(p => p.id)).toEqual(['b']);
   });
 
@@ -248,10 +255,13 @@ describe('SnapPointsComponent — editor numeric form', () => {
     const e = scene.spawn('snap-marker', ctx);
     const comp = e.getComponent(SnapPointsComponent)!;
     comp.setState({ points: [pt({ id: 'a', localPos: [0, 0, 0] })] });
-    const c = { recipientSeat: null, isHost: true, entity: e };
-    comp.onAction('edit-x', { pointId: 'a', value: 1.5 }, c);
-    comp.onAction('edit-y', { pointId: 'a', value: 2.5 }, c);
-    comp.onAction('edit-z', { pointId: 'a', value: 3.5 }, c);
+    const c = {
+      recipientSeat: null, isHost: true, entity: e,
+      preferences:   DEFAULT_PREFERENCES,
+    };
+    comp.onEditorAction('edit-x', { pointId: 'a', value: 1.5 }, c);
+    comp.onEditorAction('edit-y', { pointId: 'a', value: 2.5 }, c);
+    comp.onEditorAction('edit-z', { pointId: 'a', value: 3.5 }, c);
     expect(comp.state.points[0].localPos).toEqual([1.5, 2.5, 3.5]);
   });
 
@@ -259,11 +269,14 @@ describe('SnapPointsComponent — editor numeric form', () => {
     const e = scene.spawn('snap-marker', ctx);
     const comp = e.getComponent(SnapPointsComponent)!;
     comp.setState({ points: [pt({ id: 'a' })] });
-    const c = { recipientSeat: null, isHost: true, entity: e };
-    comp.onAction('edit-yaw',    { pointId: 'a', value: 1.2 },  c);
-    comp.onAction('edit-radius', { pointId: 'a', value: 0.9 },  c);
-    comp.onAction('edit-rot',    { pointId: 'a', value: true }, c);
-    comp.onAction('edit-snap-y', { pointId: 'a', value: true }, c);
+    const c = {
+      recipientSeat: null, isHost: true, entity: e,
+      preferences:   DEFAULT_PREFERENCES,
+    };
+    comp.onEditorAction('edit-yaw',    { pointId: 'a', value: 1.2 },  c);
+    comp.onEditorAction('edit-radius', { pointId: 'a', value: 0.9 },  c);
+    comp.onEditorAction('edit-rot',    { pointId: 'a', value: true }, c);
+    comp.onEditorAction('edit-snap-y', { pointId: 'a', value: true }, c);
     expect(comp.state.points[0].localYaw).toBe(1.2);
     expect(comp.state.points[0].radius).toBe(0.9);
     expect(comp.state.points[0].snapRotation).toBe(true);
@@ -287,7 +300,10 @@ describe('SnapPointsComponent — editor numeric form', () => {
     const e = scene.spawn('snap-marker', ctx);
     const comp = e.getComponent(SnapPointsComponent)!;
     comp.setState({ points: [pt({ id: 'a', radius: 0.5 })] });
-    comp.onAction('edit-radius', { pointId: 'a', value: -1 }, { recipientSeat: null, isHost: true, entity: e });
+    comp.onEditorAction('edit-radius', { pointId: 'a', value: -1 }, {
+      recipientSeat: null, isHost: true, entity: e,
+      preferences:   DEFAULT_PREFERENCES,
+    });
     expect(comp.state.points[0].radius).toBe(0);
   });
 
@@ -296,7 +312,10 @@ describe('SnapPointsComponent — editor numeric form', () => {
     const comp = e.getComponent(SnapPointsComponent)!;
     comp.setState({ points: [pt({ id: 'a', localPos: [0, 0, 0] })] });
     const before = comp.state.points[0];
-    comp.onAction('edit-x', { pointId: 'nope', value: 9 }, { recipientSeat: null, isHost: true, entity: e });
+    comp.onEditorAction('edit-x', { pointId: 'nope', value: 9 }, {
+      recipientSeat: null, isHost: true, entity: e,
+      preferences:   DEFAULT_PREFERENCES,
+    });
     expect(comp.state.points[0]).toEqual(before);
   });
 
@@ -305,7 +324,10 @@ describe('SnapPointsComponent — editor numeric form', () => {
     const comp = e.getComponent(SnapPointsComponent)!;
     comp.setState({ points: [pt({ id: 'a', snapRotation: false })] });
     expect((getGroup(comp).children[0] as THREE.Group).children.length).toBe(1);
-    comp.onAction('edit-rot', { pointId: 'a', value: true }, { recipientSeat: null, isHost: true, entity: e });
+    comp.onEditorAction('edit-rot', { pointId: 'a', value: true }, {
+      recipientSeat: null, isHost: true, entity: e,
+      preferences:   DEFAULT_PREFERENCES,
+    });
     expect((getGroup(comp).children[0] as THREE.Group).children.length).toBe(2);
   });
 });

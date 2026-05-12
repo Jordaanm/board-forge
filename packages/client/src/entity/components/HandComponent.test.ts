@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { SceneImpl } from '../Scene';
 import { type SpawnContext } from '../EntityComponent';
+import { DEFAULT_PREFERENCES } from '../../preferences/types';
 import { type Entity } from '../Entity';
 import { TransformComponent } from './TransformComponent';
 import { PhysicsComponent } from './PhysicsComponent';
@@ -263,18 +264,22 @@ describe('HandComponent — Tidy hand action', () => {
 
     // Tidy hand re-tweens.
     const handComp = hand.getComponent(HandComponent)!;
-    handComp.onAction('tidy-hand', undefined, { recipientSeat: 0, isHost: true, entity: hand });
+    handComp.onAction('tidy-hand', {
+      recipientSeat: 0, isHost: true, entity: hand,
+      preferences:   DEFAULT_PREFERENCES,
+    });
     expect(card.getComponent(TweenComponent)!.isActive()).toBe(true);
     card.getComponent(TweenComponent)!.snapToTarget();
     expect(card.getComponent(TransformComponent)!.state.position[0]).toBeCloseTo(0, 5);
   });
 
-  test('onContextMenu surfaces a Tidy hand action item', () => {
+  test('getActions surfaces a Tidy hand action', () => {
     const hand = scene.spawn('hand', ctx);
-    const items = hand.getComponent(HandComponent)!.onContextMenu({
+    const defs = hand.getComponent(HandComponent)!.getActions({
       recipientSeat: 0, isHost: true, entity: hand,
+      preferences:   DEFAULT_PREFERENCES,
     });
-    expect(items).toEqual([{ kind: 'action', id: 'tidy-hand', label: 'Tidy hand' }]);
+    expect(defs).toEqual([{ name: 'tidy-hand', label: 'Tidy hand' }]);
   });
 });
 
