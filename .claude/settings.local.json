@@ -62,7 +62,18 @@
       "Bash(grep -i \"\\\\.tsx\\\\|\\\\.ts$\")",
       "Bash(Get-ChildItem -Force)",
       "Bash(grep -E \"\\\\.\\(ts|tsx|js|vue\\)$\")",
-      "Bash(powershell -NoProfile -Command \"\\(Get-Content packages/client/src/entity/editorTools.test.ts -Raw\\) -replace 'hostLocal: \\\\{ attachSurface: \\\\\\(\\\\\\) => \\\\{\\\\}, attachElement: \\\\\\(\\\\\\) => \\\\{\\\\} \\\\}', 'hostLocal: { attachSurface: \\(\\) => {}, attachElement: \\(\\) => {}, attachSnapPoints: \\(\\) => {} }' | Set-Content -Encoding utf8 packages/client/src/entity/editorTools.test.ts\")"
+      "Bash(powershell -NoProfile -Command \"\\(Get-Content packages/client/src/entity/editorTools.test.ts -Raw\\) -replace 'hostLocal: \\\\{ attachSurface: \\\\\\(\\\\\\) => \\\\{\\\\}, attachElement: \\\\\\(\\\\\\) => \\\\{\\\\} \\\\}', 'hostLocal: { attachSurface: \\(\\) => {}, attachElement: \\(\\) => {}, attachSnapPoints: \\(\\) => {} }' | Set-Content -Encoding utf8 packages/client/src/entity/editorTools.test.ts\")",
+      "Bash(Get-ChildItem -Path \"d:\\\\dev\\\\virtual-table\" -Force)",
+      "Bash(Select-Object Name, FullName)",
+      "Bash(Format-Table -AutoSize)",
+      "PowerShell(Push-Location packages/client; npx tsc --noEmit; $code = $LASTEXITCODE; Pop-Location; \"exit=$code\")",
+      "PowerShell(Get-Location; npx tsc --noEmit; \"exit=$LASTEXITCODE\")",
+      "PowerShell(git add src/App.tsx src/pages/Room.tsx src/components/PreferencesModal.tsx src/components/PreferencesTrigger.tsx src/preferences)",
+      "PowerShell(npx tsc --noEmit; \"exit=$LASTEXITCODE\")",
+      "PowerShell($pwd.Path)",
+      "PowerShell(Push-Location packages/client; npx tsc --noEmit; $code=$LASTEXITCODE; Pop-Location; \"exit=$code\")",
+      "PowerShell(git add packages/client/src/components/PreferencesModal.tsx packages/client/src/preferences/PreferencesContext.test.tsx)",
+      "Bash(xargs basename -a)"
     ]
   }
 }

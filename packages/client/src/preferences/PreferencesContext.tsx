@@ -1,17 +1,17 @@
 import { createContext, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { load, save } from './storage';
-import { DEFAULT_HOTKEYS, DEFAULT_PREFERENCES, type DarkMode, type HotkeyMap, type Preferences, type RotateAmount } from './types';
+import { DEFAULT_HOTKEYS, DEFAULT_PREFERENCES, type ActionName, type DarkMode, type HotkeyMap, type Preferences, type RotateAmount } from './types';
 
 export interface PreferencesContextValue {
   darkMode:        DarkMode;
   rotateAmount:    RotateAmount;
-  // Read-only this pass — no setter. The hotkey-remapping UI is out of scope
-  // for the current PRD (planning/prd--hotkeys.md § Out of Scope); landing the
-  // schema lets the HotkeyDispatcher (issue #3) read bindings cleanly.
   hotkeys:         HotkeyMap;
   resolvedTheme:   'light' | 'dark';
   setDarkMode:     (mode: DarkMode) => void;
   setRotateAmount: (amount: RotateAmount) => void;
+  // `key` is a lower-case single char, or `''` to unbind. Any conflicting
+  // binding on a different action is cleared (no swap).
+  setHotkey:       (action: ActionName, key: string) => void;
   reset:           () => void;
 }
 
@@ -60,6 +60,23 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const setHotkey = useCallback((action: ActionName, key: string) => {
+    const normalised = key === '' ? '' : key.toLowerCase();
+    if (normalised !== '' && normalised.length !== 1) return;
+    setPrefs(prev => {
+      const hotkeys: HotkeyMap = { ...prev.hotkeys };
+      if (normalised !== '') {
+        for (const name of Object.keys(hotkeys) as ActionName[]) {
+          if (name !== action && hotkeys[name] === normalised) hotkeys[name] = '';
+        }
+      }
+      hotkeys[action] = normalised;
+      const next = { ...prev, hotkeys };
+      save(next);
+      return next;
+    });
+  }, []);
+
   const reset = useCallback(() => {
     const next: Preferences = { ...DEFAULT_PREFERENCES, hotkeys: { ...DEFAULT_HOTKEYS } };
     save(next);
@@ -73,8 +90,9 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     resolvedTheme: deriveResolvedTheme(prefs.darkMode, systemTheme),
     setDarkMode,
     setRotateAmount,
+    setHotkey,
     reset,
-  }), [prefs.darkMode, prefs.rotateAmount, prefs.hotkeys, systemTheme, setDarkMode, setRotateAmount, reset]);
+  }), [prefs.darkMode, prefs.rotateAmount, prefs.hotkeys, systemTheme, setDarkMode, setRotateAmount, setHotkey, reset]);
 
   return (
     <PreferencesContext.Provider value={value}>

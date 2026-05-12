@@ -15,6 +15,14 @@ export const ACTION_NAMES: readonly ActionName[] = [
   'flip', 'rotate-cw', 'rotate-ccw', 'lock-toggle', 'roll',
 ];
 
+export const ACTION_LABELS: Record<ActionName, string> = {
+  'flip':        'Flip',
+  'rotate-cw':   'Rotate CW',
+  'rotate-ccw':  'Rotate CCW',
+  'lock-toggle': 'Toggle Lock',
+  'roll':        'Roll',
+};
+
 export type HotkeyMap = Record<ActionName, string>;
 
 export interface Preferences {
