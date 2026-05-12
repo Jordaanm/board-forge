@@ -106,6 +106,28 @@ describe('PreferencesProvider / usePreferences', () => {
     expect(JSON.parse(raw!)).toMatchObject({ version: 1, darkMode: 'dark' });
   });
 
+  test('setRotateAmount mutates state and persists', () => {
+    const probe: Probe = { current: null };
+    mount(probe);
+    act(() => { probe.current!.setRotateAmount(90); });
+    expect(probe.current?.rotateAmount).toBe(90);
+    const raw = localStorage.getItem(STORAGE_KEY);
+    expect(raw).not.toBeNull();
+    expect(JSON.parse(raw!)).toMatchObject({ version: 1, rotateAmount: 90 });
+  });
+
+  test('reset() reverts rotateAmount along with darkMode', () => {
+    const probe: Probe = { current: null };
+    mount(probe);
+    act(() => { probe.current!.setDarkMode('dark'); });
+    act(() => { probe.current!.setRotateAmount(180); });
+    expect(probe.current?.darkMode).toBe('dark');
+    expect(probe.current?.rotateAmount).toBe(180);
+    act(() => { probe.current!.reset(); });
+    expect(probe.current?.darkMode).toBe(DEFAULT_PREFERENCES.darkMode);
+    expect(probe.current?.rotateAmount).toBe(DEFAULT_PREFERENCES.rotateAmount);
+  });
+
   test('reset() restores both fields to defaults and writes', () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
       version: 1, darkMode: 'dark', rotateAmount: 180,

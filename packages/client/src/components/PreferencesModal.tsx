@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { usePreferences } from '../preferences/usePreferences';
-import { type DarkMode } from '../preferences/types';
+import { ROTATE_AMOUNT_VALUES, type DarkMode, type RotateAmount } from '../preferences/types';
 import { useAnchorTarget } from './AnchorLayout';
 
 interface Props {
@@ -113,9 +113,30 @@ const DARK_MODE_OPTIONS: { value: DarkMode; label: string }[] = [
   { value: 'dark',   label: 'Dark' },
 ];
 
+const CHIP_ROW: React.CSSProperties = {
+  display: 'flex',
+  gap:     6,
+  flexWrap: 'wrap',
+};
+
+function chipStyle(active: boolean): React.CSSProperties {
+  return {
+    background:   active ? 'rgba(80,140,220,0.35)' : 'rgba(0,0,0,0.3)',
+    color:        active ? '#fff' : '#cfcfcf',
+    border:       active ? '1px solid rgba(120,170,240,0.6)' : '1px solid rgba(255,255,255,0.2)',
+    padding:      '6px 12px',
+    borderRadius: 16,
+    cursor:       'pointer',
+    fontSize:     13,
+    fontFamily:   'sans-serif',
+    fontWeight:   active ? 600 : 400,
+    minWidth:     52,
+  };
+}
+
 export function PreferencesModal({ open, onOpenChange }: Props) {
   const centerAnchor = useAnchorTarget('center');
-  const { darkMode, setDarkMode, reset } = usePreferences();
+  const { darkMode, setDarkMode, rotateAmount, setRotateAmount, reset } = usePreferences();
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -143,6 +164,24 @@ export function PreferencesModal({ open, onOpenChange }: Props) {
                     onClick={() => setDarkMode(opt.value)}
                   >
                     {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div style={FIELD_LABEL}>Rotate Amount</div>
+              <div style={CHIP_ROW} role="radiogroup" aria-label="Rotate Amount">
+                {ROTATE_AMOUNT_VALUES.map((value: RotateAmount) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={rotateAmount === value}
+                    style={chipStyle(rotateAmount === value)}
+                    onClick={() => setRotateAmount(value)}
+                  >
+                    {value}°
                   </button>
                 ))}
               </div>
