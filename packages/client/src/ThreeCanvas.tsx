@@ -23,6 +23,7 @@ import { ToolDispatcher, TOOL_CATALOGUE, type Tool } from './input/tools';
 import { GrabTool } from './input/tools/GrabTool';
 import { ContextMenuController } from './input/ContextMenuController';
 import { InputDispatcher } from './input/InputDispatcher';
+import { HotkeyDispatcher } from './input/HotkeyDispatcher';
 import { CursorTracker } from './cursor/CursorTracker';
 import { CursorOverlay } from './cursor/CursorOverlay';
 import { PingOverlay } from './cursor/PingOverlay';
@@ -48,6 +49,7 @@ interface Props {
   onPeerLeftRef:       MutableRefObject<(peerId: string) => void>;
   onPeerJoinedRef:     MutableRefObject<(peerId: string) => void>;
   onContextMenuRef:    MutableRefObject<(req: ContextMenuRequest) => void>;
+  isMenuOpenRef:       MutableRefObject<() => boolean>;
   freeCameraRef:       MutableRefObject<(on: boolean) => void>;
   onSelectRef:         MutableRefObject<(id: string | null) => void>;
   setHighlightRef:     MutableRefObject<(id: string | null) => void>;
@@ -71,6 +73,7 @@ export function ThreeCanvas({
   isHost, sendRef, sendToRef, getTargetsRef, getSelfSeatRef, getSelfPeerIdRef, getPeerSeatRef,
   onMsgRef, onPeerLeftRef, onPeerJoinedRef,
   onContextMenuRef,
+  isMenuOpenRef,
   freeCameraRef,
   onSelectRef, setHighlightRef, setActiveToolRef, getActiveToolRef,
   setShowAllZonesRef,
@@ -297,6 +300,25 @@ export function ThreeCanvas({
       (req) => onContextMenuRef.current(req),
     );
 
+    // Canvas needs a tabIndex to receive keydown events. Also focus on
+    // pointerdown so a click anywhere on the canvas (re-)claims keyboard
+    // focus — natural transition back from chat / sidebar inputs.
+    renderer.domElement.tabIndex = 0;
+    renderer.domElement.style.outline = 'none';
+    renderer.domElement.focus();
+    const focusOnDown = () => renderer.domElement.focus();
+    renderer.domElement.addEventListener('pointerdown', focusOnDown);
+
+    const hotkeyDispatcher = new HotkeyDispatcher({
+      world,
+      element:      renderer.domElement,
+      isHost,
+      getSelfSeat:  () => getSelfSeatRef.current(),
+      getHoveredId: () => inputDispatcher.getHoveredId(),
+      isMenuOpen:   () => isMenuOpenRef.current(),
+      send:         (msg) => sendRef.current(msg),
+    });
+
     // ── Inbound message router ──────────────────────────────────────────
     // Cursor traffic stays here (not a SceneMessage). Everything else is
     // forwarded into worldTransport so World's inbound dispatch handles it.
@@ -400,6 +422,8 @@ export function ThreeCanvas({
       cancelAnimationFrame(animId);
       window.removeEventListener('resize', onResize);
       renderer.domElement.removeEventListener('pointermove', onCursorMove);
+      renderer.domElement.removeEventListener('pointerdown', focusOnDown);
+      hotkeyDispatcher.dispose();
       onSceneReady?.(null);
       unsubscribePing();
       unsubscribeSnd();
@@ -432,6 +456,7 @@ export function ThreeCanvas({
     isHost, sendRef, sendToRef, getTargetsRef, getSelfSeatRef, getSelfPeerIdRef, getPeerSeatRef,
     onMsgRef, onPeerLeftRef, onPeerJoinedRef,
     onContextMenuRef,
+    isMenuOpenRef,
     freeCameraRef,
     onSelectRef, setHighlightRef, setActiveToolRef, getActiveToolRef,
     setShowAllZonesRef, setShowSnapPointsRef, setHandViewRef,

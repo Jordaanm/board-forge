@@ -130,6 +130,13 @@ export class InputDispatcher {
     this.deps.world.fireInputEvent(entity, eventName, payload);
   }
 
+  // Currently-hovered entity id, or null when the cursor is over no eligible
+  // entity. Read by sibling input observers (e.g. HotkeyDispatcher — issue
+  // #3 of issues--hotkeys.md) so they can target whatever the cursor is on.
+  getHoveredId(): string | null {
+    return this.hoveredId;
+  }
+
   // Per-frame tick — re-raycasts from the last pointer position and fires
   // hover-start / hover-end on transitions, plus hover-move (issue #5 of
   // issues--ui-surface.md) when the target is unchanged but worldHit / uv

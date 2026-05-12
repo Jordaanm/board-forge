@@ -83,6 +83,10 @@ export function Room({ roomId, isHost }: Props) {
   const onPeerLeftRef      = useRef<(peerId: string) => void>(noop);
   const onPeerJoinedRef    = useRef<(peerId: string) => void>(noop);
   const onContextMenuRef   = useRef<(req: ContextMenuRequest) => void>(noop);
+  // Hot-keys yield while the React context menu is open (issue #3 of
+  // issues--hotkeys.md). Ref re-assigned each render below so the canvas
+  // effect sees the latest open-state without re-running.
+  const isMenuOpenRef      = useRef<() => boolean>(() => false);
   const freeCameraRef      = useRef<(on: boolean) => void>(noop);
   const onSelectRef        = useRef<(id: string | null) => void>(noop);
   const setHighlightRef    = useRef<(id: string | null) => void>(noop);
@@ -100,6 +104,7 @@ export function Room({ roomId, isHost }: Props) {
 
   // Set every render — fine, it's just a ref assignment.
   onContextMenuRef.current   = (req) => setContextMenu(req);
+  isMenuOpenRef.current      = () => contextMenu !== null;
   onSelectRef.current        = (id) => setSelectedId(id);
   getActiveToolRef.current   = () => activeToolId;
   setHandViewRef.current     = (view) => setHandView(view);
@@ -471,6 +476,7 @@ export function Room({ roomId, isHost }: Props) {
         onPeerLeftRef={onPeerLeftRef}
         onPeerJoinedRef={onPeerJoinedRef}
         onContextMenuRef={onContextMenuRef}
+        isMenuOpenRef={isMenuOpenRef}
         freeCameraRef={freeCameraRef}
         onSelectRef={onSelectRef}
         setHighlightRef={setHighlightRef}
