@@ -100,6 +100,19 @@ export function registerCorePrimitives(): void {
     ],
   });
 
+  if (!getSpawnable('disc')) registerSpawnable({
+    type:        'disc',
+    label:       'Disc',
+    category:    'Tokens',
+    defaultTags: ['disc'],
+    components: [
+      { typeId: 'transform', state: { position: [0, 0, 0], rotation: [0, 0, 0, 1], scale: [1, 1, 1] } },
+      { typeId: 'mesh',      state: { meshRef: 'prim:disc', textureRefs: { default: '' }, color: '#cc6622', width: 0.32, height: 0.05, depth: 0.32 } },
+      { typeId: 'physics',   state: { mass: 0.1, friction: 0.5, restitution: 0.3, isLocked: false } },
+      { typeId: 'tween',     state: {} },
+    ],
+  });
+
   if (!getSpawnable('token')) registerSpawnable({
     type:        'token',
     label:       'Token',

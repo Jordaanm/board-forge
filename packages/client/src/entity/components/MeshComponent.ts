@@ -5,6 +5,8 @@
 //   - 'prim:d6'     → a chamfered cube body with pip overlays (single-material body)
 //   - 'prim:d20'    → an icosahedron body with numbered triangular face overlays
 //   - 'prim:meeple' → capsule + sphere group (matches the legacy Token shape)
+//   - 'prim:disc'   → flat cylinder. `size` consumed as [diameter, thickness,
+//                     diameter] so half-extents stay AABB-shaped.
 //   - 'prim:plane'  → single-quad PlaneGeometry in the local XY plane (normal
 //                     +Z), one `default` material slot. UVs flipped along V so
 //                     canvas top-left renders at the visual top when viewed
@@ -154,6 +156,7 @@ export class MeshComponent extends EntityComponent<MeshState> {
     if (this.state.meshRef === 'prim:plane') return 'cube';
     if (this.state.meshRef === 'prim:table-rect')   return 'cube';
     if (this.state.meshRef === 'prim:table-circle') return 'cylinder';
+    if (this.state.meshRef === 'prim:disc') return 'cylinder';
     if (this.state.meshRef === 'prim:meeple') return 'meeple';
     return 'unknown';
   }
@@ -276,6 +279,7 @@ function buildMesh(meshRef: string, size: Dims): THREE.Object3D {
   if (meshRef === 'prim:plane') return buildPlane(size);
   if (meshRef === 'prim:table-rect')   return buildTableRect(size);
   if (meshRef === 'prim:table-circle') return buildTableCircle(size);
+  if (meshRef === 'prim:disc')         return buildDisc(size);
   if (meshRef === 'prim:meeple') {
     const r = size[0] * 0.5;
     const totalH = size[1];
@@ -317,7 +321,7 @@ function halfExtentsFor(meshRef: string, size: Dims): [number, number, number] {
     const [w, , d] = size;
     return [w / 2, d / 2, 0];
   }
-  if (meshRef === 'prim:table-circle') {
+  if (meshRef === 'prim:table-circle' || meshRef === 'prim:disc') {
     // size = [diameter, height, diameter] for a cylinder authored to match
     // the rect's bounding box conventions.
     const [w, h, d] = size;
@@ -361,6 +365,20 @@ function buildTableRect(size: Dims): THREE.Object3D {
     new THREE.MeshLambertMaterial({ color: 0xffffff }),
   );
   mesh.position.y    = -h / 2;
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+// prim:disc — centred flat cylinder. `size` is consumed as [diameter,
+// thickness, diameter] so AABB half-extents stay symmetric.
+function buildDisc(size: Dims): THREE.Object3D {
+  const [w, h, _d] = size;
+  const radius = w / 2;
+  const mesh = new THREE.Mesh(
+    new THREE.CylinderGeometry(radius, radius, h, 64),
+    new THREE.MeshLambertMaterial({ color: 0xffffff }),
+  );
+  mesh.castShadow    = true;
   mesh.receiveShadow = true;
   return mesh;
 }

@@ -34,6 +34,7 @@ export const PRIMITIVE_MANIFEST_ENTRIES: AssetEntry[] = [
   { slug: 'prim:meeple',       name: 'Meeple',       type: 'model', url: 'primitive://meeple',       preload: true },
   { slug: 'prim:table-rect',   name: 'Table (rect)', type: 'model', url: 'primitive://table-rect',   preload: true },
   { slug: 'prim:table-circle', name: 'Table (round)', type: 'model', url: 'primitive://table-circle', preload: true },
+  { slug: 'prim:disc',         name: 'Disc',         type: 'model', url: 'primitive://disc',         preload: true },
 ];
 
 export const BASE_MANIFEST      = Manifest.from(BASE_MANIFEST_ENTRIES);
