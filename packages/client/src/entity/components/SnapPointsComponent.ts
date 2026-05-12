@@ -83,9 +83,10 @@ export class SnapPointsComponent extends EntityComponent<SnapPointsState> {
     if (changed.points !== undefined) this.rebuildAllPoints();
   }
 
-  // Editor numeric form (issue #4). Heading + one row per point (x/y/z/yaw/r
-  // number inputs, snapRotation checkbox, delete button) + an Add button.
-  // Each interactive item carries `pointId` in args so onAction can route the
+  // Editor numeric form (issue #4). Heading + two rows per point — row 1 is
+  // pose (x/y/z/yaw), row 2 is config + remove (radius, snap-yaw toggle,
+  // snap-Y toggle, delete) — then an Add button at the bottom. Each
+  // interactive item carries `pointId` in args so onAction can route the
   // edit to the right point without scanning the array.
   onEditorTools(ctx: MenuContext): EditorToolItem[] {
     if (!ctx.isHost) return [];
@@ -95,14 +96,19 @@ export class SnapPointsComponent extends EntityComponent<SnapPointsState> {
       items.push({
         kind:  'row',
         items: [
-          { kind: 'number',  id: 'edit-x',      label: 'x',   value: p.localPos[0], args: a, step: 0.1  },
-          { kind: 'number',  id: 'edit-y',      label: 'y',   value: p.localPos[1], args: a, step: 0.1  },
-          { kind: 'number',  id: 'edit-z',      label: 'z',   value: p.localPos[2], args: a, step: 0.1  },
-          { kind: 'number',  id: 'edit-yaw',    label: 'yaw', value: p.localYaw,    args: a, step: 0.1  },
-          { kind: 'number',  id: 'edit-radius', label: 'r',   value: p.radius,      args: a, step: 0.05, min: 0 },
-          { kind: 'boolean', id: 'edit-rot',    label: 'rot', value: p.snapRotation,  args: a },
-          { kind: 'boolean', id: 'edit-snap-y', label: 'y',   value: p.snapY === true, args: a },
-          { kind: 'button',  id: 'delete-point', label: '×',  args: a },
+          { kind: 'number', id: 'edit-x',   label: 'x',   value: p.localPos[0], args: a, step: 0.1 },
+          { kind: 'number', id: 'edit-y',   label: 'y',   value: p.localPos[1], args: a, step: 0.1 },
+          { kind: 'number', id: 'edit-z',   label: 'z',   value: p.localPos[2], args: a, step: 0.1 },
+          { kind: 'number', id: 'edit-yaw', label: 'yaw', value: p.localYaw,    args: a, step: 0.1 },
+        ],
+      });
+      items.push({
+        kind:  'row',
+        items: [
+          { kind: 'number',  id: 'edit-radius',  label: 'radius',   value: p.radius,         args: a, step: 0.05, min: 0 },
+          { kind: 'boolean', id: 'edit-rot',     label: 'snap yaw', value: p.snapRotation,   args: a },
+          { kind: 'boolean', id: 'edit-snap-y',  label: 'snap y',   value: p.snapY === true, args: a },
+          { kind: 'button',  id: 'delete-point', label: '×',        args: a },
         ],
       });
     }

@@ -175,7 +175,7 @@ describe('SnapPointsComponent — raycast guard', () => {
 });
 
 describe('SnapPointsComponent — editor numeric form', () => {
-  test('onEditorTools returns heading + one row per point + add button (host)', () => {
+  test('onEditorTools returns heading + two rows per point + add button (host)', () => {
     const e = scene.spawn('snap-marker', ctx);
     const comp = e.getComponent(SnapPointsComponent)!;
     comp.setState({ points: [
@@ -184,9 +184,22 @@ describe('SnapPointsComponent — editor numeric form', () => {
     ] });
     const items = comp.onEditorTools({ recipientSeat: null, isHost: true, entity: e });
     expect(items[0]).toEqual({ kind: 'heading', label: 'Snap Points' });
-    expect(items[1].kind).toBe('row');
-    expect(items[2].kind).toBe('row');
+    // Two points → four rows (pose + config per point), then the Add button.
+    expect(items.slice(1, 5).map(i => i.kind)).toEqual(['row', 'row', 'row', 'row']);
     expect(items[items.length - 1]).toEqual({ kind: 'button', id: 'add-point', label: 'Add Snap Point' });
+  });
+
+  test('row 1 is pose (x/y/z/yaw); row 2 is radius/snap-yaw/snap-y/delete', () => {
+    const e = scene.spawn('snap-marker', ctx);
+    const comp = e.getComponent(SnapPointsComponent)!;
+    comp.setState({ points: [pt({ id: 'a' })] });
+    const items = comp.onEditorTools({ recipientSeat: null, isHost: true, entity: e });
+    const pose   = items[1] as Extract<EditorToolItem, { kind: 'row' }>;
+    const config = items[2] as Extract<EditorToolItem, { kind: 'row' }>;
+    expect(pose.items.map(i => (i as { id?: string }).id))
+      .toEqual(['edit-x', 'edit-y', 'edit-z', 'edit-yaw']);
+    expect(config.items.map(i => (i as { id?: string }).id))
+      .toEqual(['edit-radius', 'edit-rot', 'edit-snap-y', 'delete-point']);
   });
 
   test('onEditorTools returns empty on non-host', () => {
@@ -195,13 +208,14 @@ describe('SnapPointsComponent — editor numeric form', () => {
     expect(comp.onEditorTools({ recipientSeat: null, isHost: false, entity: e })).toEqual([]);
   });
 
-  test("row carries per-point pointId in every interactive item's args", () => {
+  test("rows carry per-point pointId in every interactive item's args", () => {
     const e = scene.spawn('snap-marker', ctx);
     const comp = e.getComponent(SnapPointsComponent)!;
     comp.setState({ points: [pt({ id: 'pid-1' })] });
     const items = comp.onEditorTools({ recipientSeat: null, isHost: true, entity: e });
-    const row = items[1] as Extract<EditorToolItem, { kind: 'row' }>;
-    for (const sub of row.items) {
+    const pose   = items[1] as Extract<EditorToolItem, { kind: 'row' }>;
+    const config = items[2] as Extract<EditorToolItem, { kind: 'row' }>;
+    for (const sub of [...pose.items, ...config.items]) {
       if (sub.kind === 'number' || sub.kind === 'boolean' || sub.kind === 'button') {
         expect((sub.args as { pointId: string }).pointId).toBe('pid-1');
       }
@@ -256,13 +270,13 @@ describe('SnapPointsComponent — editor numeric form', () => {
     expect(comp.state.points[0].snapY).toBe(true);
   });
 
-  test("row exposes a 'y' boolean wired to edit-snap-y", () => {
+  test("config row exposes a 'snap y' boolean wired to edit-snap-y", () => {
     const e = scene.spawn('snap-marker', ctx);
     const comp = e.getComponent(SnapPointsComponent)!;
     comp.setState({ points: [pt({ id: 'a', snapY: true })] });
     const items = comp.onEditorTools({ recipientSeat: null, isHost: true, entity: e });
-    const row = items[1] as Extract<EditorToolItem, { kind: 'row' }>;
-    const ySwitch = row.items.find(
+    const config = items[2] as Extract<EditorToolItem, { kind: 'row' }>;
+    const ySwitch = config.items.find(
       (i): i is Extract<EditorToolItem, { kind: 'boolean' }> => i.kind === 'boolean' && i.id === 'edit-snap-y',
     );
     expect(ySwitch).toBeDefined();
