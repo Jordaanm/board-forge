@@ -34,6 +34,7 @@ Opens a searchable modal listing every public spawnable. The current built-in sp
 - **Token** — a generic token.
 - **Card** and **Deck** — cards (which have a back/front face and can sit in hands) and decks (stacks that can be drawn from, shuffled, and dealt).
 - **Zone** and **Hand** — non-physical regions that govern how contained pieces behave. A Hand is a Zone variant that's tied to a seat.
+- **Snap Marker** — invisible placement anchor that pulls dropped pieces onto a pre-defined pose. See "Snap Points" below.
 
 Filter by typing a label, category, type, or tag. Arrow keys navigate the list and Enter spawns the highlighted entry. The modal stays open after a spawn so you can quickly drop in a batch.
 
@@ -78,15 +79,25 @@ Opens a four-tab modal:
 
 - **Primitives** — read-only `prim:*` mesh entries shipped with the client.
 - **Base** — read-only `base:*` placeholder entries.
-- **Custom** — your room's own asset catalog. Add an image, model, or sound by URL; the modal probes the URL with a CORS preflight so you know up front whether it'll load.
+- **Custom** — your room's own asset catalog. Add an image, model, sound, or spritesheet by URL; the modal probes the URL with a CORS preflight so you know up front whether it'll load.
 
 Newly added assets default to `preload: true`, meaning the client will fetch them eagerly. The slug for each entry auto-suggests from the URL filename and is locked once the entry is committed.
 
+When **Spritesheet** is selected, two extra fields appear — **Cols** and **Rows** — describing the grid layout of the source image. Both default to `1` and remain editable on existing entries. See "Spritesheets" below for how the cells are addressed.
+
 The modal's footer shows the count of unpushed changes. Click **Push to peers** to broadcast the current published catalog to every connected guest. Until you push, custom-tab edits live only on the host.
+
+### Generate Deck
+
+A shortcut for converting a spritesheet into a ready-to-play deck. Pick a spritesheet asset, click the cell that holds the card back, optionally type a tag to apply to every card, and the host spawns one `Card` per non-back cell plus a `Deck` entity stacking them. Disabled until you've added at least one `spritesheet` entry in the Asset Manager.
 
 ### Show All Zones
 
 A checkbox toggle. By default Zone entities are visible only when relevant (for example, while dragging a piece into one). Turning **Show All Zones** on renders every Zone in the scene as a tinted volume — handy for laying out a complex scene.
+
+### Show Snap Points
+
+A checkbox toggle. By default Snap Markers and per-entity snap points are invisible and non-interactive. Turning **Show Snap Points** on renders each snap point as a translucent green disc (with a forward arrow if it snaps rotation) and makes Snap Markers grabbable so you can re-position them. Host-only — guests never see snap points regardless of the toggle.
 
 ## Editor panel
 
@@ -109,6 +120,36 @@ The bottom half — visible when an entity is selected — shows:
 
 Edits made in the inspector are routed through the same code paths a script would use, so anything you can do in the panel a script can do programmatically.
 
+Entities that carry a mesh expose an **Add Snap Markers** button in their tool list — clicking it attaches a `SnapPointsComponent` to the entity so you can drop snap anchors directly onto a card, board, or token without spawning a separate `Snap Marker`. The button hides once the component is attached.
+
+## Snap Points
+
+Snap Points are placement aids. When a player releases a piece near a snap point, the host teleports it onto the point's pose (XZ position, optionally Y and yaw) and zeroes its velocity. They're used for "deck goes here" drop zones and for edge-aligning rows of pieces.
+
+A snap point is just a pose + radius attached to an entity. Two entry points produce them:
+
+- **Snap Marker** — spawnable from the action bar's Spawn Object modal. It carries only a Transform and a SnapPoints component (no mesh, no physics) and ships with a single default point at its origin. Useful as a free-standing anchor on the table.
+- **Add Snap Markers** — editor inspector button on any entity that has a mesh. Attaches a `SnapPointsComponent` to that entity so the snap point travels with the piece.
+
+Once a SnapPoints component is present, the inspector renders a numeric form for each point with two rows:
+
+- **Pose row** — `x`, `y`, `z`, `yaw` (radians, applied only when "snap yaw" is on).
+- **Config row** — `radius` (XZ-plane catch distance), `snap yaw` (rotate the piece to match `yaw` on snap), `snap y` (also snap the piece's Y position to the point — off by default, so e.g. a card snapping to a deck marker doesn't drag heavy pieces through the table), and a `×` to delete the point. An **Add Snap Point** button at the bottom appends another point at the entity's origin.
+
+Snapping fires only on a grab-tool drop. Scripted moves, save-file loads, and initial spawns don't trigger snap. The host computes the result and broadcasts the final pose as a normal transform patch.
+
+## Spritesheets
+
+A **Spritesheet** is a single image laid out as a grid of equally-sized cells, addressable by index. The motivating use case is 1-image card decks — back plus 52 faces in one PNG — but anything that's a grid of icons or tiles works.
+
+Add a spritesheet from the Asset Manager's Custom tab: pick `Spritesheet` for the type, paste the image URL, and fill in **Cols** and **Rows**. Cells are numbered row-major from the top-left: index `0` is top-left, index `cols-1` is top-right, index `cols` is the start of the second row.
+
+Anywhere a texture ref is expected (card faces, surface images, etc.) you can refer to an individual cell with a 3-segment slug: `custom:my-deck:7`. The first two segments identify the sheet entry; the trailing number is the cell index. The Asset Picker exposes this directly — click a spritesheet tile to drill into a sub-grid where each cell is its own selectable tile. Picking the sheet itself is not allowed; you must pick a cell.
+
+Out-of-range indices and malformed refs (`custom:my-deck:abc`) render as the magenta "broken asset" placeholder, the same as a missing image. Cols, rows, and the URL all stay editable after creation — but be aware that a layout change invalidates any cell refs that no longer fit, so existing pieces may suddenly show the broken-asset texture.
+
+The **Generate Deck** action bar shortcut consumes a spritesheet directly and is the fastest path from "I have a deck image" to "the deck is on the table".
+
 ## Players panel — host extras
 
 The players panel in the top-right (which all peers see) gains two host-only entries when you right-click a guest's row:
@@ -129,4 +170,7 @@ The players panel in the top-right (which all peers see) gains two host-only ent
 | Edit the script   | Top action bar → Edit Script            | Monaco editor; see [scripting.md](./scripting.md). |
 | Manage assets     | Top action bar → Asset Manager          | Custom tab is editable; remember to **Push to peers**. |
 | Reveal zones      | Top action bar → Show All Zones         | Render every Zone as a tinted volume. |
+| Reveal snap points| Top action bar → Show Snap Points       | Show every snap disc; makes Snap Markers grabbable. Host-only. |
+| Generate a deck   | Top action bar → Generate Deck          | Turn a spritesheet into a `Deck` of `Card`s in one click. |
+| Add a snap anchor | Editor inspector → Add Snap Markers     | Attaches `SnapPoints` to the selected entity. Standalone anchors come from spawning a `Snap Marker`. |
 | Kick / ban a peer | Top-right players panel → right-click   | Bans persist for the room's lifetime. |

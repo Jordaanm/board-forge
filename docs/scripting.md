@@ -87,7 +87,7 @@ If you re-Save+Run this script, the previous listeners are detached before the n
 | `scene.getObjectsByTag(tag)`                   | All entities whose `tags` array contains the given tag. Returns `EntityFacade[]`. |
 | `scene.playSound(slug)`                        | Host-only. Broadcast a one-shot sound by asset slug. No-op on guest contexts. |
 | `scene.assets.get(slug)`                       | Look up one asset by slug in the live catalog. Returns a frozen `AssetEntry` or `null`. |
-| `scene.assets.list({ type })`                  | List the catalog, optionally filtered to `'image' \| 'model' \| 'sound'`. |
+| `scene.assets.list({ type })`                  | List the catalog, optionally filtered to `'image' \| 'model' \| 'sound' \| 'spritesheet'`. Spritesheet entries carry extra `cols` / `rows` fields; address individual cells with a 3-segment ref like `'custom:deck:7'` anywhere an image ref is accepted. |
 | `scene.attachSticker(parent, opts)`            | Host-only. Compose a child surface entity onto `parent` and append one element to it. Returns an `ElementHandle`. |
 | `scene.getElement(surfaceId, elementId)`       | Re-acquire an `ElementHandle` for an element you previously attached. Useful for re-binding listeners after a Run. |
 

@@ -62,6 +62,7 @@ Concrete components live in `packages/client/src/entity/components/`. The most c
 - `PhysicsComponent` — owns the entity's `CANNON.Body` and bridges it to the transform.
 - `ValueComponent` — a per-entity scalar (used by dice for face values, by counters, etc.).
 - `SurfaceComponent` — a 2D canvas attached to a face of a 3D piece, hosting `SurfaceElement`s (rich HTML, image, shape).
+- `SnapPointsComponent` — a list of local-space poses + radii that act as placement anchors. On grab-drop the host checks every snap point on every entity and teleports the dropped piece onto the closest match (see [hosting.md](./hosting.md) for the user-facing flow). The actual snap algorithm lives in `packages/client/src/entity/snap/snapOnRelease.ts` and is called from `GrabTool` via `HostInputDispatcher`.
 - Game pieces: `TableComponent`, `CardComponent`, `DeckComponent`, `DiceComponent`, `ZoneComponent`, `HandComponent`, `FlatViewComponent`, `LightingComponent`, `SkydomeComponent`.
 
 Spawnables are pure-data templates registered with `registerSpawnable` (`packages/client/src/entity/SpawnableRegistry.ts`). Each spawnable lists a type, a label/category for the spawn modal, default tags, and the components it should be built from. The seed list lives in `packages/client/src/entity/spawnables.ts`.
@@ -125,7 +126,7 @@ Errors funnel into `ScriptErrorLog` (`packages/client/src/scripting/ScriptErrorL
 
 The asset pipeline has three layers:
 
-- `Manifest` (`packages/client/src/assets/Manifest.ts`) is the leaf data type: a list of `AssetEntry` records, each with a slug, type (`image | model | sound`), URL, preload flag, and optional name/description/tags.
+- `Manifest` (`packages/client/src/assets/Manifest.ts`) is the leaf data type: a list of `AssetEntry` records, each with a slug, type (`image | model | sound | spritesheet`), URL, preload flag, and optional name/description/tags. Spritesheet entries additionally carry `cols` and `rows` (both positive integers, validator-enforced). A spritesheet cell is addressed by a synthetic 3-segment ref (`custom:deck:7`) parsed by `packages/client/src/assets/spriteRef.ts`; UV math (offset/repeat) lives in `packages/client/src/assets/spriteUV.ts`. `AssetService.subscribe` resolves these refs by fetching the parent sheet once and handing each caller a cloned `THREE.Texture` with `offset`/`repeat` set per cell, so consumers stay unaware they're holding a sub-region of a bigger image.
 - Three manifests stack at runtime: `BASE_MANIFEST` (placeholder `base:*` slugs), `PRIMITIVE_MANIFEST` (built-in `prim:*` meshes), and the host's `ManifestStore` draft (`packages/client/src/assets/ManifestStore.ts`). Stacks resolve by slug — later manifests can shadow earlier ones.
 - `AssetService` (`packages/client/src/assets/AssetService.ts`) is the resolver + cache. Components ask for an asset by slug; the service fetches, parses, and caches it. A CORS preflight (`packages/client/src/assets/corsPreflight.ts`) probes URLs before they're added so the host gets a sensible error in the Asset Manager rather than a broken texture in the scene.
 
