@@ -252,6 +252,7 @@ class WorldImpl implements World, HandleRouter {
       localPos:     [0, 0, 0],
       localYaw:     0,
       snapRotation: false,
+      snapY:        false,
       radius:       0.4,
     }] });
     entity.attachComponent(comp);

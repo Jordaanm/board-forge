@@ -17,6 +17,12 @@ export interface SnapPoint {
   localPos:     [number, number, number];
   localYaw:     number;
   snapRotation: boolean;
+  // When true, releasing onto this point also snaps the entity's Y position
+  // to the point's world Y. When false (default), the entity's existing Y is
+  // preserved — important for objects that are taller than the snap point's
+  // host (e.g. a card snapping to a deck marker shouldn't drag a die through
+  // the table).
+  snapY:        boolean;
   radius:       number;
 }
 
@@ -94,7 +100,8 @@ export class SnapPointsComponent extends EntityComponent<SnapPointsState> {
           { kind: 'number',  id: 'edit-z',      label: 'z',   value: p.localPos[2], args: a, step: 0.1  },
           { kind: 'number',  id: 'edit-yaw',    label: 'yaw', value: p.localYaw,    args: a, step: 0.1  },
           { kind: 'number',  id: 'edit-radius', label: 'r',   value: p.radius,      args: a, step: 0.05, min: 0 },
-          { kind: 'boolean', id: 'edit-rot',    label: 'rot', value: p.snapRotation, args: a },
+          { kind: 'boolean', id: 'edit-rot',    label: 'rot', value: p.snapRotation,  args: a },
+          { kind: 'boolean', id: 'edit-snap-y', label: 'y',   value: p.snapY === true, args: a },
           { kind: 'button',  id: 'delete-point', label: '×',  args: a },
         ],
       });
@@ -110,6 +117,7 @@ export class SnapPointsComponent extends EntityComponent<SnapPointsState> {
         localPos:     [0, 0, 0],
         localYaw:     0,
         snapRotation: false,
+        snapY:        false,
         radius:       DEFAULT_RADIUS,
       };
       this.setState({ points: [...this.state.points, next] });
@@ -144,6 +152,8 @@ export class SnapPointsComponent extends EntityComponent<SnapPointsState> {
           return typeof value === 'number' ? { ...p, radius: Math.max(0, value) } : p;
         case 'edit-rot':
           return typeof value === 'boolean' ? { ...p, snapRotation: value } : p;
+        case 'edit-snap-y':
+          return typeof value === 'boolean' ? { ...p, snapY: value } : p;
         default:
           return p;
       }

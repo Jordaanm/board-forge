@@ -7,6 +7,7 @@ function candidate(over: Partial<SnapCandidate>): SnapCandidate {
     worldPos:      [0, 0, 0],
     worldYaw:      0,
     snapRotation:  false,
+    snapY:         false,
     radius:        1,
     ...over,
   };
@@ -28,9 +29,9 @@ describe('resolveSnap', () => {
   });
 
   test('single candidate inside radius → wins; fields match candidate', () => {
-    const c = candidate({ worldPos: [0.1, 2, 0.1], worldYaw: 1.23, snapRotation: true, radius: 1 });
+    const c = candidate({ worldPos: [0.1, 2, 0.1], worldYaw: 1.23, snapRotation: true, snapY: true, radius: 1 });
     const r = resolveSnap(input({ candidates: [c] }));
-    expect(r).toEqual({ targetPos: [0.1, 2, 0.1], targetYaw: 1.23, snapRotation: true });
+    expect(r).toEqual({ targetPos: [0.1, 2, 0.1], targetYaw: 1.23, snapRotation: true, snapY: true });
   });
 
   test('single candidate outside radius → null', () => {
@@ -96,6 +97,18 @@ describe('resolveSnap', () => {
     const c = candidate({ snapRotation: false });
     const r = resolveSnap(input({ candidates: [c] }));
     expect(r?.snapRotation).toBe(false);
+  });
+
+  test('snapY flag passes through unchanged (true)', () => {
+    const c = candidate({ snapY: true });
+    const r = resolveSnap(input({ candidates: [c] }));
+    expect(r?.snapY).toBe(true);
+  });
+
+  test('snapY flag passes through unchanged (false)', () => {
+    const c = candidate({ snapY: false });
+    const r = resolveSnap(input({ candidates: [c] }));
+    expect(r?.snapY).toBe(false);
   });
 
   test('targetPos.y equals candidate world Y regardless of dropped entity Y', () => {

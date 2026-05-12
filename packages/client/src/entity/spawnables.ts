@@ -167,6 +167,7 @@ export function registerCorePrimitives(): void {
           localPos:     [0, 0, 0],
           localYaw:     0,
           snapRotation: false,
+          snapY:        false,
           radius:       0.4,
       }] } },
     ],

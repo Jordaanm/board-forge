@@ -10,6 +10,10 @@ export interface SnapCandidate {
   worldPos:      [number, number, number];
   worldYaw:      number;
   snapRotation:  boolean;
+  // When true, the snap result's Y axis comes from this candidate's world Y.
+  // When false, the caller preserves the dropped entity's existing Y so a
+  // tall object isn't dragged through the table.
+  snapY:         boolean;
   radius:        number;
 }
 
@@ -24,6 +28,7 @@ export interface SnapResult {
   targetPos:    [number, number, number];
   targetYaw:    number;
   snapRotation: boolean;
+  snapY:        boolean;
 }
 
 export function resolveSnap(input: SnapInput): SnapResult | null {
@@ -52,5 +57,6 @@ export function resolveSnap(input: SnapInput): SnapResult | null {
     targetPos:    [best.worldPos[0], best.worldPos[1], best.worldPos[2]],
     targetYaw:    best.worldYaw,
     snapRotation: best.snapRotation,
+    snapY:        best.snapY,
   };
 }

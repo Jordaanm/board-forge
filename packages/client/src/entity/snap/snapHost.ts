@@ -36,6 +36,8 @@ export function gatherSnapCandidates(scene: EntityScene): SnapCandidate[] {
         worldPos:      [tmpV.x, tmpV.y, tmpV.z],
         worldYaw:      ownerYaw + point.localYaw,
         snapRotation:  point.snapRotation,
+        // Coerce — legacy saves predate this field and read as undefined.
+        snapY:         point.snapY === true,
         radius:        point.radius,
       });
     }

@@ -151,15 +151,19 @@ export class HoldService {
 
   private applySnap(
     entity: Entity,
-    snap: { targetPos: [number, number, number]; targetYaw: number; snapRotation: boolean },
+    snap: { targetPos: [number, number, number]; targetYaw: number; snapRotation: boolean; snapY: boolean },
   ): void {
     const t = entity.getComponent(TransformComponent);
     if (!t) return;
     const nextRotation = snap.snapRotation
       ? yawToQuat(snap.targetYaw)
       : t.state.rotation;
+    // snapY off (default) leaves the entity's existing Y intact so taller
+    // bodies don't get pulled through the table when snapping in XZ.
+    const nextY = snap.snapY ? snap.targetPos[1] : t.state.position[1];
+    const nextPos: [number, number, number] = [snap.targetPos[0], nextY, snap.targetPos[2]];
     t.setState({
-      position: snap.targetPos,
+      position: nextPos,
       rotation: nextRotation,
       scale:    t.state.scale,
     });
@@ -167,7 +171,7 @@ export class HoldService {
     // overwrite the snap with the body's stale pose.
     const body = entity.getComponent(PhysicsComponent)?.body;
     if (body) {
-      body.position.set(snap.targetPos[0], snap.targetPos[1], snap.targetPos[2]);
+      body.position.set(nextPos[0], nextPos[1], nextPos[2]);
       const [qx, qy, qz, qw] = nextRotation;
       body.quaternion.set(qx, qy, qz, qw);
     }

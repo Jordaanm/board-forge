@@ -50,6 +50,7 @@ function placeMarker(pos: [number, number, number], opts: Partial<SnapPoint> = {
       localPos:     [0, 0, 0],
       localYaw:     0,
       snapRotation: false,
+      snapY:        false,
       radius:       0.5,
       ...opts,
     }],
@@ -72,14 +73,15 @@ function drop(entity: Entity, vel?: { vx: number; vy: number; vz: number }): voi
 }
 
 describe('snap-on-release — host integration', () => {
-  test('drops within radius snap to marker pos; velocity zeroed', () => {
+  test('drops within radius snap to marker XZ; Y preserved by default; velocity zeroed', () => {
     const marker = placeMarker([2, 0, 3]);
     const card   = placeCard([2.1, 0.05, 3.05]);
 
     drop(card, { vx: 5, vy: 0, vz: 0 });
 
     const t = card.getComponent(TransformComponent)!;
-    expect(t.state.position).toEqual([2, 0, 3]);
+    // X and Z snap to marker; Y preserved because snapY defaults to false.
+    expect(t.state.position).toEqual([2, 0.05, 3]);
     const body = card.getComponent(PhysicsComponent)!.body;
     expect(body.velocity.length()).toBe(0);
     expect(body.angularVelocity.length()).toBe(0);
@@ -130,7 +132,8 @@ describe('snap-on-release — host integration', () => {
     drop(card);
 
     const t = card.getComponent(TransformComponent)!;
-    expect(t.state.position).toEqual([0.6, 0, 0]);
+    // Y preserved (snapY default off); only XZ taken from the closer marker.
+    expect(t.state.position).toEqual([0.6, 0.05, 0]);
     expect(near.id).toBeDefined();
   });
 
@@ -188,7 +191,7 @@ describe('snap-on-release — host integration', () => {
       scale:    mt.state.scale,
     });
     marker.getComponent(SnapPointsComponent)!.setState({
-      points: [{ id: 'p', localPos: [0, 0, 0], localYaw: 0, snapRotation: true, radius: 1 }],
+      points: [{ id: 'p', localPos: [0, 0, 0], localYaw: 0, snapRotation: true, snapY: false, radius: 1 }],
     });
     const card = placeCard([0.1, 0.05, 0]);
 
@@ -200,8 +203,8 @@ describe('snap-on-release — host integration', () => {
     expect(yaw).toBeCloseTo(Math.PI / 2, 5);
   });
 
-  test('snap target position uses candidate world Y, not dropped entity Y', () => {
-    placeMarker([0, 1.5, 0]);
+  test('snapY: true → snap target Y uses candidate world Y', () => {
+    placeMarker([0, 1.5, 0], { snapY: true });
     const card = placeCard([0.1, 5, 0]);
 
     drop(card);
@@ -210,13 +213,25 @@ describe('snap-on-release — host integration', () => {
     expect(t.state.position[1]).toBe(1.5);
   });
 
+  test('snapY: false (default) → dropped entity Y is preserved on snap', () => {
+    placeMarker([0, 1.5, 0]);
+    const card = placeCard([0.1, 5, 0]);
+
+    drop(card);
+
+    const t = card.getComponent(TransformComponent)!;
+    expect(t.state.position[0]).toBeCloseTo(0);
+    expect(t.state.position[1]).toBe(5);
+    expect(t.state.position[2]).toBeCloseTo(0);
+  });
+
   test('local-offset snap point computes world pos by composing with marker transform', () => {
     // Marker at (5, 0, 0); point localPos (1, 0, 0); expected world (6, 0, 0).
     const marker = scene.spawn('snap-marker', ctx);
     const mt = marker.getComponent(TransformComponent)!;
     mt.setState({ position: [5, 0, 0], rotation: mt.state.rotation, scale: mt.state.scale });
     marker.getComponent(SnapPointsComponent)!.setState({
-      points: [{ id: 'p', localPos: [1, 0, 0], localYaw: 0, snapRotation: false, radius: 0.5 }],
+      points: [{ id: 'p', localPos: [1, 0, 0], localYaw: 0, snapRotation: false, snapY: false, radius: 0.5 }],
     });
     const card = placeCard([6.05, 0.05, 0]);
 

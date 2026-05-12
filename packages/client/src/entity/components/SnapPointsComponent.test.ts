@@ -26,6 +26,7 @@ function pt(over: Partial<SnapPoint> = {}): SnapPoint {
     localPos:     [0, 0, 0],
     localYaw:     0,
     snapRotation: false,
+    snapY:        false,
     radius:       0.5,
     ...over,
   };
@@ -240,7 +241,7 @@ describe('SnapPointsComponent — editor numeric form', () => {
     expect(comp.state.points[0].localPos).toEqual([1.5, 2.5, 3.5]);
   });
 
-  test('edit-yaw / edit-radius / edit-rot update the right fields', () => {
+  test('edit-yaw / edit-radius / edit-rot / edit-snap-y update the right fields', () => {
     const e = scene.spawn('snap-marker', ctx);
     const comp = e.getComponent(SnapPointsComponent)!;
     comp.setState({ points: [pt({ id: 'a' })] });
@@ -248,9 +249,24 @@ describe('SnapPointsComponent — editor numeric form', () => {
     comp.onAction('edit-yaw',    { pointId: 'a', value: 1.2 },  c);
     comp.onAction('edit-radius', { pointId: 'a', value: 0.9 },  c);
     comp.onAction('edit-rot',    { pointId: 'a', value: true }, c);
+    comp.onAction('edit-snap-y', { pointId: 'a', value: true }, c);
     expect(comp.state.points[0].localYaw).toBe(1.2);
     expect(comp.state.points[0].radius).toBe(0.9);
     expect(comp.state.points[0].snapRotation).toBe(true);
+    expect(comp.state.points[0].snapY).toBe(true);
+  });
+
+  test("row exposes a 'y' boolean wired to edit-snap-y", () => {
+    const e = scene.spawn('snap-marker', ctx);
+    const comp = e.getComponent(SnapPointsComponent)!;
+    comp.setState({ points: [pt({ id: 'a', snapY: true })] });
+    const items = comp.onEditorTools({ recipientSeat: null, isHost: true, entity: e });
+    const row = items[1] as Extract<EditorToolItem, { kind: 'row' }>;
+    const ySwitch = row.items.find(
+      (i): i is Extract<EditorToolItem, { kind: 'boolean' }> => i.kind === 'boolean' && i.id === 'edit-snap-y',
+    );
+    expect(ySwitch).toBeDefined();
+    expect(ySwitch!.value).toBe(true);
   });
 
   test('edit-radius clamps negatives to zero', () => {
