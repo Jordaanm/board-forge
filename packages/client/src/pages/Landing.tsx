@@ -171,6 +171,13 @@ export function Landing() {
             )}
           </div>
         </div>
+
+        <footer className="landing__foot">
+          <div className="landing__foot-inner">
+            <span>Board Together &middot; an online sandbox for playing and prototyping tabletop games</span>
+            <span>v0.1 &middot; night build</span>
+          </div>
+        </footer>
       </div>
       <PreferencesModal open={prefsOpen} onOpenChange={setPrefsOpen}/>
     </AnchorLayout>
