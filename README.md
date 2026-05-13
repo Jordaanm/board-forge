@@ -1,4 +1,4 @@
-# Virtual Table
+# Board Together
 
 A browser-based virtual tabletop — a real-time physics sandbox playable in any modern browser. Built with Three.js, React, TypeScript, cannon-es, and WebRTC; a small WebSocket signaling server brokers peer-to-peer connections.
 
