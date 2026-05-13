@@ -73,7 +73,15 @@
       "PowerShell($pwd.Path)",
       "PowerShell(Push-Location packages/client; npx tsc --noEmit; $code=$LASTEXITCODE; Pop-Location; \"exit=$code\")",
       "PowerShell(git add packages/client/src/components/PreferencesModal.tsx packages/client/src/preferences/PreferencesContext.test.tsx)",
-      "Bash(xargs basename -a)"
+      "Bash(xargs basename -a)",
+      "WebFetch(domain:api.anthropic.com)",
+      "WebFetch(domain:claude.ai)",
+      "Bash(curl -sS -L -i \"https://api.anthropic.com/v1/design/h/mmKj9T-1aStNIuCrESqKZQ?open_file=BoardForge.html\")",
+      "Bash(curl -sS -L -i \"https://design.anthropic.com/h/mmKj9T-1aStNIuCrESqKZQ?open_file=BoardForge.html\")",
+      "Bash(curl -sS -L -i \"https://claude.com/design/h/mmKj9T-1aStNIuCrESqKZQ\")",
+      "Bash(mkdir -p /tmp/boardforge)",
+      "Bash(unzip -o BoardForge-handoff.zip -d /tmp/boardforge/)",
+      "Bash(unzip -l BoardForge-handoff.zip)"
     ]
   }
 }

@@ -1,4 +1,7 @@
 import { useEffect, useState } from 'react';
+import { AnchorLayout } from '../components/AnchorLayout';
+import { PreferencesModal } from '../components/PreferencesModal';
+import { usePreferences } from '../preferences/usePreferences';
 import './Landing.css';
 
 const API_URL = 'http://localhost:3001';
@@ -25,10 +28,37 @@ const IconChevronR = () => (
   </svg>
 );
 
+const IconSearch = ({ size = 16 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+       strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="11" cy="11" r="7"/>
+    <path d="m20 20-3.5-3.5"/>
+  </svg>
+);
+
+const IconHelp = ({ size = 18 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+       strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="9"/>
+    <path d="M9.5 9a2.5 2.5 0 0 1 4.9 0.6c0 1.6-2.4 1.9-2.4 3.4"/>
+    <circle cx="12" cy="17" r="0.7" fill="currentColor" stroke="none"/>
+  </svg>
+);
+
+const IconSettings = ({ size = 18 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+       strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="3"/>
+    <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6h0A1.7 1.7 0 0 0 10.03 3.04V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15 4.6h0a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9h0a1.7 1.7 0 0 0 1.56 1.03H21a2 2 0 1 1 0 4h-.09A1.7 1.7 0 0 0 19.4 15Z"/>
+  </svg>
+);
+
 export function Landing() {
   const [rooms,        setRooms]        = useState<RoomInfo[]>([]);
   const [totalTables,  setTotalTables]  = useState(0);
   const [loading,      setLoading]      = useState(true);
+  const [prefsOpen,    setPrefsOpen]    = useState(false);
+  const { resolvedTheme } = usePreferences();
 
   useEffect(() => {
     let cancelled = false;
@@ -57,64 +87,92 @@ export function Landing() {
   };
 
   return (
-    <div className="landing">
-      <div className="landing__card">
-        <h1 className="landing__title">Board Together</h1>
-        <p className="landing__subtitle">Right Now. Over the web.</p>
-        <button className="landing__create-btn" onClick={createRoom}>Create Room</button>
-
-        <div className="landing__stats">
-          <div className="landing__stat">
-            <b>{playersOnline.toLocaleString()}</b>
-            <span>players online</span>
-          </div>
-          <div className="landing__stat-sep"/>
-          <div className="landing__stat">
-            <b>{openRooms.toLocaleString()}</b>
-            <span>open rooms</span>
-          </div>
-          <div className="landing__stat-sep"/>
-          <div className="landing__stat">
-            <b>{totalTables.toLocaleString()}</b>
-            <span>total tables</span>
-          </div>
-        </div>
-
-        <div className="landing__rooms">
-          <h2 className="landing__rooms-title">Open Rooms</h2>
-          {loading ? (
-            <p className="landing__muted">Loading...</p>
-          ) : rooms.length === 0 ? (
-            <p className="landing__muted">No open rooms</p>
-          ) : (
-            <div className="landing__rooms-grid">
-              {rooms.map(r => (
-                <a key={r.roomId} className="landing__room-card"
-                   href={`${window.location.origin}/?room=${r.roomId}`}>
-                  <div className="landing__room-top">
-                    <span className="landing__room-id">{r.roomId.slice(0, 8)}</span>
-                    <span className="landing__chip"><span className="landing__chip-dot"/>Open</span>
-                  </div>
-                  <div className="landing__room-meta">
-                    <span className="landing__room-stat">
-                      <IconUsers/> {r.occupancy} {r.occupancy === 1 ? 'player' : 'players'}
-                    </span>
-                  </div>
-                  <div className="landing__room-foot">
-                    <div className="landing__seats">
-                      {Array.from({ length: Math.max(r.occupancy, 1) }, (_, i) => (
-                        <span key={i}
-                              className={`landing__seat ${i < r.occupancy ? 'landing__seat--on' : ''}`}/>
-                      ))}
-                    </div>
-                    <span className="landing__join-cta">Join <IconChevronR/></span>
-                  </div>
-                </a>
-              ))}
+    <AnchorLayout>
+      <div className="landing" data-theme={resolvedTheme}>
+        <header className="landing__header">
+          <div className="landing__header-inner">
+            <div className="landing__brand">
+              <div className="landing__brand-mark">B</div>
+              <span>Board Together</span>
             </div>
-          )}
+            <div className="landing__header-spacer"/>
+            <div className="landing__header-right">
+              <div className="landing__search">
+                <IconSearch size={16}/>
+                <input placeholder="Search rooms, games, people" aria-label="Search"/>
+                <kbd>⌘K</kbd>
+              </div>
+              <button className="landing__icon-btn" type="button" aria-label="Help" title="Help">
+                <IconHelp size={18}/>
+              </button>
+              <button className="landing__icon-btn" type="button" aria-label="Preferences" title="Preferences"
+                      onClick={() => setPrefsOpen(true)}>
+                <IconSettings size={18}/>
+              </button>
+              <div className="landing__avatar" title="Your profile">??</div>
+            </div>
+          </div>
+        </header>
+
+        <div className="landing__card">
+          <h1 className="landing__title">Board Together</h1>
+          <p className="landing__subtitle">Right Now. Over the web.</p>
+          <button className="landing__create-btn" onClick={createRoom}>Create Room</button>
+
+          <div className="landing__stats">
+            <div className="landing__stat">
+              <b>{playersOnline.toLocaleString()}</b>
+              <span>players online</span>
+            </div>
+            <div className="landing__stat-sep"/>
+            <div className="landing__stat">
+              <b>{openRooms.toLocaleString()}</b>
+              <span>open rooms</span>
+            </div>
+            <div className="landing__stat-sep"/>
+            <div className="landing__stat">
+              <b>{totalTables.toLocaleString()}</b>
+              <span>total tables</span>
+            </div>
+          </div>
+
+          <div className="landing__rooms">
+            <h2 className="landing__rooms-title">Open Rooms</h2>
+            {loading ? (
+              <p className="landing__muted">Loading...</p>
+            ) : rooms.length === 0 ? (
+              <p className="landing__muted">No open rooms</p>
+            ) : (
+              <div className="landing__rooms-grid">
+                {rooms.map(r => (
+                  <a key={r.roomId} className="landing__room-card"
+                     href={`${window.location.origin}/?room=${r.roomId}`}>
+                    <div className="landing__room-top">
+                      <span className="landing__room-id">{r.roomId.slice(0, 8)}</span>
+                      <span className="landing__chip"><span className="landing__chip-dot"/>Open</span>
+                    </div>
+                    <div className="landing__room-meta">
+                      <span className="landing__room-stat">
+                        <IconUsers/> {r.occupancy} {r.occupancy === 1 ? 'player' : 'players'}
+                      </span>
+                    </div>
+                    <div className="landing__room-foot">
+                      <div className="landing__seats">
+                        {Array.from({ length: Math.max(r.occupancy, 1) }, (_, i) => (
+                          <span key={i}
+                                className={`landing__seat ${i < r.occupancy ? 'landing__seat--on' : ''}`}/>
+                        ))}
+                      </div>
+                      <span className="landing__join-cta">Join <IconChevronR/></span>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+      <PreferencesModal open={prefsOpen} onOpenChange={setPrefsOpen}/>
+    </AnchorLayout>
   );
 }
