@@ -9,25 +9,25 @@ import { useSyncExternalStore } from 'react';
 import { assetService } from '../assets/AssetService';
 
 const STRIP: React.CSSProperties = {
-  background:   'rgba(20,20,32,0.88)',
-  border:       '1px solid rgba(255,255,255,0.15)',
-  borderRadius: 6,
-  color:        '#e8e8e8',
-  fontFamily:   'sans-serif',
+  background:   'var(--surface)',
+  border:       '1px solid var(--line)',
+  borderRadius: 'var(--card-radius)',
+  color:        'var(--ink)',
+  fontFamily:   'var(--font-sans)',
   fontSize:     12,
   padding:      '6px 10px',
   display:      'flex',
   alignItems:   'center',
   gap:          8,
-  boxShadow:    '0 4px 16px rgba(0,0,0,0.4)',
+  boxShadow:    'var(--shadow)',
 };
 
 const SPINNER: React.CSSProperties = {
   width:        12,
   height:       12,
   borderRadius: '50%',
-  border:       '2px solid rgba(255,255,255,0.18)',
-  borderTopColor: 'rgba(120,180,240,0.9)',
+  border:       '2px solid var(--line-strong)',
+  borderTopColor: 'var(--accent)',
   animation:    'asset-loading-spin 0.8s linear infinite',
 };
 

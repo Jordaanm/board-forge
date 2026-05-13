@@ -12,22 +12,22 @@ interface Props {
 const OVERLAY: React.CSSProperties = {
   position:   'fixed',
   inset:      0,
-  background: 'rgba(0,0,0,0.55)',
+  background: 'rgba(0,0,0,0.45)',
   zIndex:     200,
 };
 
 const CONTENT: React.CSSProperties = {
   width:         420,
-  background:    'rgba(20,20,32,0.98)',
-  border:        '1px solid rgba(255,255,255,0.15)',
-  borderRadius:  8,
-  color:         '#e8e8e8',
-  fontFamily:    'sans-serif',
+  background:    'var(--surface)',
+  border:        '1px solid var(--line)',
+  borderRadius:  'var(--panel-radius)',
+  color:         'var(--ink)',
+  fontFamily:    'var(--font-sans)',
   fontSize:      13,
   zIndex:        201,
   display:       'flex',
   flexDirection: 'column',
-  boxShadow:     '0 12px 40px rgba(0,0,0,0.7)',
+  boxShadow:     'var(--shadow-lg)',
 };
 
 const HEADER: React.CSSProperties = {
@@ -35,21 +35,25 @@ const HEADER: React.CSSProperties = {
   alignItems:     'center',
   justifyContent: 'space-between',
   padding:        '12px 16px',
-  borderBottom:   '1px solid rgba(255,255,255,0.1)',
+  borderBottom:   '1px solid var(--line)',
+  background:     'var(--surface-2)',
 };
 
 const TITLE: React.CSSProperties = {
-  fontSize:   14,
+  fontFamily: 'var(--font-serif)',
+  fontSize:   17,
   fontWeight: 600,
+  letterSpacing: '-0.01em',
   margin:     0,
+  color:      'var(--ink)',
 };
 
 const CLOSE_BTN: React.CSSProperties = {
   background: 'none',
   border:     'none',
-  color:      '#aaa',
+  color:      'var(--ink-mute)',
   cursor:     'pointer',
-  fontSize:   18,
+  fontSize:   20,
   lineHeight: 1,
   padding:    '0 4px',
 };
@@ -62,31 +66,36 @@ const BODY: React.CSSProperties = {
 };
 
 const FIELD_LABEL: React.CSSProperties = {
-  fontSize:      10,
+  fontSize:      11,
   textTransform: 'uppercase',
-  letterSpacing: 1,
-  color:         '#888',
+  letterSpacing: '0.14em',
+  color:         'var(--ink-mute)',
+  fontWeight:    700,
   marginBottom:  6,
 };
 
 const SEG_GROUP: React.CSSProperties = {
   display:      'flex',
-  border:       '1px solid rgba(255,255,255,0.2)',
-  borderRadius: 6,
-  overflow:     'hidden',
+  background:   'var(--bg)',
+  border:       '1px solid var(--line)',
+  borderRadius: 'var(--card-radius)',
+  padding:      2,
+  gap:          2,
 };
 
 function segButton(active: boolean): React.CSSProperties {
   return {
-    flex:       1,
-    background: active ? 'rgba(80,140,220,0.35)' : 'rgba(0,0,0,0.3)',
-    color:      active ? '#fff' : '#cfcfcf',
-    border:     'none',
-    padding:    '8px 10px',
-    cursor:     'pointer',
-    fontSize:   13,
-    fontFamily: 'sans-serif',
-    fontWeight: active ? 600 : 400,
+    flex:         1,
+    background:   active ? 'var(--accent)' : 'transparent',
+    color:        active ? 'var(--accent-ink)' : 'var(--ink-mute)',
+    border:       'none',
+    borderRadius: 3,
+    padding:      '8px 10px',
+    cursor:       'pointer',
+    fontSize:     13,
+    fontFamily:   'inherit',
+    fontWeight:   active ? 700 : 600,
+    transition:   'background 160ms, color 160ms',
   };
 }
 
@@ -94,18 +103,20 @@ const FOOTER: React.CSSProperties = {
   display:        'flex',
   justifyContent: 'flex-end',
   padding:        '10px 16px',
-  borderTop:      '1px solid rgba(255,255,255,0.08)',
+  borderTop:      '1px solid var(--line)',
+  background:     'var(--surface-2)',
 };
 
 const RESET_BTN: React.CSSProperties = {
-  background:   'rgba(0,0,0,0.4)',
-  border:       '1px solid rgba(255,255,255,0.2)',
-  color:        '#e8e8e8',
+  background:   'transparent',
+  border:       '1px solid var(--line-strong)',
+  color:        'var(--ink)',
   padding:      '6px 14px',
-  borderRadius: 4,
+  borderRadius: 'var(--card-radius)',
   cursor:       'pointer',
-  fontFamily:   'sans-serif',
+  fontFamily:   'inherit',
   fontSize:     13,
+  fontWeight:   700,
 };
 
 const DARK_MODE_OPTIONS: { value: DarkMode; label: string }[] = [
@@ -122,16 +133,17 @@ const CHIP_ROW: React.CSSProperties = {
 
 function chipStyle(active: boolean): React.CSSProperties {
   return {
-    background:   active ? 'rgba(80,140,220,0.35)' : 'rgba(0,0,0,0.3)',
-    color:        active ? '#fff' : '#cfcfcf',
-    border:       active ? '1px solid rgba(120,170,240,0.6)' : '1px solid rgba(255,255,255,0.2)',
+    background:   active ? 'var(--accent)' : 'var(--bg)',
+    color:        active ? 'var(--accent-ink)' : 'var(--ink-2)',
+    border:       active ? '1px solid var(--accent-deep)' : '1px solid var(--line)',
     padding:      '6px 12px',
-    borderRadius: 16,
+    borderRadius: 999,
     cursor:       'pointer',
     fontSize:     13,
-    fontFamily:   'sans-serif',
-    fontWeight:   active ? 600 : 400,
+    fontFamily:   'inherit',
+    fontWeight:   active ? 700 : 600,
     minWidth:     52,
+    transition:   'background 160ms, color 160ms, border-color 160ms',
   };
 }
 
@@ -140,16 +152,17 @@ const SECTION_TOGGLE: React.CSSProperties = {
   alignItems:     'center',
   justifyContent: 'space-between',
   width:          '100%',
-  background:     'rgba(0,0,0,0.25)',
-  border:         '1px solid rgba(255,255,255,0.12)',
-  borderRadius:   6,
-  color:          '#cfcfcf',
+  background:     'var(--bg)',
+  border:         '1px solid var(--line)',
+  borderRadius:   'var(--card-radius)',
+  color:          'var(--ink-mute)',
   padding:        '8px 10px',
   cursor:         'pointer',
-  fontFamily:     'sans-serif',
+  fontFamily:     'inherit',
   fontSize:       11,
+  fontWeight:     700,
   textTransform:  'uppercase',
-  letterSpacing:  1,
+  letterSpacing:  '0.14em',
 };
 
 const HOTKEY_LIST: React.CSSProperties = {
@@ -168,23 +181,25 @@ const HOTKEY_ROW: React.CSSProperties = {
 };
 
 const HOTKEY_LABEL: React.CSSProperties = {
-  color:    '#e8e8e8',
+  color:    'var(--ink)',
   fontSize: 13,
+  fontWeight: 600,
 };
 
 function bindingButton(active: boolean): React.CSSProperties {
   return {
     minWidth:     90,
-    background:   active ? 'rgba(220,140,80,0.35)' : 'rgba(0,0,0,0.35)',
-    color:        active ? '#fff' : '#e8e8e8',
-    border:       active ? '1px solid rgba(240,170,120,0.7)' : '1px solid rgba(255,255,255,0.2)',
-    borderRadius: 4,
+    background:   active ? 'var(--accent)' : 'var(--bg)',
+    color:        active ? 'var(--accent-ink)' : 'var(--ink)',
+    border:       active ? '1px solid var(--accent-deep)' : '1px solid var(--line)',
+    borderRadius: 'var(--card-radius)',
     padding:      '6px 12px',
     cursor:       'pointer',
-    fontFamily:   'ui-monospace, SFMono-Regular, Menlo, monospace',
+    fontFamily:   'var(--font-mono)',
     fontSize:     13,
-    fontWeight:   600,
+    fontWeight:   700,
     textAlign:    'center',
+    transition:   'background 160ms, color 160ms',
   };
 }
 

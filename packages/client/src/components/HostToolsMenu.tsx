@@ -30,16 +30,16 @@ interface Props {
 }
 
 const TRIGGER: React.CSSProperties = {
-  background:   'rgba(20,20,32,0.92)',
-  border:       '1px solid rgba(255,255,255,0.2)',
-  color:        '#e8e8e8',
+  background:   'var(--surface)',
+  border:       '1px solid var(--line-strong)',
+  color:        'var(--ink)',
   padding:      '8px 14px',
-  borderRadius: 6,
+  borderRadius: 'var(--card-radius)',
   cursor:       'pointer',
-  fontFamily:   'sans-serif',
+  fontFamily:   'var(--font-sans)',
   fontSize:     12,
-  fontWeight:   600,
-  boxShadow:    '0 4px 20px rgba(0,0,0,0.5)',
+  fontWeight:   700,
+  boxShadow:    'var(--shadow-sm)',
   userSelect:   'none',
 };
 
@@ -47,16 +47,16 @@ const PANEL: React.CSSProperties = {
   position:     'absolute',
   top:          'calc(100% + 4px)',
   left:         0,
-  background:   '#1e1e2e',
-  border:       '1px solid rgba(255,255,255,0.15)',
-  borderRadius: 6,
+  background:   'var(--surface)',
+  border:       '1px solid var(--line)',
+  borderRadius: 'var(--panel-radius)',
   padding:      4,
   minWidth:     180,
-  boxShadow:    '0 8px 28px rgba(0,0,0,0.65)',
+  boxShadow:    'var(--shadow-lg)',
   zIndex:       200,
-  fontFamily:   'sans-serif',
+  fontFamily:   'var(--font-sans)',
   fontSize:     12,
-  color:        '#e8e8e8',
+  color:        'var(--ink)',
 };
 
 const SUBPANEL: React.CSSProperties = {
@@ -75,7 +75,7 @@ const ITEM: React.CSSProperties = {
   cursor:       'pointer',
   background:   'transparent',
   border:       'none',
-  color:        '#e8e8e8',
+  color:        'var(--ink)',
   fontFamily:   'inherit',
   fontSize:     12,
   textAlign:    'left',
@@ -91,17 +91,17 @@ const ITEM_DISABLED: React.CSSProperties = {
 
 const ITEM_ACTIVE: React.CSSProperties = {
   ...ITEM,
-  background: 'rgba(120,180,240,0.18)',
+  background: 'var(--surface-2)',
 };
 
 const GROUP_INDICATOR: React.CSSProperties = {
-  color:    '#888',
+  color:    'var(--ink-mute)',
   fontSize: 11,
   marginLeft: 8,
 };
 
 const CHECK: React.CSSProperties = {
-  color:      '#9ee29e',
+  color:      'var(--moss)',
   fontSize:   11,
   marginLeft: 8,
 };

@@ -15,32 +15,34 @@ interface Props {
 const OVERLAY: React.CSSProperties = {
   position:   'fixed',
   inset:      0,
-  background: 'rgba(0,0,0,0.55)',
+  background: 'rgba(0,0,0,0.45)',
   zIndex:     200,
 };
 
 const CONTENT: React.CSSProperties = {
   width:        420,
-  background:   'rgba(20,20,32,0.98)',
-  border:       '1px solid rgba(255,255,255,0.15)',
-  borderRadius: 8,
-  color:        '#e8e8e8',
-  fontFamily:   'sans-serif',
+  background:   'var(--surface)',
+  border:       '1px solid var(--line)',
+  borderRadius: 'var(--panel-radius)',
+  color:        'var(--ink)',
+  fontFamily:   'var(--font-sans)',
   fontSize:     13,
   zIndex:       201,
   padding:      16,
-  boxShadow:    '0 12px 40px rgba(0,0,0,0.7)',
+  boxShadow:    'var(--shadow-lg)',
 };
 
 const TITLE: React.CSSProperties = {
-  fontSize:   14,
-  fontWeight: 600,
-  margin:     '0 0 8px',
+  fontSize:      14,
+  fontWeight:    600,
+  margin:        '0 0 8px',
+  fontFamily:    'var(--font-serif)',
+  letterSpacing: '-0.01em',
 };
 
 const BODY: React.CSSProperties = {
   margin: '8px 0 16px',
-  color:  '#cfcfd2',
+  color:  'var(--ink-2)',
 };
 
 const FOOTER: React.CSSProperties = {
@@ -50,19 +52,20 @@ const FOOTER: React.CSSProperties = {
 };
 
 const FOOTER_BTN: React.CSSProperties = {
-  background:   'rgba(0,0,0,0.4)',
-  border:       '1px solid rgba(255,255,255,0.2)',
-  color:        '#e8e8e8',
+  background:   'var(--bg)',
+  border:       '1px solid var(--line-strong)',
+  color:        'var(--ink)',
   padding:      '6px 14px',
-  borderRadius: 4,
+  borderRadius: 'var(--card-radius)',
   cursor:       'pointer',
   fontSize:     12,
 };
 
 const FOOTER_BTN_DESTRUCTIVE: React.CSSProperties = {
   ...FOOTER_BTN,
-  background: 'rgba(180,70,70,0.7)',
-  border:     '1px solid rgba(220,120,120,0.6)',
+  background: 'color-mix(in oklab, var(--accent) 22%, transparent)',
+  border:     '1px solid var(--accent-deep)',
+  color:      'var(--accent-deep)',
 };
 
 export function RevertConfirmModal({ open, filename, onCancel, onConfirm }: Props) {

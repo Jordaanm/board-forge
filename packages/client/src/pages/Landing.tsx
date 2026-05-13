@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AnchorLayout } from '../components/AnchorLayout';
 import { PreferencesModal } from '../components/PreferencesModal';
-import { usePreferences } from '../preferences/usePreferences';
 import './Landing.css';
 
 const API_URL = 'http://localhost:3001';
@@ -58,7 +57,6 @@ export function Landing() {
   const [totalTables,  setTotalTables]  = useState(0);
   const [loading,      setLoading]      = useState(true);
   const [prefsOpen,    setPrefsOpen]    = useState(false);
-  const { resolvedTheme } = usePreferences();
 
   useEffect(() => {
     let cancelled = false;
@@ -88,7 +86,7 @@ export function Landing() {
 
   return (
     <AnchorLayout>
-      <div className="landing" data-theme={resolvedTheme}>
+      <div className="landing">
         <header className="landing__header">
           <div className="landing__header-inner">
             <div className="landing__brand">

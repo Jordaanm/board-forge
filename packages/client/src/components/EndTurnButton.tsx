@@ -13,16 +13,17 @@ interface Props {
 }
 
 const BUTTON: React.CSSProperties = {
-  background:   'rgba(40,140,80,0.92)',
-  border:       '1px solid rgba(255,255,255,0.35)',
-  color:        '#ffffff',
+  background:   'var(--accent)',
+  border:       '1px solid var(--accent-deep)',
+  color:        'var(--accent-ink)',
   padding:      '10px 22px',
-  borderRadius: 6,
+  borderRadius: 'var(--card-radius)',
   cursor:       'pointer',
-  fontFamily:   'sans-serif',
+  fontFamily:   'var(--font-sans)',
   fontSize:     14,
-  fontWeight:   600,
-  boxShadow:    '0 4px 20px rgba(0,0,0,0.5)',
+  fontWeight:   700,
+  letterSpacing: '0.01em',
+  boxShadow:    '0 1px 0 rgba(0,0,0,0.08), 0 2px 0 var(--accent-deep), 0 4px 10px rgba(168,69,31,0.25)',
   userSelect:   'none',
 };
 

@@ -29,42 +29,44 @@ interface PendingPreview {
 }
 
 const BUTTON: React.CSSProperties = {
-  background:   'rgba(20,20,32,0.92)',
-  border:       '1px solid rgba(255,255,255,0.2)',
-  color:        '#e8e8e8',
+  background:   'var(--surface)',
+  border:       '1px solid var(--line-strong)',
+  color:        'var(--ink)',
   padding:      '8px 12px',
-  borderRadius: 6,
+  borderRadius: 'var(--panel-radius)',
   cursor:       'pointer',
-  fontFamily:   'sans-serif',
+  fontFamily:   'var(--font-sans)',
   fontSize:     12,
-  boxShadow:    '0 4px 20px rgba(0,0,0,0.5)',
+  boxShadow:    'var(--shadow-lg)',
   userSelect:   'none',
 };
 
 const OVERLAY: React.CSSProperties = {
   position:   'fixed',
   inset:      0,
-  background: 'rgba(0,0,0,0.55)',
+  background: 'rgba(0,0,0,0.45)',
   zIndex:     200,
 };
 
 const CONTENT: React.CSSProperties = {
   width:        420,
-  background:   'rgba(20,20,32,0.98)',
-  border:       '1px solid rgba(255,255,255,0.15)',
-  borderRadius: 8,
-  color:        '#e8e8e8',
-  fontFamily:   'sans-serif',
+  background:   'var(--surface)',
+  border:       '1px solid var(--line)',
+  borderRadius: 'var(--panel-radius)',
+  color:        'var(--ink)',
+  fontFamily:   'var(--font-sans)',
   fontSize:     13,
   zIndex:       201,
   padding:      16,
-  boxShadow:    '0 12px 40px rgba(0,0,0,0.7)',
+  boxShadow:    'var(--shadow-lg)',
 };
 
 const TITLE: React.CSSProperties = {
-  fontSize:   14,
-  fontWeight: 600,
-  margin:     '0 0 12px',
+  fontSize:      14,
+  fontWeight:    600,
+  margin:        '0 0 12px',
+  fontFamily:    'var(--font-serif)',
+  letterSpacing: '-0.01em',
 };
 
 const ROW: React.CSSProperties = {
@@ -75,24 +77,24 @@ const ROW: React.CSSProperties = {
 };
 
 const LABEL: React.CSSProperties = {
-  color: '#999',
+  color: 'var(--ink-mute)',
 };
 
 const VALUE: React.CSSProperties = {
-  color: '#e8e8e8',
+  color: 'var(--ink)',
 };
 
 const THUMB_WRAP: React.CSSProperties = {
   width:        '100%',
   aspectRatio:  '480 / 270',
-  background:   'rgba(0,0,0,0.4)',
-  border:       '1px solid rgba(255,255,255,0.1)',
-  borderRadius: 4,
+  background:   'var(--bg)',
+  border:       '1px solid var(--line)',
+  borderRadius: 'var(--card-radius)',
   marginBottom: 12,
   display:      'flex',
   alignItems:   'center',
   justifyContent: 'center',
-  color:        '#666',
+  color:        'var(--ink-mute)',
   overflow:     'hidden',
 };
 
@@ -104,7 +106,7 @@ const THUMB_IMG: React.CSSProperties = {
 };
 
 const WARNING: React.CSSProperties = {
-  color:    '#ffb74d',
+  color:    'var(--gold)',
   fontSize: 12,
   margin:   '8px 0',
 };
@@ -117,19 +119,19 @@ const FOOTER: React.CSSProperties = {
 };
 
 const FOOTER_BTN: React.CSSProperties = {
-  background:   'rgba(0,0,0,0.4)',
-  border:       '1px solid rgba(255,255,255,0.2)',
-  color:        '#e8e8e8',
+  background:   'var(--bg)',
+  border:       '1px solid var(--line-strong)',
+  color:        'var(--ink)',
   padding:      '6px 14px',
-  borderRadius: 4,
+  borderRadius: 'var(--card-radius)',
   cursor:       'pointer',
   fontSize:     12,
 };
 
 const FOOTER_BTN_PRIMARY: React.CSSProperties = {
   ...FOOTER_BTN,
-  background: 'rgba(70,130,200,0.7)',
-  border:     '1px solid rgba(120,180,240,0.6)',
+  background: 'color-mix(in oklab, var(--accent) 22%, transparent)',
+  border:     '1px solid var(--accent)',
 };
 
 export function LoadSceneModal({ currentEntityCount, onConfirmLoad, triggerRef, hideTrigger }: Props) {
@@ -235,7 +237,7 @@ export function LoadSceneModal({ currentEntityCount, onConfirmLoad, triggerRef, 
           <Dialog.Overlay style={OVERLAY} />
           <Dialog.Content style={CONTENT} aria-describedby={undefined}>
             <Dialog.Title style={TITLE}>Could not load scene</Dialog.Title>
-            <div style={{ color: '#e57373', fontSize: 12, margin: '4px 0 12px' }}>{error}</div>
+            <div style={{ color: 'var(--accent-deep)', fontSize: 12, margin: '4px 0 12px' }}>{error}</div>
             <div style={FOOTER}>
               <button type="button" style={FOOTER_BTN_PRIMARY} onClick={() => setError(null)}>OK</button>
             </div>

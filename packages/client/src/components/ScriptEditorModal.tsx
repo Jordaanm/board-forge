@@ -37,22 +37,22 @@ interface Props {
 }
 
 const TRIGGER_BTN: React.CSSProperties = {
-  background:   'rgba(20,20,32,0.92)',
-  border:       '1px solid rgba(255,255,255,0.2)',
-  color:        '#e8e8e8',
+  background:   'var(--surface)',
+  border:       '1px solid var(--line-strong)',
+  color:        'var(--ink)',
   padding:      '8px 12px',
-  borderRadius: 6,
+  borderRadius: 'var(--panel-radius)',
   cursor:       'pointer',
-  fontFamily:   'sans-serif',
+  fontFamily:   'var(--font-sans)',
   fontSize:     12,
-  boxShadow:    '0 4px 20px rgba(0,0,0,0.5)',
+  boxShadow:    'var(--shadow-lg)',
   userSelect:   'none',
 };
 
 const OVERLAY: React.CSSProperties = {
   position:   'fixed',
   inset:      0,
-  background: 'rgba(0,0,0,0.55)',
+  background: 'rgba(0,0,0,0.45)',
   zIndex:     200,
 };
 
@@ -61,16 +61,16 @@ const CONTENT: React.CSSProperties = {
   width:         '90vw',
   maxWidth:      1400,
   height:        '88vh',
-  background:    'rgba(20,20,32,0.98)',
-  border:        '1px solid rgba(255,255,255,0.15)',
-  borderRadius:  8,
-  color:         '#e8e8e8',
-  fontFamily:    'sans-serif',
+  background:    'var(--surface)',
+  border:        '1px solid var(--line)',
+  borderRadius:  'var(--panel-radius)',
+  color:         'var(--ink)',
+  fontFamily:    'var(--font-sans)',
   fontSize:      13,
   zIndex:        201,
   display:       'flex',
   flexDirection: 'column',
-  boxShadow:     '0 12px 40px rgba(0,0,0,0.7)',
+  boxShadow:     'var(--shadow-lg)',
 };
 
 const HEADER: React.CSSProperties = {
@@ -78,20 +78,22 @@ const HEADER: React.CSSProperties = {
   alignItems:     'center',
   justifyContent: 'space-between',
   padding:        '12px 16px',
-  borderBottom:   '1px solid rgba(255,255,255,0.1)',
+  borderBottom:   '1px solid var(--line)',
   flexShrink:     0,
 };
 
 const TITLE: React.CSSProperties = {
-  fontSize:   14,
-  fontWeight: 600,
-  margin:     0,
+  fontSize:      14,
+  fontWeight:    600,
+  margin:        0,
+  fontFamily:    'var(--font-serif)',
+  letterSpacing: '-0.01em',
 };
 
 const CLOSE_BTN: React.CSSProperties = {
   background: 'none',
   border:     'none',
-  color:      '#aaa',
+  color:      'var(--ink-mute)',
   cursor:     'pointer',
   fontSize:   18,
   lineHeight: 1,
@@ -113,12 +115,12 @@ const EDITOR_LOADING: React.CSSProperties = {
   display:       'flex',
   alignItems:    'center',
   justifyContent: 'center',
-  background:    'rgba(0,0,0,0.4)',
-  border:        '1px solid rgba(255,255,255,0.2)',
-  color:         '#888',
+  background:    'var(--bg)',
+  border:        '1px solid var(--line-strong)',
+  color:         'var(--ink-mute)',
   borderRadius:  3,
   fontSize:      12,
-  fontFamily:    'sans-serif',
+  fontFamily:    'var(--font-sans)',
 };
 
 const BUTTON_ROW: React.CSSProperties = {
@@ -128,11 +130,11 @@ const BUTTON_ROW: React.CSSProperties = {
 };
 
 const BUTTON: React.CSSProperties = {
-  background:   'rgba(255,255,255,0.1)',
-  border:       '1px solid rgba(255,255,255,0.2)',
-  color:        '#e8e8e8',
+  background:   'var(--surface-2)',
+  border:       '1px solid var(--line-strong)',
+  color:        'var(--ink)',
   padding:      '8px 14px',
-  borderRadius: 4,
+  borderRadius: 'var(--card-radius)',
   cursor:       'pointer',
   fontSize:     13,
   flex:         1,
@@ -141,7 +143,7 @@ const BUTTON: React.CSSProperties = {
 const LOG_LIST: React.CSSProperties = {
   maxHeight:  '25%',
   overflowY:  'auto',
-  borderTop:  '1px solid rgba(255,255,255,0.08)',
+  borderTop:  '1px solid var(--line)',
   paddingTop: 8,
   flexShrink: 0,
 };
@@ -157,13 +159,13 @@ const LOG_LABEL: React.CSSProperties = {
   fontSize:      10,
   textTransform: 'uppercase',
   letterSpacing: 1,
-  color:         '#888',
+  color:         'var(--ink-mute)',
 };
 
 const LOG_CLEAR: React.CSSProperties = {
   background:   'none',
-  border:       '1px solid rgba(255,255,255,0.2)',
-  color:        '#bbb',
+  border:       '1px solid var(--line-strong)',
+  color:        'var(--ink-2)',
   padding:      '2px 8px',
   borderRadius: 3,
   cursor:       'pointer',
@@ -173,11 +175,11 @@ const LOG_CLEAR: React.CSSProperties = {
 const LOG_ENTRY: React.CSSProperties = {
   marginBottom: 4,
   padding:      '4px 6px',
-  background:   'rgba(220,80,80,0.10)',
-  border:       '1px solid rgba(220,80,80,0.25)',
+  background:   'color-mix(in oklab, var(--accent) 10%, transparent)',
+  border:       '1px solid color-mix(in oklab, var(--accent) 25%, transparent)',
   borderRadius: 3,
-  color:        '#ffb0b0',
-  fontFamily:   'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+  color:        'var(--accent-deep)',
+  fontFamily:   'var(--font-mono)',
   fontSize:     11,
   whiteSpace:   'pre-wrap',
   wordBreak:    'break-word',
@@ -188,9 +190,9 @@ const LOG_ENTRY: React.CSSProperties = {
 // mid-execution.
 const LOG_ENTRY_COMPILE: React.CSSProperties = {
   ...LOG_ENTRY,
-  background: 'rgba(80,140,220,0.10)',
-  border:     '1px solid rgba(80,140,220,0.30)',
-  color:      '#bcd0f0',
+  background: 'color-mix(in oklab, var(--accent) 10%, transparent)',
+  border:     '1px solid color-mix(in oklab, var(--accent) 30%, transparent)',
+  color:      'var(--accent-deep)',
 };
 
 const BADGE_BASE: React.CSSProperties = {
@@ -206,56 +208,58 @@ const BADGE_BASE: React.CSSProperties = {
 
 const BADGE_COMPILE: React.CSSProperties = {
   ...BADGE_BASE,
-  background: 'rgba(80,140,220,0.25)',
-  color:      '#cfdef7',
+  background: 'color-mix(in oklab, var(--accent) 25%, transparent)',
+  color:      'var(--accent-deep)',
 };
 
 const BADGE_HOOK: React.CSSProperties = {
   ...BADGE_BASE,
-  background: 'rgba(220,80,80,0.25)',
-  color:      '#ffd0d0',
+  background: 'color-mix(in oklab, var(--accent) 25%, transparent)',
+  color:      'var(--accent-deep)',
 };
 
 const BADGE_EVENT: React.CSSProperties = {
   ...BADGE_BASE,
-  background: 'rgba(220,140,80,0.25)',
-  color:      '#ffe0c0',
+  background: 'color-mix(in oklab, var(--gold) 25%, transparent)',
+  color:      'var(--gold)',
 };
 
 const LOG_META: React.CSSProperties = {
-  color:    '#888',
+  color:    'var(--ink-mute)',
   fontSize: 10,
 };
 
 const CONFIRM_BACKDROP: React.CSSProperties = {
   position:       'absolute',
   inset:          0,
-  background:     'rgba(0,0,0,0.55)',
+  background:     'rgba(0,0,0,0.45)',
   display:        'flex',
   alignItems:     'center',
   justifyContent: 'center',
   zIndex:         1,
-  borderRadius:   8,
+  borderRadius:   'var(--panel-radius)',
 };
 
 const CONFIRM_BOX: React.CSSProperties = {
   width:        360,
-  background:   'rgba(28,28,40,0.98)',
-  border:       '1px solid rgba(255,255,255,0.18)',
-  borderRadius: 6,
+  background:   'var(--surface)',
+  border:       '1px solid var(--line-strong)',
+  borderRadius: 'var(--panel-radius)',
   padding:      '16px 18px',
-  boxShadow:    '0 8px 28px rgba(0,0,0,0.6)',
+  boxShadow:    'var(--shadow-lg)',
 };
 
 const CONFIRM_TITLE: React.CSSProperties = {
-  fontSize:   14,
-  fontWeight: 600,
-  marginBottom: 6,
+  fontSize:      14,
+  fontWeight:    600,
+  marginBottom:  6,
+  fontFamily:    'var(--font-serif)',
+  letterSpacing: '-0.01em',
 };
 
 const CONFIRM_BODY: React.CSSProperties = {
   fontSize:    12,
-  color:       '#bdbdc0',
+  color:       'var(--ink-2)',
   marginBottom: 14,
   lineHeight:  1.4,
 };
@@ -266,11 +270,11 @@ const CONFIRM_ROW: React.CSSProperties = {
 };
 
 const CONFIRM_BTN: React.CSSProperties = {
-  background:   'rgba(255,255,255,0.1)',
-  border:       '1px solid rgba(255,255,255,0.2)',
-  color:        '#e8e8e8',
+  background:   'var(--surface-2)',
+  border:       '1px solid var(--line-strong)',
+  color:        'var(--ink)',
   padding:      '6px 10px',
-  borderRadius: 4,
+  borderRadius: 'var(--card-radius)',
   cursor:       'pointer',
   fontSize:     12,
   flex:         1,
@@ -505,7 +509,7 @@ function ErrorLogList({
         </button>
       </div>
       {entries.length === 0 ? (
-        <div style={{ color: '#666', fontSize: 11 }}>No script errors.</div>
+        <div style={{ color: 'var(--ink-mute)', fontSize: 11 }}>No script errors.</div>
       ) : (
         // Newest at top — matches typical log UX.
         [...entries].reverse().map((e, i) => (

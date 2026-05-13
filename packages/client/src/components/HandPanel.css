@@ -3,12 +3,12 @@
   align-items: flex-end;
   gap: 6px;
   padding: 8px 12px;
-  background: rgba(20, 20, 32, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-  color: #e8e8e8;
-  font-family: sans-serif;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--panel-radius);
+  box-shadow: var(--shadow);
+  color: var(--ink);
+  font-family: var(--font-sans);
   font-size: 12px;
   max-width: min(80vw, 720px);
   overflow-x: auto;
@@ -16,7 +16,7 @@
 
 .hand-panel__placeholder {
   padding: 22px 18px;
-  color: #888;
+  color: var(--ink-mute);
   font-style: italic;
   font-size: 12px;
   text-align: center;
@@ -26,26 +26,26 @@
   position: relative;
   width: 64px;
   height: 90px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: var(--bg);
+  border: 1px solid var(--line-strong);
   border-radius: 4px;
   cursor: pointer;
   user-select: none;
   flex-shrink: 0;
-  transition: transform 0.1s ease, border-color 0.1s ease;
+  transition: transform 0.1s ease, border-color 0.1s ease, box-shadow 0.1s ease;
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
 }
 
 .hand-panel__tile:hover {
-  border-color: rgba(255, 255, 255, 0.4);
+  border-color: var(--accent);
   transform: translateY(-2px);
 }
 
 .hand-panel__tile--selected {
-  border-color: #ffd740;
-  box-shadow: 0 0 0 2px rgba(255, 215, 64, 0.4);
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--gold) 40%, transparent);
 }
 
 .hand-panel__tile-fallback {
@@ -55,7 +55,7 @@
   align-items: center;
   justify-content: center;
   font-size: 10px;
-  color: #888;
+  color: var(--ink-mute);
   text-align: center;
   padding: 4px;
   word-break: break-word;

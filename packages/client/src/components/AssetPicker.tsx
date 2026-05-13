@@ -28,7 +28,7 @@ type TabId = 'primitives' | 'base' | 'custom' | 'url';
 const OVERLAY: React.CSSProperties = {
   position:   'fixed',
   inset:      0,
-  background: 'rgba(0,0,0,0.55)',
+  background: 'rgba(0,0,0,0.45)',
   zIndex:     200,
 };
 
@@ -36,16 +36,16 @@ const CONTENT: React.CSSProperties = {
   width:         600,
   maxWidth:      '90vw',
   height:        '70vh',
-  background:    'rgba(20,20,32,0.98)',
-  border:        '1px solid rgba(255,255,255,0.15)',
-  borderRadius:  8,
-  color:         '#e8e8e8',
-  fontFamily:    'sans-serif',
+  background:    'var(--surface)',
+  border:        '1px solid var(--line)',
+  borderRadius:  'var(--panel-radius)',
+  color:         'var(--ink)',
+  fontFamily:    'var(--font-sans)',
   fontSize:      13,
   zIndex:        201,
   display:       'flex',
   flexDirection: 'column',
-  boxShadow:     '0 12px 40px rgba(0,0,0,0.7)',
+  boxShadow:     'var(--shadow-lg)',
 };
 
 const HEADER: React.CSSProperties = {
@@ -53,25 +53,31 @@ const HEADER: React.CSSProperties = {
   alignItems:     'center',
   justifyContent: 'space-between',
   padding:        '12px 16px',
-  borderBottom:   '1px solid rgba(255,255,255,0.1)',
+  borderBottom:   '1px solid var(--line)',
 };
 
-const TITLE: React.CSSProperties = { fontSize: 14, fontWeight: 600, margin: 0 };
+const TITLE: React.CSSProperties = {
+  fontSize:      14,
+  fontWeight:    600,
+  margin:        0,
+  fontFamily:    'var(--font-serif)',
+  letterSpacing: '-0.01em',
+};
 
 const CLOSE_BTN: React.CSSProperties = {
-  background: 'none', border: 'none', color: '#aaa',
+  background: 'none', border: 'none', color: 'var(--ink-mute)',
   cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: '0 4px',
 };
 
 const TAB_BAR: React.CSSProperties = {
   display:      'flex',
-  borderBottom: '1px solid rgba(255,255,255,0.08)',
+  borderBottom: '1px solid var(--line)',
 };
 
 const TAB_BTN: React.CSSProperties = {
   background:   'none',
   border:       'none',
-  color:        '#bdbdc0',
+  color:        'var(--ink-2)',
   padding:      '8px 14px',
   cursor:       'pointer',
   fontSize:     12,
@@ -80,9 +86,9 @@ const TAB_BTN: React.CSSProperties = {
 
 const TAB_BTN_ACTIVE: React.CSSProperties = {
   ...TAB_BTN,
-  color:        '#e8e8e8',
+  color:        'var(--ink)',
   fontWeight:   600,
-  borderBottom: '2px solid rgba(120,180,240,0.6)',
+  borderBottom: '2px solid var(--accent)',
 };
 
 const BODY: React.CSSProperties = {
@@ -98,9 +104,9 @@ const SEARCH_ROW: React.CSSProperties = {
 };
 
 const INPUT: React.CSSProperties = {
-  background:   'rgba(0,0,0,0.4)',
-  border:       '1px solid rgba(255,255,255,0.18)',
-  color:        '#e8e8e8',
+  background:   'var(--bg)',
+  border:       '1px solid var(--line-strong)',
+  color:        'var(--ink)',
   padding:      '4px 6px',
   borderRadius: 3,
   fontSize:     12,
@@ -118,9 +124,9 @@ const TILE: React.CSSProperties = {
   display:        'flex',
   flexDirection:  'column',
   alignItems:     'stretch',
-  border:         '1px solid rgba(255,255,255,0.12)',
-  borderRadius:   4,
-  background:     'rgba(255,255,255,0.04)',
+  border:         '1px solid var(--line)',
+  borderRadius:   'var(--card-radius)',
+  background:     'var(--surface-2)',
   cursor:         'pointer',
   padding:        6,
   gap:            4,
@@ -129,19 +135,19 @@ const TILE: React.CSSProperties = {
 
 const TILE_SELECTED: React.CSSProperties = {
   ...TILE,
-  borderColor: 'rgba(120,180,240,0.8)',
-  background:  'rgba(70,130,200,0.18)',
+  borderColor: 'var(--accent)',
+  background:  'color-mix(in oklab, var(--accent) 22%, transparent)',
 };
 
 const THUMB_BOX: React.CSSProperties = {
   width:           '100%',
   aspectRatio:     '1 / 1',
-  background:      'rgba(0,0,0,0.4)',
-  border:          '1px solid rgba(255,255,255,0.06)',
+  background:      'var(--bg)',
+  border:          '1px solid var(--line)',
   display:         'flex',
   alignItems:      'center',
   justifyContent:  'center',
-  color:           '#666',
+  color:           'var(--ink-mute)',
   fontSize:        10,
   textTransform:   'uppercase',
   letterSpacing:   1,
@@ -164,7 +170,7 @@ const TILE_NAME: React.CSSProperties = {
 
 const TILE_SLUG: React.CSSProperties = {
   fontSize:     10,
-  color:        '#888',
+  color:        'var(--ink-mute)',
   whiteSpace:   'nowrap',
   textOverflow: 'ellipsis',
   overflow:     'hidden',
@@ -175,14 +181,14 @@ const FOOTER: React.CSSProperties = {
   alignItems:     'center',
   justifyContent: 'flex-end',
   padding:        '10px 16px',
-  borderTop:      '1px solid rgba(255,255,255,0.1)',
+  borderTop:      '1px solid var(--line)',
   gap:            6,
 };
 
 const BTN: React.CSSProperties = {
-  background:   'rgba(255,255,255,0.08)',
-  border:       '1px solid rgba(255,255,255,0.18)',
-  color:        '#e8e8e8',
+  background:   'var(--surface-2)',
+  border:       '1px solid var(--line-strong)',
+  color:        'var(--ink)',
   padding:      '5px 10px',
   borderRadius: 3,
   cursor:       'pointer',
@@ -191,8 +197,8 @@ const BTN: React.CSSProperties = {
 
 const BTN_PRIMARY: React.CSSProperties = {
   ...BTN,
-  background:  'rgba(70,130,200,0.4)',
-  borderColor: 'rgba(120,180,240,0.45)',
+  background:  'color-mix(in oklab, var(--accent) 22%, transparent)',
+  borderColor: 'var(--accent)',
 };
 
 const BTN_DISABLED: React.CSSProperties = {
@@ -205,14 +211,14 @@ const URL_PREVIEW: React.CSSProperties = {
   width:           '100%',
   maxHeight:       260,
   marginTop:       8,
-  border:          '1px solid rgba(255,255,255,0.1)',
-  background:      'rgba(0,0,0,0.4)',
+  border:          '1px solid var(--line)',
+  background:      'var(--bg)',
   display:         'flex',
   alignItems:      'center',
   justifyContent:  'center',
   padding:         8,
   minHeight:       120,
-  color:           '#888',
+  color:           'var(--ink-mute)',
   fontSize:        12,
 };
 
@@ -308,7 +314,7 @@ export function AssetPicker({ open, onClose, onSelect, type, store, currentRef }
                     style={BREADCRUMB_BTN}
                     onClick={() => setMode({ kind: 'list' })}
                   >‹ Pick {type} asset</button>
-                  <span style={{ color: '#888' }}> / {mode.sheet.name}</span>
+                  <span style={{ color: 'var(--ink-mute)' }}> / {mode.sheet.name}</span>
                 </span>
               ) : `Pick ${type} asset`}
             </Dialog.Title>
@@ -370,7 +376,7 @@ export function AssetPicker({ open, onClose, onSelect, type, store, currentRef }
 const BREADCRUMB_BTN: React.CSSProperties = {
   background:   'none',
   border:       'none',
-  color:        '#e8e8e8',
+  color:        'var(--ink)',
   cursor:       'pointer',
   fontSize:     14,
   fontWeight:   600,
@@ -386,7 +392,7 @@ function Grid({
   entries, currentRef, onPick,
 }: { entries: AssetEntry[]; currentRef: string | undefined; onPick: (entry: AssetEntry) => void }) {
   if (entries.length === 0) {
-    return <div style={{ color: '#666', fontSize: 12, padding: 16 }}>No matching entries.</div>;
+    return <div style={{ color: 'var(--ink-mute)', fontSize: 12, padding: 16 }}>No matching entries.</div>;
   }
   // A sprite ref like `custom:deck:5` highlights the sheet tile `custom:deck`.
   const parsedCurrent = currentRef ? parseRef(currentRef) : null;
@@ -459,8 +465,8 @@ function SpriteGrid({
               backgroundPosition: `${bgPosX} ${bgPosY}`,
               backgroundRepeat:   'no-repeat',
               border:             isSelected
-                ? '2px solid rgba(120,180,240,0.85)'
-                : '1px solid rgba(255,255,255,0.12)',
+                ? '2px solid var(--accent)'
+                : '1px solid var(--line)',
               borderRadius:       3,
               cursor:             'pointer',
             }}

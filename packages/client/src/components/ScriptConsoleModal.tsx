@@ -34,15 +34,15 @@ interface Props {
 }
 
 const TRIGGER_BTN: React.CSSProperties = {
-  background:   'rgba(20,20,32,0.92)',
-  border:       '1px solid rgba(255,255,255,0.2)',
-  color:        '#e8e8e8',
+  background:   'var(--surface)',
+  border:       '1px solid var(--line-strong)',
+  color:        'var(--ink)',
   padding:      '8px 12px',
-  borderRadius: 6,
+  borderRadius: 'var(--panel-radius)',
   cursor:       'pointer',
-  fontFamily:   'sans-serif',
+  fontFamily:   'var(--font-sans)',
   fontSize:     12,
-  boxShadow:    '0 4px 20px rgba(0,0,0,0.5)',
+  boxShadow:    'var(--shadow-lg)',
   userSelect:   'none',
 };
 
@@ -55,7 +55,7 @@ const TRIGGER_BTN_DISABLED: React.CSSProperties = {
 const OVERLAY: React.CSSProperties = {
   position:   'fixed',
   inset:      0,
-  background: 'rgba(0,0,0,0.55)',
+  background: 'rgba(0,0,0,0.45)',
   zIndex:     200,
 };
 
@@ -64,16 +64,16 @@ const CONTENT: React.CSSProperties = {
   width:         '90vw',
   maxWidth:      1200,
   height:        '80vh',
-  background:    'rgba(20,20,32,0.98)',
-  border:        '1px solid rgba(255,255,255,0.15)',
-  borderRadius:  8,
-  color:         '#e8e8e8',
-  fontFamily:    'sans-serif',
+  background:    'var(--surface)',
+  border:        '1px solid var(--line)',
+  borderRadius:  'var(--panel-radius)',
+  color:         'var(--ink)',
+  fontFamily:    'var(--font-sans)',
   fontSize:      13,
   zIndex:        201,
   display:       'flex',
   flexDirection: 'column',
-  boxShadow:     '0 12px 40px rgba(0,0,0,0.7)',
+  boxShadow:     'var(--shadow-lg)',
 };
 
 const HEADER: React.CSSProperties = {
@@ -81,14 +81,20 @@ const HEADER: React.CSSProperties = {
   alignItems:     'center',
   justifyContent: 'space-between',
   padding:        '12px 16px',
-  borderBottom:   '1px solid rgba(255,255,255,0.1)',
+  borderBottom:   '1px solid var(--line)',
   flexShrink:     0,
 };
 
-const TITLE: React.CSSProperties = { fontSize: 14, fontWeight: 600, margin: 0 };
+const TITLE: React.CSSProperties = {
+  fontSize:      14,
+  fontWeight:    600,
+  margin:        0,
+  fontFamily:    'var(--font-serif)',
+  letterSpacing: '-0.01em',
+};
 
 const CLOSE_BTN: React.CSSProperties = {
-  background: 'none', border: 'none', color: '#aaa',
+  background: 'none', border: 'none', color: 'var(--ink-mute)',
   cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: '0 4px',
 };
 
@@ -107,9 +113,9 @@ const EDITOR_LOADING: React.CSSProperties = {
   display:        'flex',
   alignItems:     'center',
   justifyContent: 'center',
-  background:     'rgba(0,0,0,0.4)',
-  border:         '1px solid rgba(255,255,255,0.2)',
-  color:          '#888',
+  background:     'var(--bg)',
+  border:         '1px solid var(--line-strong)',
+  color:          'var(--ink-mute)',
   borderRadius:   3,
   fontSize:       12,
 };
@@ -117,11 +123,11 @@ const EDITOR_LOADING: React.CSSProperties = {
 const BUTTON_ROW: React.CSSProperties = { display: 'flex', gap: 8, flexShrink: 0 };
 
 const BUTTON: React.CSSProperties = {
-  background:   'rgba(255,255,255,0.1)',
-  border:       '1px solid rgba(255,255,255,0.2)',
-  color:        '#e8e8e8',
+  background:   'var(--surface-2)',
+  border:       '1px solid var(--line-strong)',
+  color:        'var(--ink)',
   padding:      '8px 14px',
-  borderRadius: 4,
+  borderRadius: 'var(--card-radius)',
   cursor:       'pointer',
   fontSize:     13,
 };
@@ -135,9 +141,9 @@ const OUTPUT_PANE: React.CSSProperties = {
   flex:         '1 1 35%',
   minHeight:    140,
   overflowY:    'auto',
-  borderTop:    '1px solid rgba(255,255,255,0.08)',
+  borderTop:    '1px solid var(--line)',
   paddingTop:   8,
-  fontFamily:   'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+  fontFamily:   'var(--font-mono)',
   fontSize:     12,
 };
 
@@ -146,20 +152,20 @@ const OUTPUT_HEADER: React.CSSProperties = {
   alignItems:     'center',
   justifyContent: 'space-between',
   marginBottom:   6,
-  fontFamily:     'sans-serif',
+  fontFamily:     'var(--font-sans)',
 };
 
 const OUTPUT_LABEL: React.CSSProperties = {
   fontSize:      10,
   textTransform: 'uppercase',
   letterSpacing: 1,
-  color:         '#888',
+  color:         'var(--ink-mute)',
 };
 
 const CLEAR_BTN: React.CSSProperties = {
   background:   'none',
-  border:       '1px solid rgba(255,255,255,0.2)',
-  color:        '#bbb',
+  border:       '1px solid var(--line-strong)',
+  color:        'var(--ink-2)',
   padding:      '2px 8px',
   borderRadius: 3,
   cursor:       'pointer',
@@ -175,25 +181,25 @@ const LINE: React.CSSProperties = {
 };
 
 const LEVEL_STYLE: Record<LogLevel, React.CSSProperties> = {
-  log:   { ...LINE, color: '#d4d4d4' },
-  info:  { ...LINE, color: '#bcd0f0', background: 'rgba(80,140,220,0.06)' },
-  warn:  { ...LINE, color: '#ffe0a0', background: 'rgba(220,160,80,0.08)' },
-  error: { ...LINE, color: '#ffb0b0', background: 'rgba(220,80,80,0.10)' },
-  debug: { ...LINE, color: '#9eb09e' },
+  log:   { ...LINE, color: 'var(--ink)' },
+  info:  { ...LINE, color: 'var(--accent-deep)', background: 'color-mix(in oklab, var(--accent) 8%, transparent)' },
+  warn:  { ...LINE, color: 'var(--gold)', background: 'color-mix(in oklab, var(--gold) 10%, transparent)' },
+  error: { ...LINE, color: 'var(--accent-deep)', background: 'color-mix(in oklab, var(--accent) 10%, transparent)' },
+  debug: { ...LINE, color: 'var(--moss)' },
 };
 
 const RESULT_LINE: React.CSSProperties = {
   ...LINE,
-  color:      '#9ee29e',
-  background: 'rgba(80,180,80,0.10)',
-  border:     '1px solid rgba(80,180,80,0.30)',
+  color:      'var(--moss)',
+  background: 'color-mix(in oklab, var(--moss) 10%, transparent)',
+  border:     '1px solid color-mix(in oklab, var(--moss) 30%, transparent)',
 };
 
 const ERROR_LINE: React.CSSProperties = {
   ...LINE,
-  color:      '#ffb0b0',
-  background: 'rgba(220,80,80,0.10)',
-  border:     '1px solid rgba(220,80,80,0.30)',
+  color:      'var(--accent-deep)',
+  background: 'color-mix(in oklab, var(--accent) 10%, transparent)',
+  border:     '1px solid color-mix(in oklab, var(--accent) 30%, transparent)',
 };
 
 const LEVEL_BADGE: React.CSSProperties = {
@@ -205,8 +211,8 @@ const LEVEL_BADGE: React.CSSProperties = {
   letterSpacing: 0.6,
   fontWeight:    600,
   marginRight:   6,
-  background:    'rgba(255,255,255,0.08)',
-  color:         '#bdbdc0',
+  background:    'var(--surface-2)',
+  color:         'var(--ink-2)',
 };
 
 const SEED_SOURCE = `// One-time script. Runs against the live scene + game instance.
@@ -320,7 +326,7 @@ function OutputPane({ output, onClear }: { output: OutputState; onClear: () => v
           Clear
         </button>
       </div>
-      {isEmpty && <div style={{ color: '#666', fontSize: 11 }}>No output yet. Run a script to see logs + return value.</div>}
+      {isEmpty && <div style={{ color: 'var(--ink-mute)', fontSize: 11 }}>No output yet. Run a script to see logs + return value.</div>}
       {r && r.logs.map((log, i) => <LogRow key={i} log={log} />)}
       {r && r.ok && r.returnValue !== null && (
         <div style={RESULT_LINE}>

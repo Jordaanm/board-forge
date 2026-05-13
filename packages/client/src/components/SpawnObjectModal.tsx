@@ -17,38 +17,38 @@ interface Props {
 }
 
 const TRIGGER_BTN: React.CSSProperties = {
-  background:   'rgba(20,20,32,0.92)',
-  border:       '1px solid rgba(255,255,255,0.2)',
-  color:        '#e8e8e8',
+  background:   'var(--surface)',
+  border:       '1px solid var(--line-strong)',
+  color:        'var(--ink)',
   padding:      '8px 16px',
-  borderRadius: 6,
+  borderRadius: 'var(--panel-radius)',
   cursor:       'pointer',
-  fontFamily:   'sans-serif',
+  fontFamily:   'var(--font-sans)',
   fontSize:     13,
   fontWeight:   600,
-  boxShadow:    '0 4px 20px rgba(0,0,0,0.5)',
+  boxShadow:    'var(--shadow-lg)',
 };
 
 const OVERLAY: React.CSSProperties = {
   position:   'fixed',
   inset:      0,
-  background: 'rgba(0,0,0,0.55)',
+  background: 'rgba(0,0,0,0.45)',
   zIndex:     200,
 };
 
 const CONTENT: React.CSSProperties = {
   width:       520,
   height:      600,
-  background:  'rgba(20,20,32,0.98)',
-  border:      '1px solid rgba(255,255,255,0.15)',
-  borderRadius: 8,
-  color:       '#e8e8e8',
-  fontFamily:  'sans-serif',
+  background:  'var(--surface)',
+  border:      '1px solid var(--line)',
+  borderRadius: 'var(--panel-radius)',
+  color:       'var(--ink)',
+  fontFamily:  'var(--font-sans)',
   fontSize:    13,
   zIndex:      201,
   display:     'flex',
   flexDirection: 'column',
-  boxShadow:   '0 12px 40px rgba(0,0,0,0.7)',
+  boxShadow:   'var(--shadow-lg)',
 };
 
 const HEADER: React.CSSProperties = {
@@ -56,19 +56,21 @@ const HEADER: React.CSSProperties = {
   alignItems:     'center',
   justifyContent: 'space-between',
   padding:        '12px 16px',
-  borderBottom:   '1px solid rgba(255,255,255,0.1)',
+  borderBottom:   '1px solid var(--line)',
 };
 
 const TITLE: React.CSSProperties = {
-  fontSize:   14,
-  fontWeight: 600,
-  margin:     0,
+  fontSize:      14,
+  fontWeight:    600,
+  margin:        0,
+  fontFamily:    'var(--font-serif)',
+  letterSpacing: '-0.01em',
 };
 
 const CLOSE_BTN: React.CSSProperties = {
   background: 'none',
   border:     'none',
-  color:      '#aaa',
+  color:      'var(--ink-mute)',
   cursor:     'pointer',
   fontSize:   18,
   lineHeight: 1,
@@ -77,18 +79,18 @@ const CLOSE_BTN: React.CSSProperties = {
 
 const SEARCH_WRAP: React.CSSProperties = {
   padding:     '10px 16px',
-  borderBottom: '1px solid rgba(255,255,255,0.08)',
+  borderBottom: '1px solid var(--line)',
 };
 
 const SEARCH_INPUT: React.CSSProperties = {
   width:        '100%',
-  background:   'rgba(0,0,0,0.4)',
-  border:       '1px solid rgba(255,255,255,0.2)',
-  color:        '#e8e8e8',
+  background:   'var(--bg)',
+  border:       '1px solid var(--line-strong)',
+  color:        'var(--ink)',
   padding:      '6px 10px',
-  borderRadius: 4,
+  borderRadius: 'var(--card-radius)',
   fontSize:     13,
-  fontFamily:   'sans-serif',
+  fontFamily:   'var(--font-sans)',
   boxSizing:    'border-box',
   outline:      'none',
 };
@@ -103,17 +105,17 @@ const SECTION_LABEL: React.CSSProperties = {
   fontSize:      10,
   textTransform: 'uppercase',
   letterSpacing: 1,
-  color:         '#888',
+  color:         'var(--ink-mute)',
   margin:        '8px 16px 4px',
 };
 
 const ROW_CATEGORY: React.CSSProperties = {
-  color:    '#777',
+  color:    'var(--ink-mute)',
   fontSize: 11,
 };
 
 const EMPTY: React.CSSProperties = {
-  color:      '#666',
+  color:      'var(--ink-mute)',
   fontSize:   12,
   textAlign:  'center',
   padding:    '24px 16px',

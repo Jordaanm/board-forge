@@ -33,22 +33,22 @@ interface Props {
 type TabId = 'primitives' | 'base' | 'custom';
 
 const TRIGGER_BTN: React.CSSProperties = {
-  background:   'rgba(20,20,32,0.92)',
-  border:       '1px solid rgba(255,255,255,0.2)',
-  color:        '#e8e8e8',
+  background:   'var(--surface)',
+  border:       '1px solid var(--line-strong)',
+  color:        'var(--ink)',
   padding:      '8px 12px',
-  borderRadius: 6,
+  borderRadius: 'var(--panel-radius)',
   cursor:       'pointer',
-  fontFamily:   'sans-serif',
+  fontFamily:   'var(--font-sans)',
   fontSize:     12,
-  boxShadow:    '0 4px 20px rgba(0,0,0,0.5)',
+  boxShadow:    'var(--shadow-lg)',
   userSelect:   'none',
 };
 
 const OVERLAY: React.CSSProperties = {
   position:   'fixed',
   inset:      0,
-  background: 'rgba(0,0,0,0.55)',
+  background: 'rgba(0,0,0,0.45)',
   zIndex:     200,
 };
 
@@ -56,16 +56,16 @@ const CONTENT: React.CSSProperties = {
   width:         640,
   maxWidth:      '90vw',
   height:        '70vh',
-  background:    'rgba(20,20,32,0.98)',
-  border:        '1px solid rgba(255,255,255,0.15)',
-  borderRadius:  8,
-  color:         '#e8e8e8',
-  fontFamily:    'sans-serif',
+  background:    'var(--surface)',
+  border:        '1px solid var(--line)',
+  borderRadius:  'var(--panel-radius)',
+  color:         'var(--ink)',
+  fontFamily:    'var(--font-sans)',
   fontSize:      13,
   zIndex:        201,
   display:       'flex',
   flexDirection: 'column',
-  boxShadow:     '0 12px 40px rgba(0,0,0,0.7)',
+  boxShadow:     'var(--shadow-lg)',
 };
 
 const HEADER: React.CSSProperties = {
@@ -73,25 +73,31 @@ const HEADER: React.CSSProperties = {
   alignItems:     'center',
   justifyContent: 'space-between',
   padding:        '12px 16px',
-  borderBottom:   '1px solid rgba(255,255,255,0.1)',
+  borderBottom:   '1px solid var(--line)',
 };
 
-const TITLE: React.CSSProperties = { fontSize: 14, fontWeight: 600, margin: 0 };
+const TITLE: React.CSSProperties = {
+  fontSize:      14,
+  fontWeight:    600,
+  margin:        0,
+  fontFamily:    'var(--font-serif)',
+  letterSpacing: '-0.01em',
+};
 
 const CLOSE_BTN: React.CSSProperties = {
-  background: 'none', border: 'none', color: '#aaa',
+  background: 'none', border: 'none', color: 'var(--ink-mute)',
   cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: '0 4px',
 };
 
 const TAB_BAR: React.CSSProperties = {
   display:      'flex',
-  borderBottom: '1px solid rgba(255,255,255,0.08)',
+  borderBottom: '1px solid var(--line)',
 };
 
 const TAB_BTN: React.CSSProperties = {
   background:    'none',
   border:        'none',
-  color:         '#bdbdc0',
+  color:         'var(--ink-2)',
   padding:       '8px 14px',
   cursor:        'pointer',
   fontSize:      12,
@@ -100,9 +106,9 @@ const TAB_BTN: React.CSSProperties = {
 
 const TAB_BTN_ACTIVE: React.CSSProperties = {
   ...TAB_BTN,
-  color:        '#e8e8e8',
+  color:        'var(--ink)',
   fontWeight:   600,
-  borderBottom: '2px solid rgba(120,180,240,0.6)',
+  borderBottom: '2px solid var(--accent)',
 };
 
 const BODY: React.CSSProperties = {
@@ -117,8 +123,8 @@ const ROW: React.CSSProperties = {
   alignItems:   'center',
   gap:          8,
   padding:      '6px 8px',
-  borderRadius: 4,
-  border:       '1px solid rgba(255,255,255,0.06)',
+  borderRadius: 'var(--card-radius)',
+  border:       '1px solid var(--line)',
   marginBottom: 4,
 };
 
@@ -126,8 +132,8 @@ const PREVIEW_BOX: React.CSSProperties = {
   width:          40,
   height:         40,
   borderRadius:   3,
-  background:     'rgba(0,0,0,0.4)',
-  border:         '1px solid rgba(255,255,255,0.06)',
+  background:     'var(--bg)',
+  border:         '1px solid var(--line)',
   display:        'flex',
   alignItems:     'center',
   justifyContent: 'center',
@@ -143,7 +149,7 @@ const PREVIEW_IMG: React.CSSProperties = {
 const PREVIEW_PLAY_BTN: React.CSSProperties = {
   background:   'none',
   border:       'none',
-  color:        '#e8e8e8',
+  color:        'var(--ink)',
   cursor:       'pointer',
   fontSize:     16,
   padding:      0,
@@ -154,24 +160,24 @@ const PREVIEW_PLAY_BTN: React.CSSProperties = {
 
 const ROW_LABEL: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 };
 const ROW_NAME:  React.CSSProperties = { fontWeight: 500, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' };
-const ROW_SLUG:  React.CSSProperties = { fontSize: 11, color: '#888', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' };
-const ROW_TYPE:  React.CSSProperties = { fontSize: 11, color: '#bdbdc0', textTransform: 'uppercase', letterSpacing: 0.5 };
+const ROW_SLUG:  React.CSSProperties = { fontSize: 11, color: 'var(--ink-mute)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' };
+const ROW_TYPE:  React.CSSProperties = { fontSize: 11, color: 'var(--ink-2)', textTransform: 'uppercase', letterSpacing: 0.5 };
 
 const FOOTER: React.CSSProperties = {
   display:        'flex',
   alignItems:     'center',
   justifyContent: 'space-between',
   padding:        '10px 16px',
-  borderTop:      '1px solid rgba(255,255,255,0.1)',
+  borderTop:      '1px solid var(--line)',
   fontSize:       12,
 };
 
 const PUSH_BTN: React.CSSProperties = {
-  background:   'rgba(70,130,200,0.4)',
-  border:       '1px solid rgba(120,180,240,0.45)',
-  color:        '#e8e8e8',
+  background:   'color-mix(in oklab, var(--accent) 22%, transparent)',
+  border:       '1px solid var(--accent)',
+  color:        'var(--ink)',
   padding:      '6px 12px',
-  borderRadius: 4,
+  borderRadius: 'var(--card-radius)',
   cursor:       'pointer',
   fontSize:     12,
 };
@@ -183,9 +189,9 @@ const PUSH_BTN_DISABLED: React.CSSProperties = {
 };
 
 const SMALL_BTN: React.CSSProperties = {
-  background:   'rgba(255,255,255,0.08)',
-  border:       '1px solid rgba(255,255,255,0.18)',
-  color:        '#e8e8e8',
+  background:   'var(--surface-2)',
+  border:       '1px solid var(--line-strong)',
+  color:        'var(--ink)',
   padding:      '4px 8px',
   borderRadius: 3,
   cursor:       'pointer',
@@ -194,9 +200,9 @@ const SMALL_BTN: React.CSSProperties = {
 
 const DANGER_BTN: React.CSSProperties = {
   ...SMALL_BTN,
-  background: 'rgba(220,80,80,0.18)',
-  border:     '1px solid rgba(220,80,80,0.4)',
-  color:      '#ffd0d0',
+  background: 'color-mix(in oklab, var(--accent) 22%, transparent)',
+  border:     '1px solid var(--accent-deep)',
+  color:      'var(--accent-deep)',
 };
 
 const ADD_BAR: React.CSSProperties = {
@@ -205,14 +211,14 @@ const ADD_BAR: React.CSSProperties = {
   gap:            6,
   margin:         '8px 0',
   padding:        '8px',
-  border:         '1px dashed rgba(255,255,255,0.18)',
-  borderRadius:   4,
+  border:         '1px dashed var(--line-strong)',
+  borderRadius:   'var(--card-radius)',
 };
 
 const INPUT: React.CSSProperties = {
-  background:   'rgba(0,0,0,0.4)',
-  border:       '1px solid rgba(255,255,255,0.18)',
-  color:        '#e8e8e8',
+  background:   'var(--bg)',
+  border:       '1px solid var(--line-strong)',
+  color:        'var(--ink)',
   padding:      '4px 6px',
   borderRadius: 3,
   fontSize:     12,
@@ -229,11 +235,11 @@ const FIELD_GRID: React.CSSProperties = {
 
 const FIELD_LABEL: React.CSSProperties = {
   fontSize: 11,
-  color:    '#888',
+  color:    'var(--ink-mute)',
 };
 
 const ERROR_LINE: React.CSSProperties = {
-  color:    '#ffb0b0',
+  color:    'var(--accent-deep)',
   fontSize: 11,
   margin:   '4px 0',
 };
@@ -248,17 +254,17 @@ const PREFLIGHT_LINE: React.CSSProperties = {
 
 const PREFLIGHT_OK: React.CSSProperties = {
   ...PREFLIGHT_LINE,
-  color: '#9ee29e',
+  color: 'var(--moss)',
 };
 
 const PREFLIGHT_WARN: React.CSSProperties = {
   ...PREFLIGHT_LINE,
-  color: '#ffb87a',
+  color: 'var(--gold)',
 };
 
 const PREFLIGHT_PENDING: React.CSSProperties = {
   ...PREFLIGHT_LINE,
-  color: '#bdbdc0',
+  color: 'var(--ink-2)',
 };
 
 const WARNING_BADGE: React.CSSProperties = {
@@ -268,11 +274,11 @@ const WARNING_BADGE: React.CSSProperties = {
   width:          16,
   height:         16,
   borderRadius:   '50%',
-  background:     'rgba(255,160,80,0.25)',
-  color:          '#ffb87a',
+  background:     'color-mix(in oklab, var(--gold) 25%, transparent)',
+  color:          'var(--gold)',
   fontSize:       11,
   fontWeight:     700,
-  border:         '1px solid rgba(255,160,80,0.5)',
+  border:         '1px solid var(--gold)',
   marginLeft:     6,
   flexShrink:     0,
 };
@@ -324,7 +330,7 @@ export function AssetManagerModal({ store, onPush, open: controlledOpen, onOpenC
 
 function ReadOnlyList({ entries }: { entries: AssetEntry[] }) {
   if (entries.length === 0) {
-    return <div style={{ color: '#666', fontSize: 12, padding: 16 }}>Empty.</div>;
+    return <div style={{ color: 'var(--ink-mute)', fontSize: 12, padding: 16 }}>Empty.</div>;
   }
   return (
     <>
@@ -412,7 +418,7 @@ function CustomTab({ store }: { store: ManifestStore }) {
     <>
       <AddRow store={store} />
       {customEntries.length === 0 && (
-        <div style={{ color: '#666', fontSize: 12, padding: '12px 4px' }}>
+        <div style={{ color: 'var(--ink-mute)', fontSize: 12, padding: '12px 4px' }}>
           No custom assets yet. Paste a URL above to add one.
         </div>
       )}
@@ -530,7 +536,7 @@ function EditRow({ entry, store, onClose }: { entry: AssetEntry; store: Manifest
         <div style={FIELD_LABEL}>Preload</div>
         <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <input type="checkbox" checked={preload} onChange={(e) => setPreload(e.target.checked)} />
-          <span style={{ fontSize: 11, color: '#bdbdc0' }}>Fetch at session start</span>
+          <span style={{ fontSize: 11, color: 'var(--ink-2)' }}>Fetch at session start</span>
         </label>
         {isSheet && <>
           <div style={FIELD_LABEL}>Cols</div>
@@ -645,7 +651,7 @@ function AddRow({ store }: { store: ManifestStore }) {
           <div style={FIELD_LABEL}>Preload</div>
           <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <input type="checkbox" checked={preload} onChange={(e) => setPreload(e.target.checked)} />
-            <span style={{ fontSize: 11, color: '#bdbdc0' }}>Fetch at session start</span>
+            <span style={{ fontSize: 11, color: 'var(--ink-2)' }}>Fetch at session start</span>
           </label>
           {isSheet && <>
             <div style={FIELD_LABEL}>Cols</div>
@@ -735,7 +741,7 @@ function Footer({ store, onPush }: { store: ManifestStore | null; onPush: () => 
   const disabled = count === 0;
   return (
     <div style={FOOTER}>
-      <span style={{ color: count > 0 ? '#ffd07a' : '#888' }}>
+      <span style={{ color: count > 0 ? 'var(--gold)' : 'var(--ink-mute)' }}>
         {count === 0 ? 'No unpushed changes.' : `${count} unpushed change${count === 1 ? '' : 's'}.`}
       </span>
       <button

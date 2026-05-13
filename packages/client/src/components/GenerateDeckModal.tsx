@@ -25,22 +25,22 @@ interface Props {
 }
 
 const TRIGGER_BTN: React.CSSProperties = {
-  background:   'rgba(20,20,32,0.92)',
-  border:       '1px solid rgba(255,255,255,0.2)',
-  color:        '#e8e8e8',
+  background:   'var(--surface)',
+  border:       '1px solid var(--line-strong)',
+  color:        'var(--ink)',
   padding:      '8px 12px',
-  borderRadius: 6,
+  borderRadius: 'var(--panel-radius)',
   cursor:       'pointer',
-  fontFamily:   'sans-serif',
+  fontFamily:   'var(--font-sans)',
   fontSize:     12,
-  boxShadow:    '0 4px 20px rgba(0,0,0,0.5)',
+  boxShadow:    'var(--shadow-lg)',
   userSelect:   'none',
 };
 
 const OVERLAY: React.CSSProperties = {
   position:   'fixed',
   inset:      0,
-  background: 'rgba(0,0,0,0.55)',
+  background: 'rgba(0,0,0,0.45)',
   zIndex:     200,
 };
 
@@ -48,16 +48,16 @@ const CONTENT: React.CSSProperties = {
   width:         560,
   maxWidth:      '90vw',
   maxHeight:     '80vh',
-  background:    'rgba(20,20,32,0.98)',
-  border:        '1px solid rgba(255,255,255,0.15)',
-  borderRadius:  8,
-  color:         '#e8e8e8',
-  fontFamily:    'sans-serif',
+  background:    'var(--surface)',
+  border:        '1px solid var(--line)',
+  borderRadius:  'var(--panel-radius)',
+  color:         'var(--ink)',
+  fontFamily:    'var(--font-sans)',
   fontSize:      13,
   zIndex:        201,
   display:       'flex',
   flexDirection: 'column',
-  boxShadow:     '0 12px 40px rgba(0,0,0,0.7)',
+  boxShadow:     'var(--shadow-lg)',
 };
 
 const HEADER: React.CSSProperties = {
@@ -65,13 +65,19 @@ const HEADER: React.CSSProperties = {
   alignItems:     'center',
   justifyContent: 'space-between',
   padding:        '12px 16px',
-  borderBottom:   '1px solid rgba(255,255,255,0.1)',
+  borderBottom:   '1px solid var(--line)',
 };
 
-const TITLE: React.CSSProperties = { fontSize: 14, fontWeight: 600, margin: 0 };
+const TITLE: React.CSSProperties = {
+  fontSize:      14,
+  fontWeight:    600,
+  margin:        0,
+  fontFamily:    'var(--font-serif)',
+  letterSpacing: '-0.01em',
+};
 
 const CLOSE_BTN: React.CSSProperties = {
-  background: 'none', border: 'none', color: '#aaa',
+  background: 'none', border: 'none', color: 'var(--ink-mute)',
   cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: '0 4px',
 };
 
@@ -90,15 +96,15 @@ const FIELD: React.CSSProperties = {
 
 const LABEL: React.CSSProperties = {
   fontSize: 11,
-  color:    '#bdbdc0',
+  color:    'var(--ink-2)',
   textTransform: 'uppercase',
   letterSpacing: 0.5,
 };
 
 const INPUT: React.CSSProperties = {
-  background:   'rgba(0,0,0,0.4)',
-  border:       '1px solid rgba(255,255,255,0.18)',
-  color:        '#e8e8e8',
+  background:   'var(--bg)',
+  border:       '1px solid var(--line-strong)',
+  color:        'var(--ink)',
   padding:      '6px 8px',
   borderRadius: 3,
   fontSize:     12,
@@ -107,7 +113,7 @@ const INPUT: React.CSSProperties = {
 
 const HINT: React.CSSProperties = {
   fontSize: 11,
-  color:    '#888',
+  color:    'var(--ink-mute)',
 };
 
 const FOOTER: React.CSSProperties = {
@@ -115,7 +121,7 @@ const FOOTER: React.CSSProperties = {
   alignItems:     'center',
   justifyContent: 'space-between',
   padding:        '10px 16px',
-  borderTop:      '1px solid rgba(255,255,255,0.1)',
+  borderTop:      '1px solid var(--line)',
   fontSize:       12,
 };
 
@@ -125,19 +131,19 @@ const FOOTER_BTNS: React.CSSProperties = {
 };
 
 const BTN: React.CSSProperties = {
-  background:   'rgba(255,255,255,0.08)',
-  border:       '1px solid rgba(255,255,255,0.18)',
-  color:        '#e8e8e8',
+  background:   'var(--surface-2)',
+  border:       '1px solid var(--line-strong)',
+  color:        'var(--ink)',
   padding:      '6px 12px',
-  borderRadius: 4,
+  borderRadius: 'var(--card-radius)',
   cursor:       'pointer',
   fontSize:     12,
 };
 
 const BTN_PRIMARY: React.CSSProperties = {
   ...BTN,
-  background:   'rgba(70,130,200,0.4)',
-  borderColor:  'rgba(120,180,240,0.45)',
+  background:   'color-mix(in oklab, var(--accent) 22%, transparent)',
+  borderColor:  'var(--accent)',
 };
 
 const BTN_DISABLED: React.CSSProperties = {
@@ -147,7 +153,7 @@ const BTN_DISABLED: React.CSSProperties = {
 };
 
 const COUNT: React.CSSProperties = {
-  color: '#bdbdc0',
+  color: 'var(--ink-2)',
 };
 
 export function GenerateDeckModal({
@@ -243,7 +249,7 @@ function Body({
     <>
       <div style={BODY}>
         {sheets.length === 0 ? (
-          <div style={{ color: '#888', fontSize: 12, padding: 16 }}>
+          <div style={{ color: 'var(--ink-mute)', fontSize: 12, padding: 16 }}>
             No spritesheet assets yet. Add one in the Asset Manager first.
           </div>
         ) : (
@@ -312,8 +318,8 @@ function Body({
   );
 }
 
-const SELECTED_BORDER = '2px solid rgba(120,180,240,0.85)';
-const CELL_BORDER     = '1px solid rgba(255,255,255,0.12)';
+const SELECTED_BORDER = '2px solid var(--accent)';
+const CELL_BORDER     = '1px solid var(--line)';
 
 function SheetGrid({
   sheet, selectedIndex, onPick,

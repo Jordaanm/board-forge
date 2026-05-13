@@ -26,29 +26,30 @@ interface Props {
 }
 
 const PANEL_BUTTON: React.CSSProperties = {
-  background:   'rgba(20,20,32,0.92)',
-  border:       '1px solid rgba(255,255,255,0.2)',
-  color:        '#e8e8e8',
+  background:   'var(--surface)',
+  border:       '1px solid var(--line-strong)',
+  color:        'var(--ink)',
   padding:      '8px 12px',
-  borderRadius: 6,
+  borderRadius: 'var(--card-radius)',
   cursor:       'pointer',
-  fontFamily:   'sans-serif',
+  fontFamily:   'var(--font-sans)',
   fontSize:     12,
-  boxShadow:    '0 4px 20px rgba(0,0,0,0.5)',
+  fontWeight:   700,
+  boxShadow:    'var(--shadow-sm)',
   userSelect:   'none',
 };
 
 const DROPDOWN_BASE: React.CSSProperties = {
-  background:   '#1e1e2e',
-  border:       '1px solid rgba(255,255,255,0.15)',
-  borderRadius: 6,
+  background:   'var(--surface)',
+  border:       '1px solid var(--line)',
+  borderRadius: 'var(--panel-radius)',
   padding:      8,
   minWidth:     260,
-  boxShadow:    '0 4px 20px rgba(0,0,0,0.6)',
+  boxShadow:    'var(--shadow-lg)',
   zIndex:       200,
-  fontFamily:   'sans-serif',
+  fontFamily:   'var(--font-sans)',
   fontSize:     12,
-  color:        '#e8e8e8',
+  color:        'var(--ink)',
 };
 
 const DROPDOWN_ANCHORED: React.CSSProperties = {
@@ -88,19 +89,21 @@ const LIST_ITEM: React.CSSProperties = {
   alignItems: 'center',
   gap:        6,
   padding:    '2px 4px',
-  background: 'rgba(255,255,255,0.04)',
+  background: 'var(--surface-2)',
+  border:     '1px solid var(--line)',
   borderRadius: 4,
 };
 
 const ICON_BTN: React.CSSProperties = {
-  background:   'rgba(255,255,255,0.08)',
-  border:       '1px solid rgba(255,255,255,0.12)',
-  color:        '#e8e8e8',
+  background:   'var(--bg)',
+  border:       '1px solid var(--line)',
+  color:        'var(--ink)',
   padding:      '2px 6px',
   borderRadius: 3,
   cursor:       'pointer',
   fontSize:     11,
-  fontFamily:   'sans-serif',
+  fontFamily:   'inherit',
+  fontWeight:   600,
 };
 
 const ICON_BTN_DISABLED: React.CSSProperties = {
@@ -177,7 +180,7 @@ function JumpToSeatRow({
   const occupied = snapshot.seats.filter(s => s.peerId !== null);
   return (
     <div style={ROW}>
-      <span style={{ color: '#bdbdc0' }}>Jump to:</span>
+      <span style={{ color: 'var(--ink-mute)' }}>Jump to:</span>
       <select
         value=""
         onChange={(e) => {
@@ -259,7 +262,7 @@ function OrderEditor({
           </div>
         ))}
         {order.length === 0 && (
-          <div style={{ color: '#888', fontStyle: 'italic' }}>(empty)</div>
+          <div style={{ color: 'var(--ink-mute)', fontStyle: 'italic' }}>(empty)</div>
         )}
       </div>
       <div style={ROW}>

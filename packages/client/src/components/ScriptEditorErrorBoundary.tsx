@@ -18,10 +18,10 @@ const FALLBACK_WRAP: React.CSSProperties = {
 
 const FALLBACK_NOTICE: React.CSSProperties = {
   padding:      '6px 8px',
-  background:   'rgba(220,140,80,0.15)',
-  border:       '1px solid rgba(220,140,80,0.40)',
+  background:   'color-mix(in oklab, var(--accent) 18%, transparent)',
+  border:       '1px solid color-mix(in oklab, var(--accent) 40%, transparent)',
   borderRadius: 3,
-  color:        '#ffe0c0',
+  color:        'var(--accent-deep)',
   fontSize:     11,
   flexShrink:   0,
 };
@@ -29,13 +29,13 @@ const FALLBACK_NOTICE: React.CSSProperties = {
 const FALLBACK_TEXTAREA: React.CSSProperties = {
   flex:          '1 1 auto',
   minHeight:     180,
-  background:    'rgba(0,0,0,0.4)',
-  border:        '1px solid rgba(255,255,255,0.2)',
-  color:         '#e8e8e8',
+  background:    'var(--bg)',
+  border:        '1px solid var(--line)',
+  color:         'var(--ink)',
   padding:       '8px 10px',
   borderRadius:  3,
   fontSize:      13,
-  fontFamily:    'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+  fontFamily:    'var(--font-mono)',
   boxSizing:     'border-box',
   resize:        'vertical',
 };

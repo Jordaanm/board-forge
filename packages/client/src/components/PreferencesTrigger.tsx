@@ -5,15 +5,15 @@ const BTN: React.CSSProperties = {
   display:        'inline-flex',
   alignItems:     'center',
   justifyContent: 'center',
-  width:          32,
-  height:         32,
-  background:     'rgba(20,20,32,0.92)',
-  border:         '1px solid rgba(255,255,255,0.2)',
-  color:          '#e8e8e8',
-  borderRadius:   16,
+  width:          34,
+  height:         34,
+  background:     'var(--surface)',
+  border:         '1px solid var(--line-strong)',
+  color:          'var(--ink-2)',
+  borderRadius:   '50%',
   cursor:         'pointer',
   padding:        0,
-  boxShadow:      '0 4px 20px rgba(0,0,0,0.5)',
+  boxShadow:      'var(--shadow-sm)',
 };
 
 export function PreferencesTrigger() {

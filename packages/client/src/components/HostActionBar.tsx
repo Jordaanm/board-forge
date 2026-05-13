@@ -56,19 +56,19 @@ const FILE_LABEL: React.CSSProperties = {
   alignItems: 'center',
   gap:        4,
   marginLeft: 4,
-  color:      '#bdbdc0',
-  fontFamily: 'sans-serif',
+  color:      'var(--ink-mute)',
+  fontFamily: 'var(--font-sans)',
   fontSize:   11,
   userSelect: 'none',
 };
 
 const FILE_NAME: React.CSSProperties = {
-  color:    '#e8e8e8',
-  fontWeight: 600,
+  color:    'var(--ink)',
+  fontWeight: 700,
 };
 
 const FILE_TIMESTAMP: React.CSSProperties = {
-  color: '#888',
+  color: 'var(--ink-mute)',
 };
 
 export function HostActionBar({

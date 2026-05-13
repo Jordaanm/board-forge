@@ -21,38 +21,38 @@ interface Props {
 }
 
 const TRIGGER_BTN: React.CSSProperties = {
-  background:   'rgba(20,20,32,0.92)',
-  border:       '1px solid rgba(255,255,255,0.2)',
-  color:        '#e8e8e8',
+  background:   'var(--surface)',
+  border:       '1px solid var(--line-strong)',
+  color:        'var(--ink)',
   padding:      '8px 12px',
-  borderRadius: 6,
+  borderRadius: 'var(--panel-radius)',
   cursor:       'pointer',
-  fontFamily:   'sans-serif',
+  fontFamily:   'var(--font-sans)',
   fontSize:     12,
-  boxShadow:    '0 4px 20px rgba(0,0,0,0.5)',
+  boxShadow:    'var(--shadow-lg)',
   userSelect:   'none',
 };
 
 const OVERLAY: React.CSSProperties = {
   position:   'fixed',
   inset:      0,
-  background: 'rgba(0,0,0,0.55)',
+  background: 'rgba(0,0,0,0.45)',
   zIndex:     200,
 };
 
 const CONTENT: React.CSSProperties = {
   width:        420,
   maxHeight:    '70vh',
-  background:   'rgba(20,20,32,0.98)',
-  border:       '1px solid rgba(255,255,255,0.15)',
-  borderRadius: 8,
-  color:        '#e8e8e8',
-  fontFamily:   'sans-serif',
+  background:   'var(--surface)',
+  border:       '1px solid var(--line)',
+  borderRadius: 'var(--panel-radius)',
+  color:        'var(--ink)',
+  fontFamily:   'var(--font-sans)',
   fontSize:     13,
   zIndex:       201,
   display:      'flex',
   flexDirection: 'column',
-  boxShadow:    '0 12px 40px rgba(0,0,0,0.7)',
+  boxShadow:    'var(--shadow-lg)',
 };
 
 const HEADER: React.CSSProperties = {
@@ -60,19 +60,21 @@ const HEADER: React.CSSProperties = {
   alignItems:     'center',
   justifyContent: 'space-between',
   padding:        '12px 16px',
-  borderBottom:   '1px solid rgba(255,255,255,0.1)',
+  borderBottom:   '1px solid var(--line)',
 };
 
 const TITLE: React.CSSProperties = {
-  fontSize:   14,
-  fontWeight: 600,
-  margin:     0,
+  fontSize:      14,
+  fontWeight:    600,
+  margin:        0,
+  fontFamily:    'var(--font-serif)',
+  letterSpacing: '-0.01em',
 };
 
 const CLOSE_BTN: React.CSSProperties = {
   background: 'none',
   border:     'none',
-  color:      '#aaa',
+  color:      'var(--ink-mute)',
   cursor:     'pointer',
   fontSize:   18,
   lineHeight: 1,
@@ -92,7 +94,7 @@ const ROW: React.CSSProperties = {
   alignItems:     'center',
   gap:            10,
   padding:        '6px 8px',
-  borderRadius:   4,
+  borderRadius:   'var(--card-radius)',
   cursor:         'pointer',
   border:         '1px solid transparent',
 };
@@ -100,16 +102,16 @@ const ROW: React.CSSProperties = {
 const ROW_CURRENT: React.CSSProperties = {
   ...ROW,
   cursor:     'default',
-  background: 'rgba(70,130,200,0.18)',
-  border:     '1px solid rgba(120,180,240,0.45)',
+  background: 'color-mix(in oklab, var(--accent) 22%, transparent)',
+  border:     '1px solid var(--accent)',
 };
 
 const THUMB: React.CSSProperties = {
   width:        96,
   height:       54,
-  background:   'rgba(0,0,0,0.4)',
+  background:   'var(--bg)',
   borderRadius: 3,
-  border:       '1px solid rgba(255,255,255,0.1)',
+  border:       '1px solid var(--line)',
   flexShrink:   0,
   objectFit:    'cover',
   display:      'block',
@@ -132,13 +134,13 @@ const META_LABEL: React.CSSProperties = {
 
 const META_TIME: React.CSSProperties = {
   fontSize: 11,
-  color:    '#888',
+  color:    'var(--ink-mute)',
 };
 
 const EMPTY: React.CSSProperties = {
   textAlign: 'center',
   padding:   '24px 16px',
-  color:     '#666',
+  color:     'var(--ink-mute)',
   fontSize:  12,
 };
 
@@ -146,7 +148,7 @@ const CURRENT_BADGE: React.CSSProperties = {
   fontSize:  10,
   textTransform: 'uppercase',
   letterSpacing: 1,
-  color:     '#bdbdc0',
+  color:     'var(--ink-2)',
 };
 
 export function HistoryModal({ service, open: controlledOpen, onOpenChange, hideTrigger }: Props) {

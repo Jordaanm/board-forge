@@ -21,7 +21,7 @@ interface Props {
 const OVERLAY: React.CSSProperties = {
   position:   'fixed',
   inset:      0,
-  background: 'rgba(0,0,0,0.55)',
+  background: 'rgba(0,0,0,0.45)',
   zIndex:     200,
 };
 
@@ -33,16 +33,16 @@ const CONTENT: React.CSSProperties = {
   width:         '85vw',
   maxWidth:      1100,
   height:        '80vh',
-  background:    'rgba(20,20,32,0.98)',
-  border:        '1px solid rgba(255,255,255,0.15)',
-  borderRadius:  8,
-  color:         '#e8e8e8',
-  fontFamily:    'sans-serif',
+  background:    'var(--surface)',
+  border:        '1px solid var(--line)',
+  borderRadius:  'var(--panel-radius)',
+  color:         'var(--ink)',
+  fontFamily:    'var(--font-sans)',
   fontSize:      13,
   zIndex:        201,
   display:       'flex',
   flexDirection: 'column',
-  boxShadow:     '0 12px 40px rgba(0,0,0,0.7)',
+  boxShadow:     'var(--shadow-lg)',
 };
 
 const HEADER: React.CSSProperties = {
@@ -50,20 +50,22 @@ const HEADER: React.CSSProperties = {
   alignItems:     'center',
   justifyContent: 'space-between',
   padding:        '12px 16px',
-  borderBottom:   '1px solid rgba(255,255,255,0.1)',
+  borderBottom:   '1px solid var(--line)',
   flexShrink:     0,
 };
 
 const TITLE: React.CSSProperties = {
-  fontSize:   14,
-  fontWeight: 600,
-  margin:     0,
+  fontSize:      14,
+  fontWeight:    600,
+  margin:        0,
+  fontFamily:    'var(--font-serif)',
+  letterSpacing: '-0.01em',
 };
 
 const CLOSE_BTN: React.CSSProperties = {
   background: 'none',
   border:     'none',
-  color:      '#aaa',
+  color:      'var(--ink-mute)',
   cursor:     'pointer',
   fontSize:   18,
   lineHeight: 1,
@@ -85,9 +87,9 @@ const EDITOR_LOADING: React.CSSProperties = {
   display:       'flex',
   alignItems:    'center',
   justifyContent: 'center',
-  background:    'rgba(0,0,0,0.4)',
-  border:        '1px solid rgba(255,255,255,0.2)',
-  color:         '#888',
+  background:    'var(--bg)',
+  border:        '1px solid var(--line-strong)',
+  color:         'var(--ink-mute)',
   borderRadius:  3,
   fontSize:      12,
 };
@@ -98,24 +100,24 @@ const FOOTER: React.CSSProperties = {
   justifyContent: 'flex-end',
   gap:            8,
   paddingTop:     8,
-  borderTop:      '1px solid rgba(255,255,255,0.08)',
+  borderTop:      '1px solid var(--line)',
   flexShrink:     0,
 };
 
 const BTN: React.CSSProperties = {
-  background:   'rgba(255,255,255,0.1)',
-  border:       '1px solid rgba(255,255,255,0.2)',
-  color:        '#e8e8e8',
+  background:   'var(--surface-2)',
+  border:       '1px solid var(--line-strong)',
+  color:        'var(--ink)',
   padding:      '6px 14px',
-  borderRadius: 4,
+  borderRadius: 'var(--card-radius)',
   cursor:       'pointer',
   fontSize:     12,
 };
 
 const PRIMARY: React.CSSProperties = {
   ...BTN,
-  background:   'rgba(80,140,220,0.4)',
-  borderColor:  'rgba(80,140,220,0.7)',
+  background:   'color-mix(in oklab, var(--accent) 22%, transparent)',
+  borderColor:  'var(--accent)',
 };
 
 export function HtmlEditorModal({ open, initial, onClose, onSave }: Props) {

@@ -149,26 +149,28 @@ function SpectatorRow({
 
 const MENU_STYLE: React.CSSProperties = {
   position: 'fixed', zIndex: 201,
-  background: '#1e1e2e', border: '1px solid rgba(255,255,255,0.15)',
-  borderRadius: 6, padding: '4px 0', minWidth: 160,
-  boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
+  background: 'var(--surface)', border: '1px solid var(--line)',
+  borderRadius: 'var(--panel-radius)', padding: '4px 0', minWidth: 160,
+  boxShadow: 'var(--shadow-lg)',
+  color: 'var(--ink)',
 };
 
 const MENU_HEADER: React.CSSProperties = {
   padding: '8px 16px',
-  borderBottom: '1px solid rgba(255,255,255,0.1)',
+  borderBottom: '1px solid var(--line)',
+  background: 'var(--surface-2)',
   userSelect: 'none',
-  fontFamily: 'sans-serif',
+  fontFamily: 'var(--font-sans)',
 };
 
 const MENU_ITEM: React.CSSProperties = {
   display: 'block', width: '100%', padding: '8px 16px',
   background: 'none', border: 'none', cursor: 'pointer',
-  textAlign: 'left', fontSize: 13, fontFamily: 'sans-serif', color: '#e8e8e8',
+  textAlign: 'left', fontSize: 13, fontFamily: 'var(--font-sans)', color: 'var(--ink)',
 };
 
 const SEPARATOR: React.CSSProperties = {
-  height: 1, margin: '4px 0', background: 'rgba(255,255,255,0.1)',
+  height: 1, margin: '4px 0', background: 'var(--line)',
 };
 
 function menuFlags(
@@ -228,7 +230,7 @@ function PlayerMenu({
       />
       <div role="menu" style={{ ...MENU_STYLE, left: state.x, top: state.y }}>
         <div style={MENU_HEADER}>
-          <div style={{ color: '#e8e8e8', fontSize: 13, fontWeight: 600, fontFamily: 'monospace' }}>
+          <div style={{ color: 'var(--ink)', fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
             {headerLabel}
           </div>
         </div>
@@ -260,9 +262,9 @@ function MenuItemBtn({
   return (
     <button
       role="menuitem"
-      style={{ ...MENU_ITEM, color: destructive ? '#f47c7c' : '#e8e8e8' }}
+      style={{ ...MENU_ITEM, color: destructive ? 'var(--accent-deep)' : 'var(--ink)' }}
       onClick={onClick}
-      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')}
+      onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-2)')}
       onMouseLeave={e => (e.currentTarget.style.background = 'none')}
     >
       {label}
@@ -282,7 +284,7 @@ function MoveToSeatSubmenu({
       onMouseLeave={() => setOpen(false)}
     >
       <div style={{ ...MENU_ITEM, display: 'flex', justifyContent: 'space-between', cursor: 'default' }}>
-        <span>Move to seat</span><span style={{ color: '#888' }}>▸</span>
+        <span>Move to seat</span><span style={{ color: 'var(--ink-mute)' }}>▸</span>
       </div>
       {open && (
         <div ref={ref} role="menu" style={{ ...MENU_STYLE, position: 'absolute', ...style, minWidth: 140 }}>
@@ -292,7 +294,7 @@ function MoveToSeatSubmenu({
               role="menuitem"
               style={{ ...MENU_ITEM, display: 'flex', alignItems: 'center', gap: 8 }}
               onClick={() => onClaim(s.index)}
-              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')}
+              onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-2)')}
               onMouseLeave={e => (e.currentTarget.style.background = 'none')}
             >
               <span

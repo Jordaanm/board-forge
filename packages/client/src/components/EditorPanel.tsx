@@ -62,13 +62,13 @@ interface Props {
 
 const PANEL: React.CSSProperties = {
   width:         280,
-  background:    'rgba(20,20,32,0.92)',
-  border:        '1px solid rgba(255,255,255,0.15)',
-  borderRadius:  8,
-  color:         '#e8e8e8',
-  fontFamily:    'sans-serif',
+  background:    'var(--surface)',
+  border:        '1px solid var(--line)',
+  borderRadius:  'var(--panel-radius)',
+  color:         'var(--ink)',
+  fontFamily:    'var(--font-sans)',
   fontSize:      13,
-  boxShadow:     '0 4px 20px rgba(0,0,0,0.5)',
+  boxShadow:     'var(--shadow)',
   display:       'flex',
   flexDirection: 'column',
   maxHeight:     'calc(100vh - 24px)',
@@ -80,7 +80,8 @@ const HEADER: React.CSSProperties = {
   alignItems:     'center',
   justifyContent: 'space-between',
   padding:        '8px 12px',
-  borderBottom:   '1px solid rgba(255,255,255,0.1)',
+  borderBottom:   '1px solid var(--line)',
+  background:     'var(--surface-2)',
   cursor:         'pointer',
   userSelect:     'none',
   flexShrink:     0,
@@ -104,14 +105,15 @@ const SECTION_HEADER: React.CSSProperties = {
 
 const SECTION: React.CSSProperties = {
   padding:      '10px 12px',
-  borderBottom: '1px solid rgba(255,255,255,0.08)',
+  borderBottom: '1px solid var(--line)',
 };
 
 const SECTION_LABEL: React.CSSProperties = {
-  fontSize:      10,
+  fontSize:      11,
   textTransform: 'uppercase',
-  letterSpacing: 1,
-  color:         '#888',
+  letterSpacing: '0.14em',
+  color:         'var(--ink-mute)',
+  fontWeight:    700,
   marginBottom:  6,
 };
 
@@ -124,25 +126,27 @@ const LIST_ROW: React.CSSProperties = {
 };
 
 const SPAWN_BTN: React.CSSProperties = {
-  background:   'rgba(255,255,255,0.1)',
-  border:       '1px solid rgba(255,255,255,0.2)',
-  color:        '#e8e8e8',
+  background:   'var(--bg)',
+  border:       '1px solid var(--line)',
+  color:        'var(--ink)',
   padding:      '6px 10px',
-  borderRadius: 4,
+  borderRadius: 'var(--card-radius)',
   cursor:       'pointer',
+  fontFamily:   'inherit',
   fontSize:     12,
+  fontWeight:   600,
   flex:         1,
 };
 
 const INPUT: React.CSSProperties = {
   width:        '100%',
-  background:   'rgba(0,0,0,0.4)',
-  border:       '1px solid rgba(255,255,255,0.2)',
-  color:        '#e8e8e8',
+  background:   'var(--bg)',
+  border:       '1px solid var(--line)',
+  color:        'var(--ink)',
   padding:      '4px 6px',
   borderRadius: 3,
   fontSize:     12,
-  fontFamily:   'sans-serif',
+  fontFamily:   'inherit',
   boxSizing:    'border-box',
 };
 
@@ -150,8 +154,9 @@ const CHIP: React.CSSProperties = {
   display:      'inline-flex',
   alignItems:   'center',
   gap:          4,
-  background:   'rgba(255,255,255,0.08)',
-  color:        '#bdbdbd',
+  background:   'var(--surface-2)',
+  color:        'var(--ink-2)',
+  border:       '1px solid var(--line)',
   padding:      '2px 4px 2px 8px',
   borderRadius: 3,
   fontSize:     11,
@@ -160,7 +165,7 @@ const CHIP: React.CSSProperties = {
 const CHIP_X: React.CSSProperties = {
   background:   'none',
   border:       'none',
-  color:        '#888',
+  color:        'var(--ink-mute)',
   cursor:       'pointer',
   fontSize:     14,
   lineHeight:   1,
@@ -199,7 +204,7 @@ export function EditorPanel({
         <span>
           <button
             onClick={(e) => { e.stopPropagation(); setOpen(false); }}
-            style={{ background: 'none', border: 'none', color: '#aaa', cursor: 'pointer', fontSize: 16 }}
+            style={{ background: 'none', border: 'none', color: 'var(--ink-mute)', cursor: 'pointer', fontSize: 16 }}
             title="Close"
           >×</button>
         </span>
@@ -261,7 +266,7 @@ function SceneGraphList({
   return (
     <div style={SECTION}>
       <div style={SECTION_LABEL}>Objects ({objects.length})</div>
-      {objects.length === 0 && <div style={{ color: '#666', fontSize: 12 }}>No objects yet</div>}
+      {objects.length === 0 && <div style={{ color: 'var(--ink-mute)', fontSize: 12 }}>No objects yet</div>}
       {roots.map(o => (
         <SceneGraphNode
           key={o.id}
@@ -300,7 +305,7 @@ function SceneGraphNode({
         style={{
           ...LIST_ROW,
           paddingLeft: 8 + depth * 12,
-          background:  isSel ? 'rgba(80,140,220,0.3)' : 'transparent',
+          background:  isSel ? 'color-mix(in oklab, var(--accent) 22%, transparent)' : 'transparent',
         }}
         onClick={() => onSelect(isSel ? null : node.id)}
       >
@@ -314,7 +319,7 @@ function SceneGraphNode({
               width:          22,
               height:         22,
               marginLeft:     -4,
-              color:          '#aaa',
+              color:          'var(--ink-mute)',
               cursor:         hasKids ? 'pointer' : 'default',
               fontSize:       16,
               lineHeight:     1,
@@ -325,7 +330,7 @@ function SceneGraphNode({
           </span>
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{node.id}</span>
         </span>
-        <span style={{ color: '#888', flexShrink: 0, marginLeft: 6 }}>{getSpawnable(node.objectType)?.label ?? node.objectType}</span>
+        <span style={{ color: 'var(--ink-mute)', flexShrink: 0, marginLeft: 6 }}>{getSpawnable(node.objectType)?.label ?? node.objectType}</span>
       </div>
       {hasKids && isOpen && kids.map(k => (
         <SceneGraphNode
@@ -357,7 +362,7 @@ function PropertyEditor({
     return (
       <div style={SECTION}>
         <div style={SECTION_LABEL}>Properties</div>
-        <div style={{ color: '#666', fontSize: 12 }}>Select an object to edit its properties</div>
+        <div style={{ color: 'var(--ink-mute)', fontSize: 12 }}>Select an object to edit its properties</div>
       </div>
     );
   }
@@ -394,7 +399,7 @@ function EntitySection({
     <div style={SECTION}>
       <div style={SECTION_LABEL}>Entity — {selected.id}</div>
       <div style={{ marginBottom: 8 }}>
-        <label style={{ display: 'block', color: '#aaa', fontSize: 11, marginBottom: 3 }}>Name</label>
+        <label style={{ display: 'block', color: 'var(--ink-mute)', fontSize: 11, marginBottom: 3 }}>Name</label>
         <input
           type="text"
           style={INPUT}
@@ -403,7 +408,7 @@ function EntitySection({
         />
       </div>
       <div style={{ marginBottom: 8 }}>
-        <label style={{ display: 'block', color: '#aaa', fontSize: 11, marginBottom: 3 }}>Owner</label>
+        <label style={{ display: 'block', color: 'var(--ink-mute)', fontSize: 11, marginBottom: 3 }}>Owner</label>
         <SeatSelect
           value={selected.owner ?? -1}
           onChange={(v) => onUpdateEntityField(selected.id, 'owner', v)}
@@ -423,9 +428,9 @@ function EntitySection({
           ...SPAWN_BTN,
           width:        '100%',
           marginTop:    4,
-          background:   isTable ? 'rgba(255,255,255,0.05)' : 'rgba(180,40,40,0.25)',
-          borderColor:  isTable ? 'rgba(255,255,255,0.15)' : 'rgba(255,80,80,0.5)',
-          color:        isTable ? '#666' : '#ffb3b3',
+          background:   isTable ? 'var(--surface-2)' : 'color-mix(in oklab, var(--accent) 22%, transparent)',
+          borderColor:  isTable ? 'var(--line)' : 'color-mix(in oklab, var(--accent) 45%, transparent)',
+          color:        isTable ? 'var(--ink-mute)' : 'var(--accent-deep)',
           cursor:       isTable ? 'not-allowed' : 'pointer',
         }}
         disabled={isTable}
@@ -451,12 +456,12 @@ function ComponentSection({
     <div style={SECTION}>
       <div style={SECTION_HEADER} onClick={() => setCollapsed(c => !c)}>
         <div style={{ ...SECTION_LABEL, marginBottom: 0 }}>{section.label}</div>
-        <span style={{ color: '#888', fontSize: 11, lineHeight: 1 }}>{collapsed ? '▸' : '▾'}</span>
+        <span style={{ color: 'var(--ink-mute)', fontSize: 11, lineHeight: 1 }}>{collapsed ? '▸' : '▾'}</span>
       </div>
       {!collapsed && (
         <>
           {section.entries.length === 0 && (
-            <div style={{ color: '#666', fontSize: 12 }}>No editable properties.</div>
+            <div style={{ color: 'var(--ink-mute)', fontSize: 12 }}>No editable properties.</div>
           )}
           {section.entries.map(def => (
             <SchemaPropertyRow
@@ -493,7 +498,7 @@ function TagsRow({
 
   return (
     <div style={{ marginBottom: 8 }}>
-      <label style={{ display: 'block', color: '#aaa', fontSize: 11, marginBottom: 3 }}>Tags</label>
+      <label style={{ display: 'block', color: 'var(--ink-mute)', fontSize: 11, marginBottom: 3 }}>Tags</label>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 4 }}>
         {tags.map(t => (
           <span key={t} style={CHIP}>
@@ -563,7 +568,7 @@ function CustomDataRow({
 
   return (
     <div style={{ marginBottom: 8 }}>
-      <label style={{ display: 'block', color: '#aaa', fontSize: 11, marginBottom: 3 }}>Custom Data</label>
+      <label style={{ display: 'block', color: 'var(--ink-mute)', fontSize: 11, marginBottom: 3 }}>Custom Data</label>
       {entries.map(([k, v]) => (
         <CustomDataEntry
           key={k}
@@ -654,9 +659,9 @@ const CUSTOM_DATA_ROW: React.CSSProperties = {
 };
 
 const CUSTOM_DATA_ADD_BTN: React.CSSProperties = {
-  background:   'rgba(255,255,255,0.1)',
-  border:       '1px solid rgba(255,255,255,0.2)',
-  color:        '#e8e8e8',
+  background:   'var(--bg)',
+  border:       '1px solid var(--line)',
+  color:        'var(--ink)',
   cursor:       'pointer',
   fontSize:     14,
   lineHeight:   1,
@@ -678,7 +683,7 @@ function SchemaPropertyRow({
     : null;
   return (
     <div style={{ marginBottom: 8 }}>
-      <label style={{ display: 'block', color: '#aaa', fontSize: 11, marginBottom: 3 }}>{def.label}</label>
+      <label style={{ display: 'block', color: 'var(--ink-mute)', fontSize: 11, marginBottom: 3 }}>{def.label}</label>
       {def.type === 'number' && (
         <input
           type="number"
@@ -732,8 +737,8 @@ const ASSET_ROW: React.CSSProperties = {
   display:      'flex',
   alignItems:   'center',
   gap:          6,
-  background:   'rgba(0,0,0,0.4)',
-  border:       '1px solid rgba(255,255,255,0.2)',
+  background:   'var(--bg)',
+  border:       '1px solid var(--line)',
   borderRadius: 3,
   padding:      4,
   cursor:       'pointer',
@@ -745,14 +750,14 @@ const ASSET_THUMB: React.CSSProperties = {
   width:           28,
   height:          28,
   flex:            '0 0 auto',
-  background:      'rgba(255,255,255,0.06)',
-  border:          '1px solid rgba(255,255,255,0.08)',
+  background:      'var(--surface-2)',
+  border:          '1px solid var(--line)',
   borderRadius:    2,
   display:         'flex',
   alignItems:      'center',
   justifyContent:  'center',
   fontSize:        9,
-  color:           '#888',
+  color:           'var(--ink-mute)',
   textTransform:   'uppercase',
   overflow:        'hidden',
 };
@@ -766,7 +771,7 @@ const ASSET_THUMB_IMG: React.CSSProperties = {
 const ASSET_LABEL: React.CSSProperties = {
   flex:         1,
   fontSize:     12,
-  color:        '#e8e8e8',
+  color:        'var(--ink)',
   whiteSpace:   'nowrap',
   overflow:     'hidden',
   textOverflow: 'ellipsis',
@@ -776,7 +781,7 @@ const ASSET_LABEL: React.CSSProperties = {
 const ASSET_BTN: React.CSSProperties = {
   background:   'none',
   border:       'none',
-  color:        '#aaa',
+  color:        'var(--ink-mute)',
   cursor:       'pointer',
   fontSize:     14,
   padding:      '0 4px',
@@ -804,7 +809,7 @@ function AssetField({
       >
         <AssetThumbnail assetType={assetType} ref_={ref} />
         <span style={ASSET_LABEL}>{display}</span>
-        <span style={{ color: '#888', flex: '0 0 auto' }}>▼</span>
+        <span style={{ color: 'var(--ink-mute)', flex: '0 0 auto' }}>▼</span>
         {ref && (
           <button
             type="button"
@@ -899,7 +904,7 @@ function SeatSelect({ value, onChange }: { value: number | undefined; onChange: 
       <span style={{
         width: 14, height: 14, borderRadius: 3,
         background: swatch,
-        border: '1px solid rgba(255,255,255,0.3)',
+        border: '1px solid var(--line-strong)',
         flex: '0 0 auto',
       }} />
       <select
@@ -1035,19 +1040,19 @@ const TOOL_FIELD: React.CSSProperties = {
 };
 
 const TOOL_FIELD_LABEL: React.CSSProperties = {
-  color:    '#888',
+  color:    'var(--ink-mute)',
   fontSize: 10,
 };
 
 const TOOL_INPUT: React.CSSProperties = {
   width:        '100%',
-  background:   'rgba(0,0,0,0.4)',
-  border:       '1px solid rgba(255,255,255,0.2)',
-  color:        '#e8e8e8',
+  background:   'var(--bg)',
+  border:       '1px solid var(--line)',
+  color:        'var(--ink)',
   padding:      '3px 4px',
   borderRadius: 3,
   fontSize:     11,
-  fontFamily:   'sans-serif',
+  fontFamily:   'inherit',
   boxSizing:    'border-box',
   minWidth:     0,
 };
@@ -1057,7 +1062,7 @@ function RollSection({ onRollDice }: { onRollDice: () => void }) {
     <div style={SECTION}>
       <div style={SECTION_LABEL}>Dice</div>
       <button
-        style={{ ...SPAWN_BTN, borderColor: 'rgba(255,200,0,0.4)', color: '#ffd740', width: '100%' }}
+        style={{ ...SPAWN_BTN, borderColor: 'color-mix(in oklab, var(--gold) 50%, transparent)', color: 'var(--gold)', width: '100%' }}
         onClick={onRollDice}
       >
         Roll All Dice
@@ -1087,8 +1092,8 @@ function CameraSection({
 // ── Surface Elements ────────────────────────────────────────────────────────
 
 const ELEMENT_CARD: React.CSSProperties = {
-  background:   'rgba(255,255,255,0.04)',
-  border:       '1px solid rgba(255,255,255,0.08)',
+  background:   'var(--surface-2)',
+  border:       '1px solid var(--line)',
   borderRadius: 4,
   padding:      8,
   marginBottom: 6,
@@ -1104,9 +1109,11 @@ const ELEMENT_HEADER: React.CSSProperties = {
 const KIND_BADGE: React.CSSProperties = {
   fontSize:      10,
   textTransform: 'uppercase',
-  letterSpacing: 1,
-  background:    'rgba(80,140,220,0.25)',
-  color:         '#cfe1ff',
+  letterSpacing: '0.14em',
+  fontWeight:    700,
+  background:    'color-mix(in oklab, var(--accent) 18%, transparent)',
+  color:         'var(--accent-deep)',
+  border:        '1px solid color-mix(in oklab, var(--accent) 30%, transparent)',
   padding:       '2px 6px',
   borderRadius:  3,
 };
@@ -1120,19 +1127,19 @@ const PAIR_ROW: React.CSSProperties = {
 
 const PAIR_LABEL: React.CSSProperties = {
   display:    'block',
-  color:      '#aaa',
+  color:      'var(--ink-mute)',
   fontSize:   11,
   marginBottom: 3,
 };
 
 const HTML_PREVIEW: React.CSSProperties = {
-  background:   'rgba(0,0,0,0.4)',
-  border:       '1px solid rgba(255,255,255,0.15)',
+  background:   'var(--bg)',
+  border:       '1px solid var(--line)',
   borderRadius: 3,
   padding:      6,
   fontSize:     11,
-  fontFamily:   'monospace',
-  color:        '#bdbdbd',
+  fontFamily:   'var(--font-mono)',
+  color:        'var(--ink-2)',
   whiteSpace:   'nowrap',
   overflow:     'hidden',
   textOverflow: 'ellipsis',
@@ -1152,7 +1159,7 @@ function SurfaceElementsSection({
     <div style={SECTION}>
       <div style={SECTION_LABEL}>Surface Elements ({surface.elements.length})</div>
       {surface.elements.length === 0 && (
-        <div style={{ color: '#666', fontSize: 12 }}>
+        <div style={{ color: 'var(--ink-mute)', fontSize: 12 }}>
           Use the Tools section below to add Rich UI / Image / Shape / Button elements.
         </div>
       )}
@@ -1184,7 +1191,7 @@ function SurfaceElementCard({
     <div style={ELEMENT_CARD}>
       <div style={ELEMENT_HEADER}>
         <span style={KIND_BADGE}>{element.kind}</span>
-        <span style={{ color: '#888', fontSize: 10, fontFamily: 'monospace', flex: 1, marginLeft: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <span style={{ color: 'var(--ink-mute)', fontSize: 10, fontFamily: 'var(--font-mono)', flex: 1, marginLeft: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {element.id.slice(0, 8)}
         </span>
         <button

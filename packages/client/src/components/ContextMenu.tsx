@@ -12,31 +12,46 @@ interface Props {
 const ITEM: React.CSSProperties = {
   display: 'block', width: '100%', padding: '8px 16px',
   background: 'none', border: 'none', cursor: 'pointer',
-  textAlign: 'left', fontSize: 13, fontFamily: 'sans-serif',
+  textAlign: 'left', fontSize: 13, fontFamily: 'var(--font-sans)',
+  color: 'var(--ink)',
 };
 
 const HEADER: React.CSSProperties = {
   padding: '8px 16px',
-  borderBottom: '1px solid rgba(255,255,255,0.1)',
+  borderBottom: '1px solid var(--line)',
+  background: 'var(--surface-2)',
   userSelect: 'none',
-  fontFamily: 'sans-serif',
+  fontFamily: 'var(--font-sans)',
 };
 
 const SEPARATOR: React.CSSProperties = {
-  height: 1, margin: '4px 0', background: 'rgba(255,255,255,0.1)',
+  height: 1, margin: '4px 0', background: 'var(--line)',
 };
 
 const HEADING_STYLE: React.CSSProperties = {
-  padding: '6px 16px', fontSize: 11, color: '#888',
-  textTransform: 'uppercase', letterSpacing: 1,
-  fontFamily: 'sans-serif', userSelect: 'none',
+  padding: '6px 16px', fontSize: 11, color: 'var(--ink-mute)',
+  textTransform: 'uppercase', letterSpacing: '0.14em', fontWeight: 700,
+  fontFamily: 'var(--font-sans)', userSelect: 'none',
 };
 
 const TAG_STYLE: React.CSSProperties = {
-  background: 'rgba(255,255,255,0.08)', color: '#bdbdbd',
+  background: 'var(--bg)', color: 'var(--ink-2)',
+  border: '1px solid var(--line)',
   padding: '1px 6px', borderRadius: 3, fontSize: 10,
-  fontFamily: 'sans-serif', userSelect: 'none',
+  fontFamily: 'var(--font-sans)', userSelect: 'none', fontWeight: 600,
 };
+
+const MENU: React.CSSProperties = {
+  background: 'var(--surface)',
+  border: '1px solid var(--line)',
+  borderRadius: 'var(--panel-radius)',
+  padding: '4px 0',
+  minWidth: 160,
+  boxShadow: 'var(--shadow-lg)',
+  color: 'var(--ink)',
+};
+
+const HOVER_BG = 'var(--surface-2)';
 
 export function ContextMenu({ menu, onAction, onDismiss }: Props) {
   return (
@@ -48,18 +63,13 @@ export function ContextMenu({ menu, onAction, onDismiss }: Props) {
       />
       <div
         role="menu"
-        style={{
-          position: 'fixed', left: menu.x, top: menu.y, zIndex: 201,
-          background: '#1e1e2e', border: '1px solid rgba(255,255,255,0.15)',
-          borderRadius: 6, padding: '4px 0', minWidth: 160,
-          boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
-        }}
+        style={{ ...MENU, position: 'fixed', left: menu.x, top: menu.y, zIndex: 201 }}
       >
         <div style={HEADER}>
-          <div style={{ color: '#e8e8e8', fontSize: 13, fontWeight: 600 }}>
+          <div style={{ color: 'var(--ink)', fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-serif)', letterSpacing: '-0.01em' }}>
             {menu.entityName}
           </div>
-          <div style={{ color: '#888', fontSize: 11, fontFamily: 'monospace' }}>
+          <div style={{ color: 'var(--ink-mute)', fontSize: 11, fontFamily: 'var(--font-mono)' }}>
             {menu.entityId}
           </div>
           {menu.entityTags.length > 0 && (
@@ -74,8 +84,6 @@ export function ContextMenu({ menu, onAction, onDismiss }: Props) {
           items={menu.items}
           onAction={(item, args) => {
             onAction(item, args);
-            // Colorpicker stays open so the user can iterate shades; backdrop
-            // click dismisses. Other actions auto-close on selection.
             if (item.kind !== 'colorpicker') onDismiss();
           }}
         />
@@ -118,7 +126,7 @@ function ActionRow({
       disabled={item.disabled}
       style={{
         ...ITEM,
-        color: isDestructive ? '#f47c7c' : '#e8e8e8',
+        color: isDestructive ? 'var(--accent-deep)' : 'var(--ink)',
         opacity: item.disabled ? 0.5 : 1,
         cursor: item.disabled ? 'default' : 'pointer',
       }}
@@ -129,7 +137,7 @@ function ActionRow({
         const args = promptArgs ?? item.args;
         onAction(item, args);
       }}
-      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')}
+      onMouseEnter={e => (e.currentTarget.style.background = HOVER_BG)}
       onMouseLeave={e => (e.currentTarget.style.background = 'none')}
     >
       {item.label}
@@ -145,8 +153,8 @@ function ColorPickerRow({
 }) {
   return (
     <label
-      style={{ ...ITEM, color: '#e8e8e8', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
-      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')}
+      style={{ ...ITEM, display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+      onMouseEnter={e => (e.currentTarget.style.background = HOVER_BG)}
       onMouseLeave={e => (e.currentTarget.style.background = 'none')}
     >
       <span>{item.label}</span>
@@ -172,7 +180,6 @@ function NumericRow({
     if (!Number.isFinite(n)) return;
     if (item.min !== undefined && n < item.min) n = item.min;
     if (item.max !== undefined && n > item.max) n = item.max;
-    // Forward as an `action` so the existing dispatcher pipeline accepts it.
     const action = {
       kind: 'action' as const,
       id:   item.id,
@@ -185,13 +192,12 @@ function NumericRow({
     <div
       style={{
         ...ITEM,
-        color: '#e8e8e8',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         gap: 6,
       }}
-      onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')}
+      onMouseEnter={e => (e.currentTarget.style.background = HOVER_BG)}
       onMouseLeave={e => (e.currentTarget.style.background = 'none')}
     >
       <span style={{ flexShrink: 0 }}>{item.label}</span>
@@ -205,16 +211,17 @@ function NumericRow({
           onKeyDown={e => { if (e.key === 'Enter') submit(); }}
           style={{
             width: 56, padding: '2px 4px', fontSize: 12,
-            background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.2)',
-            color: '#e8e8e8', borderRadius: 3,
+            background: 'var(--bg)', border: '1px solid var(--line)',
+            color: 'var(--ink)', borderRadius: 3, fontFamily: 'inherit',
           }}
         />
         <button
           onClick={submit}
           style={{
-            padding: '2px 8px', fontSize: 12,
-            background: 'rgba(80,140,220,0.3)', border: '1px solid rgba(255,255,255,0.2)',
-            color: '#e8e8e8', borderRadius: 3, cursor: 'pointer',
+            padding: '2px 8px', fontSize: 12, fontWeight: 700,
+            background: 'var(--accent)', border: '1px solid var(--accent-deep)',
+            color: 'var(--accent-ink)', borderRadius: 3, cursor: 'pointer',
+            fontFamily: 'inherit',
           }}
         >
           OK
@@ -238,19 +245,14 @@ function SubmenuRow({
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
     >
-      <div style={{ ...ITEM, color: '#e8e8e8', display: 'flex', justifyContent: 'space-between' }}>
-        <span>{item.label}</span><span style={{ color: '#888' }}>▸</span>
+      <div style={{ ...ITEM, display: 'flex', justifyContent: 'space-between' }}>
+        <span>{item.label}</span><span style={{ color: 'var(--ink-mute)' }}>▸</span>
       </div>
       {open && (
         <div
           ref={ref}
           role="menu"
-          style={{
-            position: 'absolute', ...style,
-            background: '#1e1e2e', border: '1px solid rgba(255,255,255,0.15)',
-            borderRadius: 6, padding: '4px 0', minWidth: 140,
-            boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
-          }}
+          style={{ ...MENU, position: 'absolute', ...style, minWidth: 140 }}
         >
           <MenuList items={item.items} onAction={onAction} />
         </div>
@@ -259,12 +261,8 @@ function SubmenuRow({
   );
 }
 
-// Sentinel returned when the user cancels a numeric prompt — caller drops
-// the click rather than firing an action with undefined args.
 const SKIP_ACTION = Symbol('skip-action') as unknown as object;
 
-// "Custom…" actions (id === 'custom' or label matching the convention)
-// open a numeric prompt and forward the result as args: { count }.
 function maybePromptForCount(item: MenuItem & { kind: 'action' }): object | undefined {
   if (item.id !== 'custom' && item.label !== 'Custom…') return undefined;
   const raw = window.prompt('Enter a count:', '1');
