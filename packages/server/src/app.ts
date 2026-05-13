@@ -3,7 +3,7 @@ import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import { onMessage, onClose } from './signaling';
 import { getIceServers } from './config';
-import { listRooms } from './rooms';
+import { listRooms, getTotalRoomsCreated } from './rooms';
 
 const app = express();
 
@@ -22,7 +22,7 @@ app.get('/ice-config', (_req, res) => {
 });
 
 app.get('/rooms', (_req, res) => {
-  res.json({ rooms: listRooms() });
+  res.json({ rooms: listRooms(), totalRoomsCreated: getTotalRoomsCreated() });
 });
 
 export const server = createServer(app);

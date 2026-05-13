@@ -22,12 +22,14 @@ export interface JoinResult {
 
 const rooms        = new Map<string, Room>();
 const clientLookup = new Map<WebSocket, { roomId: string; peerId: string }>();
+let totalRoomsCreated = 0;
 
 export function join(roomId: string, role: Role, ws: WebSocket): JoinResult | 'full' {
   let room = rooms.get(roomId);
   if (!room) {
     room = { hostId: null, members: new Map() };
     rooms.set(roomId, room);
+    totalRoomsCreated++;
   }
 
   // Host re-claim: evict any stale host whose WS hasn't been cleaned up yet
@@ -75,6 +77,10 @@ export function listRooms(): RoomInfo[] {
     roomId,
     occupancy: room.members.size,
   }));
+}
+
+export function getTotalRoomsCreated(): number {
+  return totalRoomsCreated;
 }
 
 export function lookup(ws: WebSocket): { roomId: string; peerId: string } | null {

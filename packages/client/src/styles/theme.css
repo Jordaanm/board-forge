@@ -1,0 +1,67 @@
+/* ─── Theme tokens (BoardForge "cosy paper table") ──────────────
+   Reusable design tokens — colours, typography, shape, shadow.
+   Pages opt in via the CSS custom properties below; the file has
+   no global side-effects beyond loading the brand fonts.
+*/
+
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&display=swap');
+
+:root {
+  /* Surfaces & ink (light) */
+  --bg:          #F5F0E8;
+  --bg-2:        #EDE4D4;
+  --surface:     #FBF7EE;
+  --surface-2:   #F0E7D4;
+  --ink:         #1C1410;
+  --ink-2:       #3A2A1E;
+  --ink-mute:    #7A6A58;
+  --line:        rgba(28, 20, 16, 0.12);
+  --line-strong: rgba(28, 20, 16, 0.22);
+
+  /* Accents */
+  --accent:      #C8623F; /* terracotta */
+  --accent-deep: #A8451F;
+  --accent-ink:  #FBF7EE;
+  --plum:        #6A3B4A;
+  --moss:        #6B7A4E;
+  --gold:        #C89B3F;
+
+  /* Shape */
+  --card-radius:  5px;
+  --panel-radius: 6px;
+
+  /* Shadow */
+  --shadow-sm: 0 1px 2px rgba(28, 20, 16, 0.08), 0 1px 1px rgba(28, 20, 16, 0.04);
+  --shadow:    0 2px 4px rgba(28, 20, 16, 0.08), 0 8px 18px rgba(28, 20, 16, 0.07);
+  --shadow-lg: 0 4px 8px rgba(28, 20, 16, 0.09), 0 22px 48px rgba(28, 20, 16, 0.12);
+
+  /* Typography */
+  --font-sans:      'Nunito', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-serif:     'Fraunces', Georgia, serif;
+  --font-mono:      ui-monospace, 'Cascadia Code', Consolas, monospace;
+  --font-size-base: 15px;
+
+  /* Effects */
+  --paper-tex: 0.25;
+}
+
+[data-theme="dark"] {
+  --bg:          #1C1410;
+  --bg-2:        #231A14;
+  --surface:     #2A221A;
+  --surface-2:   #342920;
+  --ink:         #F2E9DB;
+  --ink-2:       #E4D6BF;
+  --ink-mute:    #A89B84;
+  --line:        rgba(242, 233, 219, 0.10);
+  --line-strong: rgba(242, 233, 219, 0.18);
+  --accent:      #D97A55;
+  --accent-deep: #B75630;
+  --accent-ink:  #1C1410;
+  --plum:        #B07082;
+  --moss:        #9FAF7E;
+  --gold:        #E0B66A;
+  --shadow-sm:   0 1px 2px rgba(0,0,0,0.35);
+  --shadow:      0 2px 4px rgba(0,0,0,0.35), 0 10px 22px rgba(0,0,0,0.35);
+  --shadow-lg:   0 4px 8px rgba(0,0,0,0.4),  0 26px 54px rgba(0,0,0,0.45);
+}

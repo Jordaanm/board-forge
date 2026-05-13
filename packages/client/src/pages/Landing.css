@@ -1,96 +1,260 @@
+/* ─── Lobby (Landing) ────────────────────────────────────
+   Uses theme tokens from src/styles/theme.css.
+*/
+
 .landing {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 100%;
   height: 100%;
-  background: #1a1a2e;
-  color: #e8e8e8;
-  font-family: sans-serif;
+  overflow-y: auto;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 .landing__card {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 72px 28px 80px;
   text-align: center;
-  min-width: 420px;
 }
 
 .landing__title {
-  font-size: 36px;
-  font-weight: 700;
-  margin-bottom: 8px;
-  letter-spacing: 1px;
+  font-family: var(--font-serif);
+  font-optical-sizing: auto;
+  font-variation-settings: "SOFT" 50, "WONK" 0;
+  font-size: 64px;
+  line-height: 0.98;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  margin: 0 0 12px;
 }
 
 .landing__subtitle {
-  font-size: 14px;
-  color: #888;
-  margin-bottom: 32px;
+  color: var(--ink-mute);
+  font-size: 17px;
+  line-height: 1.55;
+  margin: 0 0 32px;
 }
 
 .landing__create-btn {
-  padding: 12px 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 52px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: var(--card-radius);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-family: inherit;
+  font-weight: 700;
   font-size: 16px;
-  font-weight: 600;
-  background: #5c7cfa;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
+  letter-spacing: 0.01em;
   cursor: pointer;
+  box-shadow:
+    0 1px 0 rgba(0,0,0,0.08),
+    0 2px 0 var(--accent-deep),
+    0 4px 10px rgba(168, 69, 31, 0.25);
+  transition: transform 120ms cubic-bezier(.34,1.56,.64,1), background 160ms, box-shadow 160ms;
+}
+.landing__create-btn:hover  { background: var(--accent-deep); transform: translateY(-1px); }
+.landing__create-btn:active { transform: translateY(1px) scale(0.98); }
+
+/* ─── Stats strip ─── */
+.landing__stats {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 28px;
+  margin-top: 38px;
+  padding-top: 28px;
+  border-top: 1px solid var(--line);
+}
+.landing__stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: var(--font-serif);
+  font-optical-sizing: auto;
+  font-variation-settings: "SOFT" 50, "WONK" 0;
+  color: var(--ink);
+}
+.landing__stat b {
+  font-size: 30px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+.landing__stat span {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink-mute);
+  font-weight: 700;
+  margin-top: 2px;
+}
+.landing__stat-sep {
+  width: 1px;
+  height: 28px;
+  background: var(--line-strong);
 }
 
 .landing__rooms {
-  margin-top: 40px;
+  margin-top: 56px;
+  padding-top: 32px;
+  border-top: 1px solid var(--line);
   text-align: left;
 }
 
 .landing__rooms-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #aaa;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  margin-bottom: 12px;
-  text-align: center;
+  font-family: var(--font-serif);
+  font-optical-sizing: auto;
+  font-variation-settings: "SOFT" 50, "WONK" 0;
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin: 0 0 18px;
+  text-align: left;
+  text-transform: none;
 }
 
 .landing__muted {
-  color: #666;
+  color: var(--ink-mute);
   font-size: 14px;
   text-align: center;
+  padding: 24px 0;
 }
 
-.landing__list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
+/* ─── Rooms grid ─── */
+.landing__rooms-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
 }
 
-.landing__row {
+.landing__room-card {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--card-radius);
+  box-shadow: var(--shadow-sm);
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 160ms, box-shadow 160ms, border-color 160ms;
+}
+.landing__room-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+  border-color: var(--line-strong);
+}
+
+.landing__room-top {
+  display: flex;
   justify-content: space-between;
-  padding: 10px 14px;
-  background: #252538;
-  border-radius: 6px;
-  margin-bottom: 6px;
-  font-size: 14px;
+  align-items: center;
+  gap: 10px;
 }
 
 .landing__room-id {
-  font-family: monospace;
-  color: #e8e8e8;
-}
-
-.landing__occupancy {
-  color: #aaa;
-  font-size: 13px;
-}
-
-.landing__join-btn {
-  padding: 6px 14px;
-  background: #5c7cfa;
-  color: #fff;
-  border-radius: 4px;
-  text-decoration: none;
+  font-family: var(--font-mono);
   font-weight: 600;
   font-size: 13px;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 3px 8px;
+}
+
+.landing__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  border: 1px solid var(--line);
+}
+.landing__chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #3F9E5C;
+  box-shadow: 0 0 0 3px rgba(63, 158, 92, 0.18);
+}
+
+.landing__room-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.landing__room-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-mute);
+  font-size: 13px;
+  font-weight: 600;
+}
+.landing__room-stat svg { flex: none; }
+
+.landing__room-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding-top: 10px;
+  margin-top: auto;
+  border-top: 1px dashed var(--line);
+}
+
+.landing__seats {
+  display: flex;
+  gap: 4px;
+}
+.landing__seat {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--line-strong);
+  border: 1.5px solid var(--surface);
+}
+.landing__seat--on {
+  background: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-deep);
+}
+
+.landing__join-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--accent);
+  letter-spacing: 0.01em;
+  transition: gap 160ms;
+}
+.landing__room-card:hover .landing__join-cta { gap: 8px; }
+
+@media (max-width: 640px) {
+  .landing__card       { padding: 44px 20px 60px; }
+  .landing__title      { font-size: 44px; }
+  .landing__rooms-grid { grid-template-columns: 1fr; }
+  .landing__stats      { gap: 18px; }
+  .landing__stat b     { font-size: 24px; }
 }
