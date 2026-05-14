@@ -37,7 +37,7 @@ import './Room.css';
 
 type Status = 'connecting' | 'connected' | 'disconnected' | 'room-full';
 
-const SIGNALING_URL = 'ws://localhost:3001';
+const SIGNALING_URL = import.meta.env.VITE_API_URL.replace(/^http/, 'ws');
 
 const STATUS_LABEL: Record<Status, string> = {
   connecting:   'Waiting for peer...',
