@@ -8,6 +8,7 @@
     "deploy": "cdk deploy",
     "deploy:server": "cdk deploy ServerStack",
     "deploy:client": "cdk deploy ClientStack",
+    "deploy:client:fast": "node scripts/deploy-client-fast.mjs",
     "deploy:all": "cdk deploy --all",
     "destroy": "cdk destroy",
     "diff": "cdk diff",
