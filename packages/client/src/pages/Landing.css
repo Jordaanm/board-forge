@@ -309,6 +309,13 @@
   background: #3F9E5C;
   box-shadow: 0 0 0 3px rgba(63, 158, 92, 0.18);
 }
+.landing__chip--full {
+  color: var(--ink-mute);
+}
+.landing__chip--full .landing__chip-dot {
+  background: #B0453A;
+  box-shadow: 0 0 0 3px rgba(176, 69, 58, 0.18);
+}
 
 .landing__room-meta {
   display: flex;

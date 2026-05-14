@@ -8,6 +8,7 @@ const API_URL = import.meta.env.VITE_API_URL;
 interface RoomInfo {
   roomId:    string;
   occupancy: number;
+  capacity:  number;
 }
 
 const IconUsers = () => (
@@ -142,12 +143,16 @@ export function Landing() {
               <p className="landing__muted">No open rooms</p>
             ) : (
               <div className="landing__rooms-grid">
-                {rooms.map(r => (
+                {rooms.map(r => {
+                  const isFull = r.occupancy >= r.capacity;
+                  return (
                   <a key={r.roomId} className="landing__room-card"
                      href={`${window.location.origin}/?room=${r.roomId}`}>
                     <div className="landing__room-top">
                       <span className="landing__room-id">{r.roomId.slice(0, 8)}</span>
-                      <span className="landing__chip"><span className="landing__chip-dot"/>Open</span>
+                      <span className={`landing__chip ${isFull ? 'landing__chip--full' : ''}`}>
+                        <span className="landing__chip-dot"/>{isFull ? 'Full' : 'Open'}
+                      </span>
                     </div>
                     <div className="landing__room-meta">
                       <span className="landing__room-stat">
@@ -156,7 +161,7 @@ export function Landing() {
                     </div>
                     <div className="landing__room-foot">
                       <div className="landing__seats">
-                        {Array.from({ length: Math.max(r.occupancy, 1) }, (_, i) => (
+                        {Array.from({ length: r.capacity }, (_, i) => (
                           <span key={i}
                                 className={`landing__seat ${i < r.occupancy ? 'landing__seat--on' : ''}`}/>
                         ))}
@@ -164,7 +169,8 @@ export function Landing() {
                       <span className="landing__join-cta">Join <IconChevronR/></span>
                     </div>
                   </a>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

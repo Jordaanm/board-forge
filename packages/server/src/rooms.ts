@@ -70,12 +70,14 @@ export function getRoomMembers(roomId: string): Member[] {
 export interface RoomInfo {
   roomId:    string;
   occupancy: number;
+  capacity:  number;
 }
 
 export function listRooms(): RoomInfo[] {
   return Array.from(rooms.entries()).map(([roomId, room]) => ({
     roomId,
     occupancy: room.members.size,
+    capacity:  maxRoomPeers,
   }));
 }
 
