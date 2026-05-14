@@ -17,8 +17,14 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
-app.get('/ice-config', (_req, res) => {
-  res.json({ iceServers: getIceServers() });
+app.get('/ice-config', async (_req, res) => {
+  try {
+    const iceServers = await getIceServers();
+    res.json({ iceServers });
+  } catch (err) {
+    console.error('[ice-config]', err);
+    res.status(500).json({ error: 'ice-config failed' });
+  }
 });
 
 app.get('/rooms', (_req, res) => {
