@@ -81,7 +81,9 @@
       "Bash(curl -sS -L -i \"https://claude.com/design/h/mmKj9T-1aStNIuCrESqKZQ\")",
       "Bash(mkdir -p /tmp/boardforge)",
       "Bash(unzip -o BoardForge-handoff.zip -d /tmp/boardforge/)",
-      "Bash(unzip -l BoardForge-handoff.zip)"
+      "Bash(unzip -l BoardForge-handoff.zip)",
+      "Bash(aws s3 *)",
+      "Bash(aws cloudfront *)"
     ]
   }
 }
