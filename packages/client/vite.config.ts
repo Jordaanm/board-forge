@@ -9,7 +9,7 @@ export default defineConfig({
   // Replace the access at transform time with an empty object so unset
   // keys evaluate to `undefined` (matching Node behaviour).
   define: {
-    'process.env': '({})',
+    'process.env': '{}',
   },
   server: {
     port: 5173,
