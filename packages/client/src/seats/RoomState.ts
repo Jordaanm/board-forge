@@ -15,6 +15,9 @@ export interface RoomStateSnapshot {
   seats:      SeatEntry[];   // length 8, index === position in array
   spectators: string[];
   turns:      TurnState;
+  // Per-peer display name lookup. Includes host and all guests; falls back to
+  // a UUID slice in the UI if a peer is somehow missing here.
+  names:      Record<string, string>;
 }
 
 export interface RoomStatePatch {
@@ -22,6 +25,9 @@ export interface RoomStatePatch {
   spectatorsAdded?:   string[];
   spectatorsRemoved?: string[];
   turns?:             TurnState;
+  // Sparse delta of name updates (additions and removals). A `null` value
+  // means the peer left and the entry should be deleted.
+  names?:             Record<string, string | null>;
 }
 
 export type RoomStateMessage =

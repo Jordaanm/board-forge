@@ -36,40 +36,54 @@ export class RoomStateManager {
   private readonly banned: Set<string> = new Set();
   private readonly listeners: Listener[] = [];
   private readonly turnEventListeners: TurnEventListener[] = [];
+  private readonly names: Map<string, string> = new Map();
   private turns: TurnState = initialTurnState();
 
-  constructor(hostPeerId: string) {
+  constructor(hostPeerId: string, hostDisplayName: string = '') {
     this.hostPeerId = hostPeerId;
     this.seats[0].peerId = hostPeerId;
+    if (hostDisplayName !== '') this.names.set(hostPeerId, hostDisplayName);
   }
 
-  assignOnJoin(peerId: string): void {
+  assignOnJoin(peerId: string, displayName: string = ''): void {
     if (this.banned.has(peerId)) return;
-    if (this.locate(peerId)) return;
+    const nameChanged = displayName !== '' && this.names.get(peerId) !== displayName;
+    if (nameChanged) this.names.set(peerId, displayName);
+    const namesPatch = nameChanged ? { [peerId]: displayName } : undefined;
+    if (this.locate(peerId)) {
+      if (namesPatch) this.emit({ names: namesPatch });
+      return;
+    }
 
     const empty = this.seats.find(s => s.peerId === null);
     if (empty) {
       empty.peerId = peerId;
-      this.emit({ seats: [{ ...empty }] });
+      this.emit({ seats: [{ ...empty }], names: namesPatch });
       return;
     }
 
     this.spectators.push(peerId);
-    this.emit({ spectatorsAdded: [peerId] });
+    this.emit({ spectatorsAdded: [peerId], names: namesPatch });
   }
 
   removePeer(peerId: string): void {
+    const hadName = this.names.delete(peerId);
+    const namesPatch: Record<string, string | null> | undefined =
+      hadName ? { [peerId]: null } : undefined;
     const seated = this.seats.find(s => s.peerId === peerId);
     if (seated) {
       seated.peerId = null;
-      this.emit({ seats: [{ ...seated }] });
+      this.emit({ seats: [{ ...seated }], names: namesPatch });
       return;
     }
 
     const idx = this.spectators.indexOf(peerId);
-    if (idx === -1) return;
+    if (idx === -1) {
+      if (namesPatch) this.emit({ names: namesPatch });
+      return;
+    }
     this.spectators.splice(idx, 1);
-    this.emit({ spectatorsRemoved: [peerId] });
+    this.emit({ spectatorsRemoved: [peerId], names: namesPatch });
   }
 
   // Move peerId to seatIndex if it is empty. Returns false if the seat is
@@ -130,6 +144,7 @@ export class RoomStateManager {
       seats:      this.seats.map(s => ({ ...s })),
       spectators: [...this.spectators],
       turns:      cloneTurns(this.turns),
+      names:      Object.fromEntries(this.names),
     };
   }
 
@@ -208,7 +223,8 @@ export class RoomStateManager {
       (!patch.seats || patch.seats.length === 0) &&
       (!patch.spectatorsAdded   || patch.spectatorsAdded.length   === 0) &&
       (!patch.spectatorsRemoved || patch.spectatorsRemoved.length === 0) &&
-      !patch.turns
+      !patch.turns &&
+      (!patch.names || Object.keys(patch.names).length === 0)
     ) return;
 
     const change: RoomStateChange = { patch, snapshot: this.snapshot() };

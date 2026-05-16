@@ -33,25 +33,37 @@ function handleJoin(ws: WebSocket, msg: Msg) {
   const { roomId, role } = msg;
   if (!roomId || (role !== 'host' && role !== 'guest')) return;
 
-  const result = join(roomId, role, ws);
+  const displayName = sanitiseDisplayName(msg.displayName);
+
+  const result = join(roomId, role, ws, displayName);
   if (result === 'full') {
     send(ws, { type: 'room-full' });
     return;
   }
 
   send(ws, {
-    type:       'joined',
-    peerId:     result.peerId,
+    type:        'joined',
+    peerId:      result.peerId,
     role,
-    hostId:     result.hostId,
-    otherPeers: result.otherPeers,
+    hostId:      result.hostId,
+    displayName,
+    otherPeers:  result.otherPeers,
   });
 
   // Notify existing members of the new peer.
   for (const other of result.otherPeers) {
     const member = getMember(roomId, other.peerId);
-    if (member) send(member.ws, { type: 'peer-joined', peerId: result.peerId, role });
+    if (member) send(member.ws, { type: 'peer-joined', peerId: result.peerId, role, displayName });
   }
+}
+
+const MAX_DISPLAY_NAME_LENGTH = 40;
+
+function sanitiseDisplayName(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  const trimmed = raw.trim();
+  if (trimmed === '') return '';
+  return Array.from(trimmed).slice(0, MAX_DISPLAY_NAME_LENGTH).join('');
 }
 
 function handleForward(ws: WebSocket, msg: Msg) {

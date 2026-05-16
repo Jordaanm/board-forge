@@ -4,9 +4,10 @@ import { maxRoomPeers } from './config';
 export type Role = 'host' | 'guest';
 
 export interface Member {
-  peerId: string;
-  role:   Role;
-  ws:     WebSocket;
+  peerId:      string;
+  role:        Role;
+  ws:          WebSocket;
+  displayName: string;
 }
 
 interface Room {
@@ -17,14 +18,14 @@ interface Room {
 export interface JoinResult {
   peerId:     string;
   hostId:     string | null;
-  otherPeers: { peerId: string; role: Role }[];
+  otherPeers: { peerId: string; role: Role; displayName: string }[];
 }
 
 const rooms        = new Map<string, Room>();
 const clientLookup = new Map<WebSocket, { roomId: string; peerId: string }>();
 let totalRoomsCreated = 0;
 
-export function join(roomId: string, role: Role, ws: WebSocket): JoinResult | 'full' {
+export function join(roomId: string, role: Role, ws: WebSocket, displayName: string): JoinResult | 'full' {
   let room = rooms.get(roomId);
   if (!room) {
     room = { hostId: null, members: new Map() };
@@ -47,13 +48,13 @@ export function join(roomId: string, role: Role, ws: WebSocket): JoinResult | 'f
   if (room.members.size >= maxRoomPeers) return 'full';
 
   const peerId = crypto.randomUUID();
-  room.members.set(peerId, { peerId, role, ws });
+  room.members.set(peerId, { peerId, role, ws, displayName });
   if (role === 'host') room.hostId = peerId;
   clientLookup.set(ws, { roomId, peerId });
 
   const otherPeers = Array.from(room.members.values())
     .filter(m => m.peerId !== peerId)
-    .map(m => ({ peerId: m.peerId, role: m.role }));
+    .map(m => ({ peerId: m.peerId, role: m.role, displayName: m.displayName }));
 
   return { peerId, hostId: room.hostId, otherPeers };
 }

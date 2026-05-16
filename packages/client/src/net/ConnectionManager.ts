@@ -4,7 +4,7 @@ type Role   = 'host' | 'guest';
 type MsgHandler           = (peerId: string, msg: unknown) => void;
 type StatusHandler        = (s: Status) => void;
 type PeerLeftHandler      = (peerId: string) => void;
-type PeerConnectedHandler = (peerId: string) => void;
+type PeerConnectedHandler = (peerId: string, displayName: string) => void;
 type JoinedHandler        = (peerId: string, hostPeerId: string | null) => void;
 
 type SignalingMsg = { type: string; [k: string]: unknown };
@@ -56,8 +56,10 @@ export class ConnectionManager {
   private role:       Role | null = null;
   private hostId:     string | null = null;
   private peers       = new Map<string, PeerEntry>();
+  private peerNames   = new Map<string, string>();
   private iceServers: RTCIceServer[] = FALLBACK_ICE_SERVERS;
   private disposed    = false;
+  private displayName = '';
 
   constructor(
     private readonly onMsg:           MsgHandler,
@@ -78,12 +80,18 @@ export class ConnectionManager {
     return ids;
   }
 
-  hostRoom(signalingUrl: string, roomId: string) {
+  hostRoom(signalingUrl: string, roomId: string, displayName: string) {
+    this.displayName = displayName;
     void this.connect(signalingUrl, roomId, 'host');
   }
 
-  joinRoom(signalingUrl: string, roomId: string) {
+  joinRoom(signalingUrl: string, roomId: string, displayName: string) {
+    this.displayName = displayName;
     void this.connect(signalingUrl, roomId, 'guest');
+  }
+
+  getPeerDisplayName(peerId: string): string | null {
+    return this.peerNames.get(peerId) ?? null;
   }
 
   // Broadcast (host) or send to host (guest). Defaults to the reliable
@@ -129,7 +137,7 @@ export class ConnectionManager {
     this.ws = ws;
 
     ws.addEventListener('open', () => {
-      ws.send(JSON.stringify({ type: 'join', roomId, role }));
+      ws.send(JSON.stringify({ type: 'join', roomId, role, displayName: this.displayName }));
     });
 
     ws.addEventListener('message', (e) => {
@@ -147,18 +155,25 @@ export class ConnectionManager {
       case 'joined':
         this.peerId = msg.peerId as string;
         this.hostId = (msg.hostId as string | null) ?? null;
+        for (const p of (msg.otherPeers as { peerId: string; role: Role; displayName?: string }[] | undefined) ?? []) {
+          if (typeof p.displayName === 'string') this.peerNames.set(p.peerId, p.displayName);
+        }
         this.onJoined(this.peerId, this.hostId);
         if (this.role === 'host') {
           // Existing peers (rare path: host joining late) get offers.
-          for (const p of msg.otherPeers as { peerId: string; role: Role }[]) {
+          for (const p of msg.otherPeers as { peerId: string; role: Role; displayName?: string }[]) {
             await this.dialPeer(p.peerId);
           }
         }
         break;
 
-      case 'peer-joined':
-        if (this.role === 'host') await this.dialPeer(msg.peerId as string);
+      case 'peer-joined': {
+        const peerId      = msg.peerId as string;
+        const displayName = typeof msg.displayName === 'string' ? msg.displayName : '';
+        this.peerNames.set(peerId, displayName);
+        if (this.role === 'host') await this.dialPeer(peerId);
         break;
+      }
 
       case 'peer-left':
         this.tearDownPeer(msg.peerId as string);
@@ -254,7 +269,7 @@ export class ConnectionManager {
       if (ch.label === RELIABLE_LABEL) {
         entry.open = true;
         this.onStatus('connected');
-        this.onPeerConnected(remoteId);
+        this.onPeerConnected(remoteId, this.peerNames.get(remoteId) ?? '');
       }
     };
     ch.onclose = () => this.markPeerClosed(remoteId);
@@ -272,6 +287,7 @@ export class ConnectionManager {
     if (!entry) return;
     entry.pc.close();
     this.peers.delete(remoteId);
+    this.peerNames.delete(remoteId);
     if (!this.anyPeerOpen()) this.onStatus('disconnected');
   }
 

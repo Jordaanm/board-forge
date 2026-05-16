@@ -24,9 +24,9 @@ function send(ws: WebSocket, data: unknown) {
   ws.send(JSON.stringify(data));
 }
 
-async function joinRoom(ws: WebSocket, roomId: string, role: 'host' | 'guest') {
+async function joinRoom(ws: WebSocket, roomId: string, role: 'host' | 'guest', displayName = 'Player') {
   const joined = nextMsg(ws);
-  send(ws, { type: 'join', roomId, role });
+  send(ws, { type: 'join', roomId, role, displayName });
   return joined;
 }
 
@@ -58,7 +58,7 @@ describe('room join', () => {
 
     expect(guestJoined.role).toBe('guest');
     expect(guestJoined.hostId).toBe(hostId);
-    expect(guestJoined.otherPeers).toEqual([{ peerId: hostId, role: 'host' }]);
+    expect(guestJoined.otherPeers).toEqual([{ peerId: hostId, role: 'host', displayName: 'Player' }]);
 
     const pj = await peerJoined;
     expect(pj.type).toBe('peer-joined');
@@ -144,6 +144,45 @@ describe('room join', () => {
     host.close();
     overflow.close();
     for (const g of guests) g.close();
+  });
+});
+
+describe('display name', () => {
+  test('joined echoes the supplied display name', async () => {
+    const host = await connect();
+    const msg = await joinRoom(host, 'room-name-a', 'host', 'Alice');
+    expect(msg.displayName).toBe('Alice');
+    host.close();
+  });
+
+  test('display name is included in otherPeers and peer-joined', async () => {
+    const host  = await connect();
+    const guest = await connect();
+    await joinRoom(host, 'room-name-b', 'host', 'Alice');
+
+    const peerJoined = nextMsg(host);
+    const guestJoined = await joinRoom(guest, 'room-name-b', 'guest', 'Bob');
+
+    expect((guestJoined.otherPeers as { displayName: string }[])[0].displayName).toBe('Alice');
+    const pj = await peerJoined;
+    expect(pj.displayName).toBe('Bob');
+
+    host.close();
+    guest.close();
+  });
+
+  test('whitespace-only and oversize names are sanitised', async () => {
+    const host = await connect();
+    const msg = await joinRoom(host, 'room-name-c', 'host', '   ');
+    expect(msg.displayName).toBe('');
+
+    const longHost = await connect();
+    const longMsg = await joinRoom(longHost, 'room-name-d', 'host', 'x'.repeat(80));
+    expect(typeof longMsg.displayName).toBe('string');
+    expect((longMsg.displayName as string).length).toBe(40);
+
+    host.close();
+    longHost.close();
   });
 });
 

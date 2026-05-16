@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { type RoomStateSnapshot, type SeatEntry } from '../seats/RoomState';
+import type { RoomStateSnapshot, SeatEntry } from '../seats/RoomState';
 import { type SeatIndex } from '../seats/SeatLayout';
 import { useFlipPosition } from './useFlipPosition';
 import './PlayersPanel.css';
@@ -51,6 +51,7 @@ export function PlayersPanel({
               <SeatRow
                 key={`seat-${seat.index}`}
                 seat={seat}
+                displayName={seat.peerId ? displayNameFor(snapshot, seat.peerId) : ''}
                 isSelf={seat.peerId !== null && seat.peerId === selfPeerId}
                 isHostPeer={seat.peerId === snapshot.hostPeerId}
                 isActiveTurn={snapshot.turns.enabled && snapshot.turns.activeSeat === seat.index}
@@ -67,6 +68,7 @@ export function PlayersPanel({
               <SpectatorRow
                 key={`spec-${peerId}`}
                 peerId={peerId}
+                displayName={displayNameFor(snapshot, peerId)}
                 isSelf={peerId === selfPeerId}
                 onContextMenu={(e) => openMenu(e, {
                   rowKind: 'spectator', peerId,
@@ -93,10 +95,15 @@ export function PlayersPanel({
   );
 }
 
+function displayNameFor(snapshot: RoomStateSnapshot, peerId: string): string {
+  return snapshot.names?.[peerId] ?? peerId.slice(0, 8);
+}
+
 function SeatRow({
-  seat, isSelf, isHostPeer, isActiveTurn, onContextMenu,
+  seat, displayName, isSelf, isHostPeer, isActiveTurn, onContextMenu,
 }: {
   seat:          SeatEntry;
+  displayName:   string;
   isSelf:        boolean;
   isHostPeer:    boolean;
   isActiveTurn:  boolean;
@@ -120,7 +127,7 @@ function SeatRow({
         title={`Seat ${seat.index} (${seat.colour})`}
       />
       {occupied
-        ? <span className="players-panel__name">{seat.peerId}</span>
+        ? <span className="players-panel__name">{displayName}</span>
         : <span className="players-panel__name players-panel__name--placeholder">empty</span>}
       {isHostPeer && <span className="players-panel__badge players-panel__badge--host">host</span>}
       {isSelf && !isHostPeer && <span className="players-panel__badge">you</span>}
@@ -129,9 +136,10 @@ function SeatRow({
 }
 
 function SpectatorRow({
-  peerId, isSelf, onContextMenu,
+  peerId, displayName, isSelf, onContextMenu,
 }: {
   peerId:        string;
+  displayName:   string;
   isSelf:        boolean;
   onContextMenu: (e: React.MouseEvent) => void;
 }) {
@@ -139,9 +147,10 @@ function SpectatorRow({
     <div
       className={`players-panel__row${isSelf ? ' players-panel__row--self' : ''}`}
       onContextMenu={onContextMenu}
+      data-peer-id={peerId}
     >
       <div className="players-panel__swatch players-panel__swatch--empty" />
-      <span className="players-panel__name">{peerId}</span>
+      <span className="players-panel__name">{displayName}</span>
       {isSelf && <span className="players-panel__badge">you</span>}
     </div>
   );
@@ -218,7 +227,7 @@ function PlayerMenu({
     state, snapshot, selfPeerId, isHost,
   );
   const headerLabel = state.peerId
-    ? state.peerId
+    ? displayNameFor(snapshot, state.peerId)
     : `Seat ${state.seat?.index} (${state.seat?.colour ?? ''})`;
 
   return (

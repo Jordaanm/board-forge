@@ -14,6 +14,7 @@ import { UIPanel } from '../components/UIPanel';
 import { HandPanel } from '../components/HandPanel';
 import { PreferencesTrigger } from '../components/PreferencesTrigger';
 import { load as loadPreferences } from '../preferences/storage';
+import { loadDisplayName } from '../identity/displayName';
 import { TOOL_CATALOGUE } from '../input/tools';
 import { type ContextMenuRequest, dispatchMenuAction } from '../input/ContextMenuController';
 import { type MenuItem } from '../entity/EntityComponent';
@@ -141,6 +142,7 @@ export function Room({ roomId, isHost }: Props) {
   }, [handle, isHost]);
 
   useEffect(() => {
+    const selfDisplayName = loadDisplayName();
     let manager: RoomStateManager | null = null;
     let client:  RoomStateClient  | null = null;
     let mgr!: ConnectionManager;
@@ -199,14 +201,14 @@ export function Room({ roomId, isHost }: Props) {
         handleRef.current?.controller.releasePeer(peerId);
         onPeerLeftRef.current(peerId);
       },
-      (peerId) => {
+      (peerId, displayName) => {
         if (!manager) return;
         if (manager.isBanned(peerId)) {
           mgr.sendTo(peerId, { type: 'kicked', reason: 'ban' } satisfies RoomStateMessage);
           mgr.kickPeer(peerId);
           return;
         }
-        manager.assignOnJoin(peerId);
+        manager.assignOnJoin(peerId, displayName);
         const snapshotMsg: RoomStateMessage = { type: 'room-state', snapshot: manager.snapshot() };
         mgr.sendTo(peerId, snapshotMsg);
         const manifestSnap = manifestStoreRef.current?.getPublished().toArray() ?? [];
@@ -218,7 +220,7 @@ export function Room({ roomId, isHost }: Props) {
       (peerId) => {
         setSelfPeerId(peerId);
         if (isHost) {
-          manager = new RoomStateManager(peerId);
+          manager = new RoomStateManager(peerId, selfDisplayName);
           managerRef.current = manager;
           manager.onChange((change) => {
             const patchMsg: RoomStateMessage = { type: 'room-state-patch', patch: change.patch };
@@ -305,8 +307,8 @@ export function Room({ roomId, isHost }: Props) {
       mgr.kickPeer(peerId);
     };
 
-    if (isHost) mgr.hostRoom(SIGNALING_URL, roomId);
-    else        mgr.joinRoom(SIGNALING_URL, roomId);
+    if (isHost) mgr.hostRoom(SIGNALING_URL, roomId, selfDisplayName);
+    else        mgr.joinRoom(SIGNALING_URL, roomId, selfDisplayName);
 
     return () => {
       mgr.dispose();

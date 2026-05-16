@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AnchorLayout } from '../components/AnchorLayout';
 import { PreferencesModal } from '../components/PreferencesModal';
+import { DisplayNamePromptModal } from '../components/DisplayNamePromptModal';
+import { hasPromptedDisplayName } from '../identity/displayName';
 import './Landing.css';
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -60,6 +62,7 @@ export function Landing() {
   const [totalTables,  setTotalTables]  = useState(0);
   const [loading,      setLoading]      = useState(true);
   const [prefsOpen,    setPrefsOpen]    = useState(false);
+  const [namePromptOpen, setNamePromptOpen] = useState(() => !hasPromptedDisplayName());
 
   useEffect(() => {
     let cancelled = false;
@@ -186,6 +189,7 @@ export function Landing() {
         </footer>
       </div>
       <PreferencesModal open={prefsOpen} onOpenChange={setPrefsOpen}/>
+      <DisplayNamePromptModal open={namePromptOpen} onOpenChange={setNamePromptOpen}/>
     </AnchorLayout>
   );
 }
