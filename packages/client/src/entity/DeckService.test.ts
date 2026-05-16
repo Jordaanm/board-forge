@@ -217,6 +217,37 @@ describe('DeckService.peelTop', () => {
     // releaseHold runs as cleanup; the card is no longer in the deck either way.
     expect(scene.getEntity(topId)!.heldBy).toBeNull();
   });
+
+  test('race: two seats peel a deck that dissolves mid-race — winner peels, loser gets null', () => {
+    // A 2-card deck dissolves after the first peel (cards.length → 1 →
+    // maybeDissolve despawns the deck). The second seat's peel finds no
+    // deck and returns null.
+    const deck = buildDeckOf('t', ['a', 'b']);
+
+    const first = decks.peelTop(deck.id, 0);
+    expect(first).not.toBeNull();
+    expect(despawned).toContain(deck.id);
+
+    const second = decks.peelTop(deck.id, 1);
+    expect(second).toBeNull();
+    // Only one hold call recorded — the winner's.
+    expect(heldCards).toHaveLength(1);
+    expect(heldCards[0].seat).toBe(0);
+  });
+
+  test('atomicity: sequential peels from a 3-card deck each return distinct cards', () => {
+    const deck = buildDeckOf('t', ['a', 'b', 'c']);
+    const cardsBefore = [...deck.getComponent(DeckComponent)!.state.cards];
+
+    const first  = decks.peelTop(deck.id, 0);
+    const second = decks.peelTop(deck.id, 1);
+
+    expect(first).not.toBeNull();
+    expect(second).not.toBeNull();
+    expect(first!.cardId).toBe(cardsBefore[0]);
+    expect(second!.cardId).toBe(cardsBefore[1]);
+    expect(first!.cardId).not.toBe(second!.cardId);
+  });
 });
 
 describe('DeckService.dealFromDeck', () => {

@@ -49,6 +49,11 @@ class FakeHandle {
   released: ReleaseCall[] = [];
   holds:    SeatIndex[]   = [];
 
+  // Optional override so tests can simulate a deck whose owner refuses
+  // manipulation (spectator viewer, locked-owner non-owner) — both surface
+  // through this single gate.
+  private canStartDragValue = true;
+
   constructor(public id: string, kind: 'deck' | 'card' | 'die', position: [number, number, number] = [0, 0.5, 0]) {
     this.obj = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.1, 0.7));
     this.obj.position.set(position[0], position[1], position[2]);
@@ -61,13 +66,15 @@ class FakeHandle {
     }
   }
 
+  setCanStartDrag(v: boolean): void { this.canStartDragValue = v; }
+
   get(cls: { typeId: string }): unknown {
     if (cls.typeId === 'transform') return { object3d: this.obj, state: { position: [this.obj.position.x, this.obj.position.y, this.obj.position.z], rotation: [0,0,0,1], scale: [1,1,1] } };
     if (cls.typeId === 'physics')   return { body: { position: this.obj.position }, state: { isLocked: false } };
     return undefined;
   }
 
-  canStartDrag(): boolean { return true; }
+  canStartDrag(): boolean { return this.canStartDragValue; }
   tryHold(seat: SeatIndex): boolean { this.entity.heldBy = seat; this.holds.push(seat); return true; }
   heldBy(): SeatIndex | null { return this.entity.heldBy; }
   release(velocity?: ReleaseCall): void {
@@ -276,6 +283,43 @@ describe('GrabTool — short-press peel on a deck', () => {
 
     expect(deck.holds).toEqual([]);
     // No active gesture remains.
+    expect(tool.hasActiveGesture()).toBe(false);
+  });
+});
+
+describe('GrabTool — peel authority gating', () => {
+  test('spectator (canStartDrag false) never invokes peelAndHold; tool resets silently', () => {
+    const deck = new FakeHandle('deck-1', 'deck', [0, 0.5, 0]);
+    deck.setCanStartDrag(false);
+    scene.add(deck.obj);
+    const { world, fake } = makeWorld([deck]);
+    const ctx = makeCtx(world, camera, scene, canvas, null);  // spectator: null seat
+    tool.onActivate(ctx);
+
+    const t0 = performance.now();
+    tool.onPress(pointerEvent({ timestamp: t0 }), ctx);
+    tool.onMove(pointerEvent({ timestamp: t0 + 20, clientX: 100, clientY: 100, worldX: 1 }), ctx);
+
+    expect(fake.peelCalls).toEqual([]);
+    expect(deck.holds).toEqual([]);
+    expect(tool.hasActiveGesture()).toBe(false);
+  });
+
+  test('locked-owner non-owner (canStartDrag false) never invokes peelAndHold; tool resets silently', () => {
+    const deck = new FakeHandle('deck-1', 'deck', [0, 0.5, 0]);
+    deck.setCanStartDrag(false);
+    deck.entity.owner = 7;  // owned by someone else
+    scene.add(deck.obj);
+    const { world, fake } = makeWorld([deck]);
+    const ctx = makeCtx(world, camera, scene, canvas, 0);  // self seat 0, not the owner
+    tool.onActivate(ctx);
+
+    const t0 = performance.now();
+    tool.onPress(pointerEvent({ timestamp: t0 }), ctx);
+    tool.onMove(pointerEvent({ timestamp: t0 + 20, clientX: 100, clientY: 100, worldX: 1 }), ctx);
+
+    expect(fake.peelCalls).toEqual([]);
+    expect(deck.holds).toEqual([]);
     expect(tool.hasActiveGesture()).toBe(false);
   });
 });

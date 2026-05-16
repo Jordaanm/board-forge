@@ -6,6 +6,8 @@ import { EntityComponent } from './EntityComponent';
 import { HostReplicatorV2, type ReplicatorPolicy } from './HostReplicatorV2';
 import { HoldService } from './HoldService';
 import { HostInputDispatcher } from './HostInputDispatcher';
+import { type DeckService } from './DeckService';
+import { type PeelAndHoldResult } from './wire';
 import { type SeatIndex } from '../seats/SeatLayout';
 
 const POLICY: ReplicatorPolicy = {
@@ -205,5 +207,111 @@ describe('HostInputDispatcher.handleHoldRelease', () => {
 
     expect(dispatcher.handleHoldRelease('p2', { type: 'hold-release', entityId: 'a' })).toBe(false);
     expect(e.heldBy).toBe(1);
+  });
+});
+
+describe('HostInputDispatcher.handlePeelAndHold — issue #3 of issues--deck-peel.md', () => {
+  let peelCalls: Array<{ deckId: string; seat: SeatIndex }>;
+  let peelResult: PeelAndHoldResult | null;
+
+  function stubDeckService(): void {
+    peelCalls = [];
+    peelResult = { cardId: 'card-1', pos: [0, 0, 0], rot: [0, 0, 0, 1] };
+    const stub = {
+      peelTop: (deckId: string, seat: SeatIndex) => {
+        peelCalls.push({ deckId, seat });
+        return peelResult;
+      },
+    } as unknown as DeckService;
+    dispatcher.setDeckService(stub);
+  }
+
+  test('owner-seated guest peel — calls peelTop and returns its result', () => {
+    spawn('deck-1', 1);
+    PEERS.set('p1', 1);
+    stubDeckService();
+
+    const result = dispatcher.handlePeelAndHold('p1', {
+      type: 'peel-and-hold', requestId: 'r1', deckId: 'deck-1',
+    });
+
+    expect(result).toEqual({ cardId: 'card-1', pos: [0, 0, 0], rot: [0, 0, 0, 1] });
+    expect(peelCalls).toEqual([{ deckId: 'deck-1', seat: 1 }]);
+  });
+
+  test('non-owner seated guest is refused — peelTop not called', () => {
+    spawn('deck-1', 1);
+    PEERS.set('p2', 2);
+    stubDeckService();
+
+    const result = dispatcher.handlePeelAndHold('p2', {
+      type: 'peel-and-hold', requestId: 'r2', deckId: 'deck-1',
+    });
+
+    expect(result).toBeNull();
+    expect(peelCalls).toEqual([]);
+  });
+
+  test('spectator (peerSeat null) is refused — peelTop not called', () => {
+    spawn('deck-1', null);
+    PEERS.set('p3', null);
+    stubDeckService();
+
+    const result = dispatcher.handlePeelAndHold('p3', {
+      type: 'peel-and-hold', requestId: 'r3', deckId: 'deck-1',
+    });
+
+    expect(result).toBeNull();
+    expect(peelCalls).toEqual([]);
+  });
+
+  test('any seated guest may peel from an unowned deck', () => {
+    spawn('deck-1', null);
+    PEERS.set('p4', 3);
+    stubDeckService();
+
+    const result = dispatcher.handlePeelAndHold('p4', {
+      type: 'peel-and-hold', requestId: 'r4', deckId: 'deck-1',
+    });
+
+    expect(result).not.toBeNull();
+    expect(peelCalls).toEqual([{ deckId: 'deck-1', seat: 3 }]);
+  });
+
+  test('unknown deck id is refused — peelTop not called', () => {
+    PEERS.set('p1', 1);
+    stubDeckService();
+
+    const result = dispatcher.handlePeelAndHold('p1', {
+      type: 'peel-and-hold', requestId: 'r5', deckId: 'missing',
+    });
+
+    expect(result).toBeNull();
+    expect(peelCalls).toEqual([]);
+  });
+
+  test('returns null when DeckService is not wired', () => {
+    spawn('deck-1', 1);
+    PEERS.set('p1', 1);
+    // No setDeckService call.
+    const result = dispatcher.handlePeelAndHold('p1', {
+      type: 'peel-and-hold', requestId: 'r6', deckId: 'deck-1',
+    });
+    expect(result).toBeNull();
+  });
+
+  test('propagates peelTop null (empty deck, defensive failure, etc.)', () => {
+    spawn('deck-1', 1);
+    PEERS.set('p1', 1);
+    stubDeckService();
+    peelResult = null;
+
+    const result = dispatcher.handlePeelAndHold('p1', {
+      type: 'peel-and-hold', requestId: 'r7', deckId: 'deck-1',
+    });
+
+    expect(result).toBeNull();
+    // peelTop was called — the null comes from the service, not the gate.
+    expect(peelCalls).toEqual([{ deckId: 'deck-1', seat: 1 }]);
   });
 });
