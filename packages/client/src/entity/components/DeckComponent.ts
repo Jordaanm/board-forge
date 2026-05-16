@@ -12,6 +12,7 @@ import {
   type SpawnContext,
   type MenuItem,
   type ActionContext,
+  type GrabIntent,
 } from '../EntityComponent';
 import { MeshComponent } from './MeshComponent';
 import { PhysicsComponent } from './PhysicsComponent';
@@ -42,6 +43,15 @@ export class DeckComponent extends EntityComponent<DeckState> {
     if (changed.cards !== undefined) {
       this.applyCardsToSiblings();
     }
+  }
+
+  // Short-press-and-drag on a deck peels the top card; long-press carries the
+  // whole deck. Empty deck falls through to whole-deck grab so the gesture is
+  // never a dead-end. Issue #2 of issues--deck-peel.md.
+  onTryGrab(isLongPress: boolean): GrabIntent | null {
+    if (isLongPress)                    return null;
+    if (this.state.cards.length === 0)  return null;
+    return { kind: 'peel', sourceId: this.entity.id };
   }
 
   // Deck items use submenus and args (draw/deal counts), so they don't fit

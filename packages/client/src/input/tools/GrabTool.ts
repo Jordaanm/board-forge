@@ -22,6 +22,8 @@ import { projectRayOntoAxis } from '../axisDrag';
 import { type Tool, type ToolContext, type ToolPointerEvent } from './types';
 import { type AxisGizmoAttachment } from './AxisGizmoAttachment';
 import { findDropTargetAt } from '../dropTargetRegistry';
+import { type PeelAndHoldResult } from '../../entity/wire';
+import { type SeatIndex } from '../../seats/SeatLayout';
 
 const VELOCITY_SAMPLES = 20;
 
@@ -47,6 +49,26 @@ type CarryDrag = {
   active: boolean;     // false while waiting for guest hold-claim echo
 };
 
+// Short-press peel — issue #2 of issues--deck-peel.md. Lives parallel to
+// CarryDrag. Created when GrabTool's commit point sees `{ kind: 'peel' }`
+// from Entity.tryGrab; the world's peelAndHold returns a promise that
+// resolves with the new card id + pose. The tool stays in this state until
+// the reply arrives AND the new card is in scene held by self — then
+// transitions to a regular Carry.
+type PendingPeel = {
+  sourceId:      string;
+  pointerId:     number;
+  holdOffsetX:   number;
+  holdOffsetZ:   number;
+  holdY:         number;
+  reply:         PeelAndHoldResult | null;
+  replyReceived: boolean;
+  // True once the user has released the pointer (or the tool was cancelled)
+  // before the reply arrived. The pending-peel closure detects this and
+  // releases any peeled card on arrival.
+  canceled:      boolean;
+};
+
 export class GrabTool implements Tool {
   readonly id     = 'grab';
   readonly label  = 'Grab';
@@ -54,6 +76,7 @@ export class GrabTool implements Tool {
 
   private pending:      Pending | null = null;
   private pendingEmpty: { pointerId: number } | null = null;
+  private pendingPeel:  PendingPeel | null = null;
   private carry:        CarryDrag | null = null;
   private axisDrag:     AxisDrag  | null = null;
 
@@ -84,6 +107,7 @@ export class GrabTool implements Tool {
   hasActiveGesture(): boolean {
     return this.pending !== null
         || this.pendingEmpty !== null
+        || this.pendingPeel !== null
         || this.carry !== null
         || this.axisDrag !== null;
   }
@@ -94,23 +118,23 @@ export class GrabTool implements Tool {
     this.syncAttachment(ctx);
   }
 
-  onDeactivate(_ctx: ToolContext): void {
+  onDeactivate(ctx: ToolContext): void {
     this.active = false;
     this.attachment.detach();
     // Drop any in-flight gesture as a safety net — caller usually rejects
     // tool-switch during an active gesture, but onDeactivate must leave a
     // clean slate either way.
-    this.cancelGesture();
+    this.cancelGesture(ctx);
   }
 
-  onCancel(_ctx: ToolContext): void {
-    this.cancelGesture();
+  onCancel(ctx: ToolContext): void {
+    this.cancelGesture(ctx);
   }
 
   // ── Pointer hooks ──────────────────────────────────────────────────────
   onPress(e: ToolPointerEvent, ctx: ToolContext): void {
     if (e.button !== 0) return;
-    if (this.carry || this.axisDrag || this.pending || this.pendingEmpty) return;
+    if (this.carry || this.axisDrag || this.pending || this.pendingEmpty || this.pendingPeel) return;
 
     // Gizmo arms take priority over the object body.
     ctx.raycaster.set(e.ray.origin, e.ray.direction);
@@ -185,7 +209,7 @@ export class GrabTool implements Tool {
       const dy = e.clientY - this.pending.startY;
       if (dx * dx + dy * dy > GRAB_MOVE_THRESHOLD_PX * GRAB_MOVE_THRESHOLD_PX) this.beginCarry(this.pending, ctx);
     }
-    if (!this.carry) return;
+    if (!this.carry && !this.pendingPeel) return;
     ctx.raycaster.set(e.ray.origin, e.ray.direction);
     const pt = this.castToCarryPlane(ctx.raycaster);
     if (!pt) return;
@@ -228,6 +252,16 @@ export class GrabTool implements Tool {
       return;
     }
 
+    if (this.pendingPeel) {
+      // Pointer released before (or after) the host's reply. Either way the
+      // peeled card sits at the deck's pose — no throw applies; no Carry
+      // ever began. cleanupPendingPeel releases the peeled card, threading
+      // through the still-pending closure when the reply hasn't arrived.
+      this.cleanupPendingPeel(ctx);
+      this.velHistory.length = 0;
+      return;
+    }
+
     if (this.pending) {
       this.onSelect(this.pending.handle.id);
       this.pending = null;
@@ -244,6 +278,23 @@ export class GrabTool implements Tool {
   update(_dt: number, ctx: ToolContext): void {
     if (this.pending && performance.now() - this.pending.startT >= GRAB_LONG_PRESS_MS) {
       this.beginCarry(this.pending, ctx);
+    }
+
+    // PendingPeel → Carry transition. Mirrors the host hold-claim echo wait
+    // for axis/carry drags, but keyed on the new card id from the reply.
+    if (this.pendingPeel && this.pendingPeel.replyReceived
+        && !this.pendingPeel.canceled
+        && this.pendingPeel.reply !== null) {
+      const seat       = ctx.getSelfSeat();
+      const cardHandle = ctx.world.get(this.pendingPeel.reply.cardId);
+      if (seat !== null && cardHandle && cardHandle.heldBy() === seat) {
+        const t      = cardHandle.get(TransformComponent);
+        const cardY  = t?.object3d.position.y ?? (this.pendingPeel.holdY - CARRY_LIFT_HEIGHT);
+        this.holdY               = cardY + CARRY_LIFT_HEIGHT;
+        this.carryPlane.constant = -this.holdY;
+        this.carry = { handle: cardHandle, active: true };
+        this.pendingPeel = null;
+      }
     }
 
     if (this.carry && !this.carry.active) {
@@ -290,7 +341,7 @@ export class GrabTool implements Tool {
     this.attachment.attach(handle, ctx);
   }
 
-  private cancelGesture(): void {
+  private cancelGesture(ctx: ToolContext): void {
     if (this.carry) {
       this.carry.handle.release();
       this.carry = null;
@@ -299,9 +350,26 @@ export class GrabTool implements Tool {
       this.axisDrag.handle.release();
       this.axisDrag = null;
     }
+    if (this.pendingPeel) {
+      this.cleanupPendingPeel(ctx);
+    }
     this.pending      = null;
     this.pendingEmpty = null;
     this.velHistory.length = 0;
+  }
+
+  // Tear down a PendingPeel before its host reply has been consumed. Sets
+  // the canceled flag so the still-pending closure releases any peeled card
+  // on arrival; if the closure has already run, releases the peeled card
+  // now via the world handle.
+  private cleanupPendingPeel(ctx: ToolContext): void {
+    const peel = this.pendingPeel;
+    if (!peel) return;
+    this.pendingPeel = null;
+    peel.canceled = true;
+    if (peel.replyReceived && peel.reply !== null) {
+      ctx.world.get(peel.reply.cardId)?.release();
+    }
   }
 
   private castToCarryPlane(raycaster: THREE.Raycaster): THREE.Vector3 | null {
@@ -320,7 +388,10 @@ export class GrabTool implements Tool {
 
     const isLongPress = performance.now() - p.startT >= GRAB_LONG_PRESS_MS;
     const intent      = p.handle.entity.tryGrab(isLongPress);
-    if (intent.kind !== 'self') return;
+    if (intent.kind === 'peel') {
+      this.beginPeel(p, intent.sourceId, ctx, seat);
+      return;
+    }
 
     if (p.handle.entity.heldBy !== null) return;
     if (!p.handle.tryHold(seat)) return;
@@ -345,6 +416,62 @@ export class GrabTool implements Tool {
       this.holdOffsetX = 0;
       this.holdOffsetZ = 0;
     }
+  }
+
+  // Commit to a peel-style grab: capture the carry plane / hold offset
+  // against the deck's current pose, fire World.peelAndHold, park in
+  // PendingPeel until the reply + entity arrival lets update() transition
+  // to a regular Carry. p.handle is the deck (the source); the carried
+  // entity is the freshly-peeled card delivered by the host's reply.
+  private beginPeel(p: Pending, sourceId: string, ctx: ToolContext, seat: SeatIndex): void {
+    const deckT  = p.handle.get(TransformComponent);
+    const deckX  = deckT?.object3d.position.x ?? 0;
+    const deckY  = deckT?.object3d.position.y ?? 0;
+    const deckZ  = deckT?.object3d.position.z ?? 0;
+    const holdY  = deckY + CARRY_LIFT_HEIGHT;
+    this.holdY               = holdY;
+    this.carryPlane.constant = -holdY;
+    this.velHistory.length   = 0;
+
+    let holdOffsetX = 0;
+    let holdOffsetZ = 0;
+    const pt = this.castToCarryPlane(ctx.raycaster);
+    if (pt) {
+      holdOffsetX = deckX - pt.x;
+      holdOffsetZ = deckZ - pt.z;
+      this.carryTarget.set(pt.x + holdOffsetX, holdY, pt.z + holdOffsetZ);
+      this.velHistory.push({ pos: pt.clone(), t: performance.now() });
+    }
+    this.holdOffsetX = holdOffsetX;
+    this.holdOffsetZ = holdOffsetZ;
+
+    const peel: PendingPeel = {
+      sourceId,
+      pointerId:     p.pointerId,
+      holdOffsetX, holdOffsetZ, holdY,
+      reply:         null,
+      replyReceived: false,
+      canceled:      false,
+    };
+    this.pendingPeel = peel;
+
+    ctx.world.peelAndHold(sourceId, seat).then((reply) => {
+      peel.reply         = reply;
+      peel.replyReceived = true;
+      const stillCurrent = this.pendingPeel === peel;
+      if (peel.canceled || reply === null) {
+        // User released / canceled in flight, or the host rejected. If a card
+        // was peeled, release it now so it sits visibly at the deck's pose.
+        if (reply !== null) ctx.world.get(reply.cardId)?.release();
+        if (stillCurrent) {
+          this.pendingPeel = null;
+          this.velHistory.length = 0;
+        }
+        return;
+      }
+      // Reply OK + user still holding. update() will pick up the transition
+      // to Carry once the new card's heldBy === self seat.
+    });
   }
 
   private beginAxisDrag(handle: EntityHandle, axisName: GizmoAxis, ctx: ToolContext): void {

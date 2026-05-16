@@ -11,6 +11,7 @@ import { type SceneImpl } from './Scene';
 import { type Entity } from './Entity';
 import { type SeatIndex } from '../seats/SeatLayout';
 import { type HostReplicatorV2 } from './HostReplicatorV2';
+import { type PeelAndHoldResult } from './wire';
 import { DeckComponent } from './components/DeckComponent';
 import { CardComponent } from './components/CardComponent';
 import { TransformComponent } from './components/TransformComponent';
@@ -21,6 +22,12 @@ import { HandComponent } from './components/HandComponent';
 
 export interface DeckHostFacade {
   despawn(entityId: string): void;
+  // Synchronous hold-claim for the freshly-peeled card. Delegates to the
+  // host's HoldService.tryClaim. Returns true on success.
+  tryHold(card: Entity, seat: SeatIndex): boolean;
+  // Defensive cleanup if tryHold somehow fails after the card has been
+  // released from the deck (shouldn't happen in practice).
+  releaseHold(card: Entity): void;
 }
 
 const TWEEN_INTO_HAND_MS = 250;
@@ -226,6 +233,53 @@ export class DeckService {
 
     this.host.despawn(deckId);
     return true;
+  }
+
+  // Short-press peel — atomic pop, release, hold, dissolve. Issue #2 of
+  // issues--deck-peel.md. Returns the new card's id and pose, or null if the
+  // deck is unknown, missing DeckComponent, empty, or the hold fails
+  // defensively. Caller is expected to have already gated `canManipulate`.
+  peelTop(deckId: string, callerSeat: SeatIndex): PeelAndHoldResult | null {
+    const deck = this.scene.getEntity(deckId);
+    if (!deck) return null;
+    const deckC = deck.getComponent(DeckComponent);
+    if (!deckC) return null;
+    if (deckC.state.cards.length === 0) return null;
+
+    const cardId = deckC.state.cards[0];
+    const card = this.scene.getEntity(cardId);
+    if (!card) return null;
+
+    const deckTransform = deck.getComponent(TransformComponent);
+    if (!deckTransform) return null;
+    const pos: [number, number, number] = [
+      deckTransform.state.position[0],
+      deckTransform.state.position[1],
+      deckTransform.state.position[2],
+    ];
+    const rot: [number, number, number, number] = [
+      deckTransform.state.rotation[0],
+      deckTransform.state.rotation[1],
+      deckTransform.state.rotation[2],
+      deckTransform.state.rotation[3],
+    ];
+
+    // Pop first so a concurrent guest call doesn't see the same top card.
+    // Single-threaded JS means this is genuinely atomic from any concurrent
+    // RPC's perspective.
+    deckC.setState({ cards: deckC.state.cards.slice(1) });
+    this.releaseCardFromDeck(card, pos, rot);
+
+    if (!this.host.tryHold(card, callerSeat)) {
+      // Defensive — card just left contained state with heldBy=null, so
+      // tryClaim should always succeed. If it doesn't, release any partial
+      // hold and bail without dissolving.
+      this.host.releaseHold(card);
+      return null;
+    }
+
+    this.maybeDissolve(deckId);
+    return { cardId, pos, rot };
   }
 
   // If the deck has exactly 1 card left, un-hide that card at the deck's

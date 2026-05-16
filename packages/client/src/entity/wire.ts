@@ -112,6 +112,29 @@ export interface HoldRelease {
   vz?:      number;
 }
 
+// Atomic pop-top-of-deck + hold for the requesting seat (planning/prd--deck-peel.md).
+// Guest sends; host validates ownership, pops the top card, releases it from
+// the deck, claims a hold for the sender, runs maybeDissolve, and replies with
+// the new card id and the deck's pose. Reliable channel.
+export interface PeelAndHoldResult {
+  cardId: string;
+  pos:    [number, number, number];
+  rot:    [number, number, number, number];
+}
+
+export interface PeelAndHoldRequest {
+  type:      'peel-and-hold';
+  requestId: string;
+  deckId:    string;
+}
+
+export interface PeelAndHoldReply {
+  type:      'peel-and-hold-reply';
+  requestId: string;
+  // null on rejection (deck missing, no DeckComponent, empty, ownership refused).
+  result:    PeelAndHoldResult | null;
+}
+
 export interface RequestUpdate {
   type:     'request-update';
   entityId: string;
@@ -196,6 +219,29 @@ export interface SpreadDeck {
   deckId: string;
 }
 
+// Short-press peel on a deck — issue #2 of issues--deck-peel.md. Guest sends
+// the request; host atomically pops the top card, releases it from the deck,
+// holds it for the requesting seat, and replies with the new card's id +
+// pose (or null on rejection). Correlated by `requestId` so the guest can
+// match the reply back to the pending GrabTool gesture.
+export interface PeelAndHoldRequest {
+  type:      'peel-and-hold';
+  requestId: string;
+  deckId:    string;
+}
+
+export interface PeelAndHoldResult {
+  cardId: string;
+  pos:    [number, number, number];
+  rot:    [number, number, number, number];
+}
+
+export interface PeelAndHoldReply {
+  type:      'peel-and-hold-reply';
+  requestId: string;
+  result:    PeelAndHoldResult | null;
+}
+
 // Cosmetic sound effect broadcast initiated from a host script via
 // `scene.playSound(slug)`. Issue #11 of issues--asset-registry.md. Rides the
 // unreliable channel — missed messages are not retried (audio cues are
@@ -253,5 +299,7 @@ export type SceneMessage =
   | ShuffleDeck
   | DealFromDeck
   | SpreadDeck
+  | PeelAndHoldRequest
+  | PeelAndHoldReply
   | ToolBroadcast
   | PlaySoundMessage;

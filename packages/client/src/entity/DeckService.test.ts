@@ -26,6 +26,8 @@ let replicator: HostReplicatorV2;
 let merge:      MergeService;
 let decks:      DeckService;
 let despawned:  string[];
+let heldCards:  { id: string; seat: number }[];
+let tryHoldFn:  (card: Entity, seat: number) => boolean;
 
 function spawnAt(type: string, position: [number, number, number]): Entity {
   const e = scene.spawn(type, ctx);
@@ -64,11 +66,19 @@ beforeEach(() => {
   merge = new MergeService(scene, replicator, {
     spawnAt: (type, position) => spawnAt(type, position),
   });
+  heldCards = [];
+  tryHoldFn = (card: Entity, seat: number) => {
+    card.heldBy = seat as 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+    heldCards.push({ id: card.id, seat });
+    return true;
+  };
   decks = new DeckService(scene, replicator, {
     despawn: (id) => {
       despawned.push(id);
       scene.removeEntity(id);
     },
+    tryHold:     (card, seat) => tryHoldFn(card, seat),
+    releaseHold: (card) => { card.heldBy = null; },
   });
 });
 
@@ -142,6 +152,70 @@ describe('DeckService.maybeDissolve', () => {
     const lone = scene.getEntity('a')!;
     expect(lone.isContained).toBe(false);
     expect(lone.parentId).toBeNull();
+  });
+});
+
+describe('DeckService.peelTop', () => {
+  test('pops top card, releases it, holds it for caller, returns deck pose', () => {
+    const deck = buildDeckOf('t', ['a', 'b', 'c']);
+    const t = deck.getComponent(TransformComponent)!;
+    t.setState({ position: [1, 2, 3], rotation: [0, 0, 0, 1], scale: t.state.scale });
+    const cardsBefore = [...deck.getComponent(DeckComponent)!.state.cards];
+    const topId = cardsBefore[0];
+    const result = decks.peelTop(deck.id, 0)!;
+    expect(result).not.toBeNull();
+    expect(result.cardId).toBe(topId);
+    expect(result.pos).toEqual([1, 2, 3]);
+    expect(result.rot).toEqual([0, 0, 0, 1]);
+
+    const card = scene.getEntity(topId)!;
+    expect(card.isContained).toBe(false);
+    expect(card.parentId).toBeNull();
+    expect(card.heldBy).toBe(0);
+    expect(heldCards).toEqual([{ id: topId, seat: 0 }]);
+    expect(deck.getComponent(DeckComponent)!.state.cards).toEqual(cardsBefore.slice(1));
+  });
+
+  test('returns null when deck id is unknown', () => {
+    expect(decks.peelTop('missing-deck', 0)).toBeNull();
+    expect(heldCards).toEqual([]);
+  });
+
+  test('returns null when the entity has no DeckComponent', () => {
+    const card = spawnCard('lonecard');
+    expect(decks.peelTop(card.id, 0)).toBeNull();
+    expect(heldCards).toEqual([]);
+  });
+
+  test('returns null when the deck is empty', () => {
+    const deck = buildDeckOf('t', ['a', 'b']);
+    deck.getComponent(DeckComponent)!.setState({ cards: [] });
+    expect(decks.peelTop(deck.id, 0)).toBeNull();
+    expect(heldCards).toEqual([]);
+  });
+
+  test('dissolves the deck when peel drops it to a singleton', () => {
+    const deck = buildDeckOf('t', ['a', 'b']);
+    const cardsBefore = [...deck.getComponent(DeckComponent)!.state.cards];
+    const topId  = cardsBefore[0];
+    const loneId = cardsBefore[1];
+    const result = decks.peelTop(deck.id, 0);
+    expect(result).not.toBeNull();
+    expect(result!.cardId).toBe(topId);
+    expect(despawned).toContain(deck.id);
+    const lone = scene.getEntity(loneId)!;
+    expect(lone.isContained).toBe(false);
+    expect(lone.parentId).toBeNull();
+  });
+
+  test('defensive tryHold failure releases the popped card and returns null', () => {
+    const deck = buildDeckOf('t', ['a', 'b', 'c']);
+    const topId = deck.getComponent(DeckComponent)!.state.cards[0];
+    tryHoldFn = () => false;
+    const result = decks.peelTop(deck.id, 0);
+    expect(result).toBeNull();
+    // releaseHold runs as cleanup; the card is no longer in the deck either way.
+    expect(scene.getEntity(topId)!.heldBy).toBeNull();
   });
 });
 

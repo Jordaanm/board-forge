@@ -16,7 +16,7 @@ import { canManipulate } from '../seats/OwnershipPolicy';
 import { type HoldService } from './HoldService';
 import { type DeckService } from './DeckService';
 import { type SceneHistoryService } from './SceneHistoryService';
-import { type HoldClaim, type HoldRelease, type InvokeAction, type RequestUpdate, type ApplyImpulse, type PlayCardToTable, type ReorderHand, type TweenIntoHand, type DrawFromDeck, type ShuffleDeck, type DealFromDeck, type SpreadDeck } from './wire';
+import { type HoldClaim, type HoldRelease, type InvokeAction, type RequestUpdate, type ApplyImpulse, type PlayCardToTable, type ReorderHand, type TweenIntoHand, type DrawFromDeck, type ShuffleDeck, type DealFromDeck, type SpreadDeck, type PeelAndHoldRequest, type PeelAndHoldResult } from './wire';
 import { type ActionContext } from './EntityComponent';
 import { load as loadPreferences } from '../preferences/storage';
 import { PhysicsComponent } from './components/PhysicsComponent';
@@ -194,6 +194,23 @@ export class HostInputDispatcher {
     this.push(`deal ${msg.count} from ${entity.name}`);
     const dealt = this.decks.dealFromDeck(msg.deckId, msg.count, senderSeat);
     return dealt > 0;
+  }
+
+  // Issue #2 of issues--deck-peel.md — guest short-press-peels the top card
+  // off a deck. Validates ownership + seat, delegates the atomic pop /
+  // release / hold sequence to DeckService.peelTop, returns the new card's
+  // id and pose (or null on any rejection). World.handleInboundHost wraps
+  // the result in a `peel-and-hold-reply` to the requesting peer.
+  handlePeelAndHold(peerId: string, msg: PeelAndHoldRequest): PeelAndHoldResult | null {
+    if (!this.decks) return null;
+    const senderSeat = this.getPeerSeat(peerId);
+    if (senderSeat === null) return null;
+    const entity = this.scene.getEntity(msg.deckId);
+    if (!entity) return null;
+    if (!canManipulate({ peerSeat: senderSeat, isHost: false }, entity.owner)) return null;
+    const result = this.decks.peelTop(msg.deckId, senderSeat);
+    if (result) this.push(`peel ${entity.name}`);
+    return result;
   }
 
   // Guest right-clicks "Spread deck" on a deck. Host validates ownership and

@@ -123,3 +123,28 @@ describe('DeckComponent — context menu', () => {
   });
 });
 
+describe('DeckComponent.onTryGrab', () => {
+  test('short press returns peel intent with the deck id', () => {
+    spawnCard('a', '', '');
+    spawnCard('b', '', '');
+    const deck = scene.spawn('deck', ctx);
+    deck.getComponent(DeckComponent)!.setState({ cards: ['a', 'b'], category: '' });
+    expect(deck.getComponent(DeckComponent)!.onTryGrab(false)).toEqual({ kind: 'peel', sourceId: deck.id });
+  });
+
+  test('long press returns null (whole-deck grab falls through)', () => {
+    spawnCard('a', '', '');
+    spawnCard('b', '', '');
+    const deck = scene.spawn('deck', ctx);
+    deck.getComponent(DeckComponent)!.setState({ cards: ['a', 'b'], category: '' });
+    expect(deck.getComponent(DeckComponent)!.onTryGrab(true)).toBeNull();
+  });
+
+  test('empty deck returns null (defensive fall-through during transitions)', () => {
+    const deck = scene.spawn('deck', ctx);
+    // Default state is cards: [].
+    expect(deck.getComponent(DeckComponent)!.onTryGrab(false)).toBeNull();
+    expect(deck.getComponent(DeckComponent)!.onTryGrab(true)).toBeNull();
+  });
+});
+

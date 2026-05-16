@@ -63,7 +63,7 @@ import {
   type GenerateDeckOptions,
 } from './types';
 import { getPropertySchema, clampForSchema, type PropertyDef } from '../propertySchema';
-import { type HoldRelease, type ToolBroadcast, type PlayCardToTable, type ReorderHand, type TweenIntoHand, type PlaySoundMessage } from '../wire';
+import { type HoldRelease, type ToolBroadcast, type PlayCardToTable, type ReorderHand, type TweenIntoHand, type PlaySoundMessage, type PeelAndHoldRequest, type PeelAndHoldReply, type PeelAndHoldResult } from '../wire';
 import { type InputEventName, type InputEventPayload } from '../../input/inputEvents';
 import { type GuestInputEvent } from '../../net/SceneState';
 
@@ -130,6 +130,12 @@ class WorldImpl implements World, HandleRouter {
   private tickIndex = 0;
   private disposed  = false;
 
+  // Guest-only — pending peelAndHold promises keyed by requestId. The host's
+  // peel-and-hold-reply carries the same requestId so the inbound dispatch
+  // resolves the matching promise.
+  private readonly pendingPeelRequests = new Map<string, (r: PeelAndHoldResult | null) => void>();
+  private nextPeelRequestId = 0;
+
   constructor(opts: WorldOptions) {
     registerCorePrimitives();
 
@@ -152,7 +158,9 @@ class WorldImpl implements World, HandleRouter {
       });
       this.hold.setMergeService(this.merge);
       this.decks      = new DeckService(this.scene, this.replicator, {
-        despawn: (id) => this.despawn(id),
+        despawn:     (id) => this.despawn(id),
+        tryHold:     (card, seat) => this.hold!.tryClaim(card, seat),
+        releaseHold: (card) => this.hold!.release(card),
       });
       this.hostInput  = new HostInputDispatcher(this.hold, this.getPeerSeat, this.scene);
       this.hostInput.setDeckService(this.decks);
@@ -879,6 +887,26 @@ class WorldImpl implements World, HandleRouter {
     this.transport.send({ type: 'spread-deck', deckId }, { reliable: true });
   }
 
+  // Short-press peel — GrabTool's commit branch for the peel intent. Issue
+  // #2 of issues--deck-peel.md. Host: synchronous DeckService.peelTop, wrap
+  // the result in a resolved Promise. Guest: dispatch the request RPC,
+  // register a one-shot resolver keyed by requestId, resolve when the
+  // host's peel-and-hold-reply arrives.
+  peelAndHold(deckId: string, seat: SeatIndex): Promise<PeelAndHoldResult | null> {
+    if (this.role === 'host') {
+      const deck = this.scene.getEntity(deckId);
+      if (deck) this.history_?.push(`peel ${deck.name}`);
+      const result = this.decks?.peelTop(deckId, seat) ?? null;
+      return Promise.resolve(result);
+    }
+    const requestId = `peel-${this.nextPeelRequestId++}`;
+    return new Promise<PeelAndHoldResult | null>((resolve) => {
+      this.pendingPeelRequests.set(requestId, resolve);
+      const msg: PeelAndHoldRequest = { type: 'peel-and-hold', requestId, deckId };
+      this.transport.send(msg, { reliable: true });
+    });
+  }
+
   // Spawns one card per face-ref at a single deck position, then wraps them
   // in a fresh Deck entity via MergeService.assembleDeckFrom. Cards are
   // collocated and immediately parented (isContained=true) so they never
@@ -1044,6 +1072,23 @@ class WorldImpl implements World, HandleRouter {
       case 'shuffle-deck':       this.hostInput?.handleShuffleDeck(peerId, msg);      return;
       case 'deal-from-deck':     this.hostInput?.handleDealFromDeck(peerId, msg);     return;
       case 'spread-deck':        this.hostInput?.handleSpreadDeck(peerId, msg);       return;
+      case 'peel-and-hold': {
+        const result = this.hostInput?.handlePeelAndHold(peerId, msg) ?? null;
+        const reply: PeelAndHoldReply = {
+          type:      'peel-and-hold-reply',
+          requestId: msg.requestId,
+          result,
+        };
+        // sendTo where available so the reply only hits the requesting peer;
+        // fall back to a broadcast — other peers' pendingPeelRequests maps
+        // won't have the requestId, so they ignore it.
+        if (this.transport.sendTo) this.transport.sendTo(peerId, reply);
+        else                       this.transport.send(reply, { reliable: true });
+        return;
+      }
+      case 'peel-and-hold-reply':
+        // Host doesn't expect inbound replies. Drop.
+        return;
       case 'guest-drag-move':  this.guestInput?.handleMessage(peerId, msg);      return;
       case 'guest-drag-start':
       case 'guest-drag-end':
@@ -1193,6 +1238,14 @@ class WorldImpl implements World, HandleRouter {
         return;
       }
 
+      case 'peel-and-hold-reply': {
+        const resolve = this.pendingPeelRequests.get(msg.requestId);
+        if (!resolve) return;
+        this.pendingPeelRequests.delete(msg.requestId);
+        resolve(msg.result);
+        return;
+      }
+
       case 'invoke-action':
       case 'request-update':
       case 'apply-impulse':
@@ -1203,6 +1256,7 @@ class WorldImpl implements World, HandleRouter {
       case 'shuffle-deck':
       case 'deal-from-deck':
       case 'spread-deck':
+      case 'peel-and-hold':
       case 'guest-drag-move':
       case 'guest-drag-start':
       case 'guest-drag-end':

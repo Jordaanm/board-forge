@@ -218,6 +218,15 @@ export interface World {
   // left), then despawn the deck.
   spreadDeck(deckId: string): void;
 
+  // Short-press peel on a deck — atomically pop the top card, release it
+  // from the deck, hold it for the calling seat. Host runs the sequence
+  // synchronously through DeckService.peelTop; guest dispatches the
+  // `peel-and-hold` RPC and the returned promise resolves when the host's
+  // `peel-and-hold-reply` arrives. Resolves to null if the deck is unknown,
+  // empty, locked-owner by another seat, or the host otherwise rejects.
+  // Issue #2 of issues--deck-peel.md.
+  peelAndHold(deckId: string, seat: SeatIndex): Promise<import('../wire').PeelAndHoldResult | null>;
+
   // Host-only — spawn one card per face-ref and immediately wrap them in a
   // fresh Deck entity (cards become children with isContained=true, so no
   // scatter). Backs the host "Generate Deck" tool. Returns a handle to the
