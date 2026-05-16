@@ -4,6 +4,7 @@ import { Landing } from './pages/Landing';
 import { Room } from './pages/Room';
 import { DocsPage } from './pages/docs/DocsPage';
 import { DocsLayout } from './pages/docs/DocsLayout';
+import { DocsIndex } from './pages/docs/DocsIndex';
 import { PreferencesProvider } from './preferences/PreferencesContext';
 import { usePreferences } from './preferences/usePreferences';
 
@@ -24,10 +25,6 @@ function RoomRoute() {
   return <Room roomId={roomId} isHost={isHost} />;
 }
 
-function DocsPlaceholder() {
-  return <div>Docs coming soon</div>;
-}
-
 export function App() {
   return (
     <PreferencesProvider>
@@ -37,7 +34,7 @@ export function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/r/:roomId" element={<RoomRoute />} />
           <Route path="/docs" element={<DocsLayout />}>
-            <Route index element={<DocsPlaceholder />} />
+            <Route index element={<DocsIndex />} />
             <Route path=":slug" element={<DocsPage />} />
           </Route>
         </Routes>

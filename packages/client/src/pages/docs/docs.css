@@ -207,6 +207,79 @@
    so it inherits the docs `<pre>` styling above. */
 .docs-page pre code.hljs { background: transparent; padding: 0; }
 
+/* ─── Index page (hero + grouped cards) ─── */
+.docs-index {
+  max-width: 880px;
+  color: var(--ink);
+}
+.docs-index__hero {
+  padding: 16px 0 32px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 28px;
+}
+.docs-index__title {
+  font-family: var(--font-serif);
+  font-size: 40px;
+  letter-spacing: -0.02em;
+  margin: 0 0 10px;
+}
+.docs-index__lede {
+  font-size: 17px;
+  line-height: 1.55;
+  color: var(--ink-2);
+  max-width: 640px;
+  margin: 0;
+}
+
+.docs-index__group { margin-bottom: 32px; }
+.docs-index__group-title {
+  font-family: var(--font-serif);
+  font-size: 20px;
+  margin: 0 0 4px;
+}
+.docs-index__group-blurb {
+  margin: 0 0 14px;
+  color: var(--ink-mute);
+  font-size: 14px;
+}
+.docs-index__cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+.docs-index__card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--panel-radius);
+  color: var(--ink);
+  text-decoration: none;
+  box-shadow: var(--shadow-sm);
+  transition: background 120ms, border-color 120ms, transform 120ms;
+}
+.docs-index__card:hover {
+  background: var(--surface-2);
+  border-color: var(--line-strong);
+  transform: translateY(-1px);
+}
+.docs-index__card-title {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--ink);
+}
+.docs-index__card-blurb {
+  font-size: 13px;
+  color: var(--ink-mute);
+  line-height: 1.45;
+}
+
 @media (max-width: 760px) {
   .docs__body { grid-template-columns: 1fr; }
   .docs__sidebar {
