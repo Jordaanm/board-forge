@@ -1,9 +1,22 @@
-import { useParams } from 'react-router-dom';
+import type { AnchorHTMLAttributes } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
+import { rehypeRewriteLinks } from './rehype-rewrite-links';
 import 'highlight.js/styles/github-dark.css';
 import './docs.css';
+
+function DocLink({ href, children, ...rest }: AnchorHTMLAttributes<HTMLAnchorElement>) {
+  if (href && href.startsWith('/')) {
+    return <Link to={href}>{children}</Link>;
+  }
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" {...rest}>
+      {children}
+    </a>
+  );
+}
 
 const RAW_DOCS = import.meta.glob('../../../../../docs/*.md', {
   query: '?raw',
@@ -32,7 +45,11 @@ export function DocsPage() {
 
   return (
     <div className="docs-page">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeRewriteLinks, rehypeHighlight]}
+        components={{ a: DocLink }}
+      >
         {raw}
       </ReactMarkdown>
     </div>
