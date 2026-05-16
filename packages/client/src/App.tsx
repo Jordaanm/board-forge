@@ -1,15 +1,9 @@
 import { useEffect } from 'react';
+import { BrowserRouter, Route, Routes, useParams, useSearchParams } from 'react-router-dom';
 import { Landing } from './pages/Landing';
 import { Room } from './pages/Room';
 import { PreferencesProvider } from './preferences/PreferencesContext';
 import { usePreferences } from './preferences/usePreferences';
-
-function parseUrl() {
-  const p = new URLSearchParams(window.location.search);
-  const roomId = p.get('room');
-  const isHost = p.has('host');
-  return { roomId, isHost };
-}
 
 function ThemeBinder() {
   const { resolvedTheme } = usePreferences();
@@ -20,12 +14,30 @@ function ThemeBinder() {
   return null;
 }
 
+function RoomRoute() {
+  const { roomId } = useParams<{ roomId: string }>();
+  const [search] = useSearchParams();
+  const isHost = search.has('host');
+  if (!roomId) return null;
+  return <Room roomId={roomId} isHost={isHost} />;
+}
+
+function DocsPlaceholder() {
+  return <div>Docs coming soon</div>;
+}
+
 export function App() {
-  const { roomId, isHost } = parseUrl();
   return (
     <PreferencesProvider>
       <ThemeBinder/>
-      {roomId ? <Room roomId={roomId} isHost={isHost} /> : <Landing />}
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Landing />} />
+          <Route path="/r/:roomId" element={<RoomRoute />} />
+          <Route path="/docs" element={<DocsPlaceholder />} />
+          <Route path="/docs/*" element={<DocsPlaceholder />} />
+        </Routes>
+      </BrowserRouter>
     </PreferencesProvider>
   );
 }

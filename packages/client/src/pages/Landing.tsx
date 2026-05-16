@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { AnchorLayout } from '../components/AnchorLayout';
 import { PreferencesModal } from '../components/PreferencesModal';
 import './Landing.css';
@@ -54,6 +55,7 @@ const IconSettings = ({ size = 18 }: { size?: number }) => (
 );
 
 export function Landing() {
+  const navigate = useNavigate();
   const [rooms,        setRooms]        = useState<RoomInfo[]>([]);
   const [totalTables,  setTotalTables]  = useState(0);
   const [loading,      setLoading]      = useState(true);
@@ -82,7 +84,7 @@ export function Landing() {
 
   const createRoom = () => {
     const roomId = crypto.randomUUID();
-    window.location.href = `${window.location.origin}/?room=${roomId}&host=1`;
+    navigate(`/r/${roomId}?host=1`);
   };
 
   return (
@@ -96,19 +98,19 @@ export function Landing() {
             </div>
             <div className="landing__header-spacer"/>
             <div className="landing__header-right">
-              <div className="landing__search">
+              {/* <div className="landing__search">
                 <IconSearch size={16}/>
                 <input placeholder="Search rooms, games, people" aria-label="Search"/>
                 <kbd>⌘K</kbd>
-              </div>
-              <button className="landing__icon-btn" type="button" aria-label="Help" title="Help">
+              </div> */}
+              <Link to="/docs" className="landing__icon-btn" aria-label="Help" title="Help">
                 <IconHelp size={18}/>
-              </button>
+              </Link>
               <button className="landing__icon-btn" type="button" aria-label="Preferences" title="Preferences"
                       onClick={() => setPrefsOpen(true)}>
                 <IconSettings size={18}/>
               </button>
-              <div className="landing__avatar" title="Your profile">??</div>
+              {/* <div className="landing__avatar" title="Your profile">??</div> */}
             </div>
           </div>
         </header>
@@ -146,8 +148,8 @@ export function Landing() {
                 {rooms.map(r => {
                   const isFull = r.occupancy >= r.capacity;
                   return (
-                  <a key={r.roomId} className="landing__room-card"
-                     href={`${window.location.origin}/?room=${r.roomId}`}>
+                  <Link key={r.roomId} className="landing__room-card"
+                        to={`/r/${r.roomId}`}>
                     <div className="landing__room-top">
                       <span className="landing__room-id">{r.roomId.slice(0, 8)}</span>
                       <span className={`landing__chip ${isFull ? 'landing__chip--full' : ''}`}>
@@ -168,7 +170,7 @@ export function Landing() {
                       </div>
                       <span className="landing__join-cta">Join <IconChevronR/></span>
                     </div>
-                  </a>
+                  </Link>
                   );
                 })}
               </div>
