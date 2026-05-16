@@ -187,11 +187,13 @@ describe('wire encode/decode round-trip', () => {
       { type: 'invoke-action', entityId: 'e', componentTypeId: 't', actionId: 'a' },
       { type: 'hold-claim', entityId: 'e', seat: 0 },
       { type: 'hold-release', entityId: 'e' },
+      { type: 'peel-and-hold', requestId: 'r', deckId: 'd' },
+      { type: 'peel-and-hold-reply', requestId: 'r', result: null },
       { type: 'request-update', entityId: 'e', typeId: 't', partial: {} },
       { type: 'apply-impulse',  entityId: 'e', vx: 0, vy: 0, vz: 0 },
       { type: 'tool-broadcast', toolId: 'ping', peerId: 'p', seat: null, payload: {} },
       { type: 'play-sound', slug: 'custom:s' },
     ];
-    expect(messages).toHaveLength(13);
+    expect(messages).toHaveLength(15);
   });
 });
