@@ -32,7 +32,12 @@ let totalRoomsCreated = 0;
 export function join(roomId: string, role: Role, ws: WebSocket, displayName: string, ip: string): JoinResult | 'full' {
   let room = rooms.get(roomId);
   if (!room) {
-    room = { hostId: null, members: new Map(), metadata: new RoomMetadata(displayName) };
+    // Initial host display name only carries through for the typical
+    // host-first flow. A guest-first room gets an empty host name (default
+    // becomes the generic "Room" fallback) until the host arrives and
+    // refreshes the default via setHostDisplayName below.
+    const initialHostName = role === 'host' ? displayName : '';
+    room = { hostId: null, members: new Map(), metadata: new RoomMetadata(initialHostName) };
     rooms.set(roomId, room);
     totalRoomsCreated++;
   }
@@ -48,6 +53,10 @@ export function join(roomId: string, role: Role, ws: WebSocket, displayName: str
     }
     room.hostId = null;
   }
+
+  // Refresh the default name to use the actual host's display name. No-ops
+  // when the host has already customised the name.
+  if (role === 'host') room.metadata.setHostDisplayName(displayName);
 
   if (room.members.size >= maxRoomPeers) return 'full';
 

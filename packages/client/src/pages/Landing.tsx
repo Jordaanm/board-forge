@@ -172,7 +172,7 @@ export function Landing() {
                           }
                         }}>
                     <div className="landing__room-top">
-                      <span className="landing__room-id" title={r.name}>
+                      <span className="landing__room-name" title={r.name || r.roomId}>
                         {r.hasPassword && <span className="landing__room-lock" aria-label="Locked"><IconLock/></span>}
                         {r.name || r.roomId.slice(0, 8)}
                       </span>

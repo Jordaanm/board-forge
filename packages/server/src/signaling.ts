@@ -115,6 +115,21 @@ function handleJoin(ws: WebSocket, msg: Msg) {
     const member = getMember(roomId, other.peerId);
     if (member) send(member.ws, { type: 'peer-joined', peerId: result.peerId, role, displayName });
   }
+
+  // When the host arrives after one or more guests, the default room name
+  // was just refreshed to "<host>'s room" by rooms.join(). Push that to the
+  // existing members so their lobby/in-room title stays in sync.
+  if (role === 'host' && result.otherPeers.length > 0 && metadata) {
+    const settingsPayload = {
+      type:        'roomSettingsUpdated',
+      name:        metadata.getName(),
+      hasPassword: metadata.hasPassword(),
+    };
+    for (const other of result.otherPeers) {
+      const member = getMember(roomId, other.peerId);
+      if (member) send(member.ws, settingsPayload);
+    }
+  }
 }
 
 function handleSetRoomName(ws: WebSocket, msg: Msg) {

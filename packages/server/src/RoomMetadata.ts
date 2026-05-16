@@ -30,6 +30,7 @@ export interface PublicRoomInfo {
 export class RoomMetadata {
   private hostDisplayName: string;
   private name:     string;
+  private nameCustomized: boolean = false;
   private password: string | null = null;
   private bans:     BanEntry[]    = [];
   private readonly salt: string;
@@ -38,6 +39,19 @@ export class RoomMetadata {
     this.hostDisplayName = hostDisplayName;
     this.name = this.defaultName();
     this.salt = randomBytes(16).toString('hex');
+  }
+
+  // Called when the host claims (or re-claims) the room. Refreshes the
+  // default room name to "<host>'s room" using this host's display name —
+  // unless the host has already customised the name via setName, in which
+  // case the custom name wins. Returns true if the visible name changed.
+  setHostDisplayName(name: string): boolean {
+    this.hostDisplayName = name;
+    if (this.nameCustomized) return false;
+    const next = this.defaultName();
+    if (next === this.name) return false;
+    this.name = next;
+    return true;
   }
 
   // Hashes a client IP with this room's salt. Salt is per-room, so the same
@@ -89,7 +103,13 @@ export class RoomMetadata {
   // callers can broadcast the canonical string.
   setName(input: string): string {
     const sanitised = sanitiseName(input);
-    this.name = sanitised === '' ? this.defaultName() : sanitised;
+    if (sanitised === '') {
+      this.name = this.defaultName();
+      this.nameCustomized = false;
+    } else {
+      this.name = sanitised;
+      this.nameCustomized = true;
+    }
     return this.name;
   }
 

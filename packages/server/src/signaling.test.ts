@@ -259,6 +259,45 @@ describe('room name', () => {
 
     host.close();
   });
+
+  test('host arriving after a guest refreshes the default to "<host>\'s room"', async () => {
+    const guest = await connect();
+    const guestJoined = await joinRoom(guest, 'room-host-late', 'guest', 'Bob');
+    // No host yet — default falls back to the generic "Room".
+    expect((guestJoined.roomSettings as { name: string }).name).toBe('Room');
+
+    const settingsUpdated = waitFor(guest, 'roomSettingsUpdated');
+    const host = await connect();
+    const peerJoined = nextMsg(guest);
+    const hostJoined = await joinRoom(host, 'room-host-late', 'host', 'Alice');
+    await peerJoined;
+
+    // Host's own joined payload reflects the refreshed default.
+    expect((hostJoined.roomSettings as { name: string }).name).toBe("Alice's room");
+    // Pre-existing guest is told about the new default via broadcast.
+    expect((await settingsUpdated).name).toBe("Alice's room");
+
+    host.close();
+    guest.close();
+  });
+
+  test('host re-claim under a new display name does not overwrite a custom name', async () => {
+    const host1 = await connect();
+    const host1Joined = await joinRoom(host1, 'room-host-reclaim', 'host', 'Alice');
+    expect((host1Joined.roomSettings as { name: string }).name).toBe("Alice's room");
+
+    const renamed = nextMsg(host1);
+    send(host1, { type: 'setRoomName', name: 'D&D night' });
+    await renamed;
+
+    // Second host attempt under a different name takes over the room
+    // (evicting the first). Custom name must survive.
+    const host2 = await connect();
+    const host2Joined = await joinRoom(host2, 'room-host-reclaim', 'host', 'Carol');
+    expect((host2Joined.roomSettings as { name: string }).name).toBe('D&D night');
+
+    host2.close();
+  });
 });
 
 describe('bans', () => {

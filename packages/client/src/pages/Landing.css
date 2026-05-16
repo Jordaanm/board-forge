@@ -285,18 +285,19 @@
   margin-right: 6px;
 }
 
-.landing__room-id {
-  font-family: var(--font-mono);
+.landing__room-name {
+  font-family: var(--font-serif);
   font-weight: 600;
-  font-size: 13px;
+  font-size: 16px;
   color: var(--ink);
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  border-radius: 3px;
-  padding: 3px 8px;
+  letter-spacing: -0.01em;
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .landing__chip {

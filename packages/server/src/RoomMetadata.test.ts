@@ -52,6 +52,37 @@ describe('RoomMetadata — name', () => {
     expect(m.setName('   \t  ')).toBe("Bob's room");
   });
 
+  test('setHostDisplayName refreshes the default when name was never customised', () => {
+    const m = new RoomMetadata('');
+    expect(m.getName()).toBe('Room');
+    expect(m.setHostDisplayName('Alice')).toBe(true);
+    expect(m.getName()).toBe("Alice's room");
+  });
+
+  test('setHostDisplayName replaces the prior default when host name changes', () => {
+    const m = new RoomMetadata('Alice');
+    expect(m.getName()).toBe("Alice's room");
+    m.setHostDisplayName('Bob');
+    expect(m.getName()).toBe("Bob's room");
+  });
+
+  test('setHostDisplayName leaves a custom name alone', () => {
+    const m = new RoomMetadata('Alice');
+    m.setName('D&D night');
+    expect(m.setHostDisplayName('Bob')).toBe(false);
+    expect(m.getName()).toBe('D&D night');
+  });
+
+  test('reverting a custom name to empty picks up the new host default', () => {
+    const m = new RoomMetadata('Alice');
+    m.setName('Custom');
+    m.setHostDisplayName('Bob');
+    // Custom still wins.
+    expect(m.getName()).toBe('Custom');
+    // Reverting to empty pulls in the latest host default.
+    expect(m.setName('')).toBe("Bob's room");
+  });
+
   test('getPublicInfo exposes name and hasPassword=false by default', () => {
     const m = new RoomMetadata('Alice');
     m.setName('Lobby');
