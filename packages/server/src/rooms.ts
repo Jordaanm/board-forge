@@ -80,18 +80,20 @@ export function getRoomMembers(roomId: string): Member[] {
 }
 
 export interface RoomInfo {
-  roomId:    string;
-  occupancy: number;
-  capacity:  number;
-  name:      string;
+  roomId:      string;
+  occupancy:   number;
+  capacity:    number;
+  name:        string;
+  hasPassword: boolean;
 }
 
 export function listRooms(): RoomInfo[] {
   return Array.from(rooms.entries()).map(([roomId, room]) => ({
     roomId,
-    occupancy: room.members.size,
-    capacity:  maxRoomPeers,
-    name:      room.metadata.getName(),
+    occupancy:   room.members.size,
+    capacity:    maxRoomPeers,
+    name:        room.metadata.getName(),
+    hasPassword: room.metadata.hasPassword(),
   }));
 }
 

@@ -8,10 +8,12 @@ import { useAnchorTarget } from './AnchorLayout';
 const ROOM_NAME_MAX_LENGTH = 40;
 
 interface Props {
-  open:         boolean;
-  onOpenChange: (open: boolean) => void;
-  roomName:     string;
-  onRenameRoom: (name: string) => void;
+  open:              boolean;
+  onOpenChange:      (open: boolean) => void;
+  roomName:          string;
+  onRenameRoom:      (name: string) => void;
+  hasPassword:       boolean;
+  onSetRoomPassword: (password: string | null) => void;
 }
 
 const OVERLAY: React.CSSProperties = {
@@ -87,9 +89,59 @@ const INPUT: React.CSSProperties = {
   boxSizing:    'border-box',
 };
 
-export function RoomSettingsModal({ open, onOpenChange, roomName, onRenameRoom }: Props) {
+const STATUS_ROW: React.CSSProperties = {
+  display:       'flex',
+  alignItems:    'center',
+  gap:           8,
+  marginBottom:  8,
+  fontSize:      12,
+};
+
+const STATUS_BADGE = (active: boolean): React.CSSProperties => ({
+  background:   active ? 'var(--accent)' : 'var(--bg)',
+  color:        active ? 'var(--accent-ink)' : 'var(--ink-mute)',
+  border:       active ? '1px solid var(--accent-deep)' : '1px solid var(--line)',
+  borderRadius: 999,
+  padding:      '2px 10px',
+  fontWeight:   700,
+});
+
+const ROW: React.CSSProperties = {
+  display:    'flex',
+  gap:        6,
+  alignItems: 'center',
+};
+
+const BTN: React.CSSProperties = {
+  background:   'transparent',
+  border:       '1px solid var(--line-strong)',
+  color:        'var(--ink)',
+  padding:      '6px 12px',
+  borderRadius: 'var(--card-radius)',
+  cursor:       'pointer',
+  fontFamily:   'inherit',
+  fontSize:     12,
+  fontWeight:   700,
+};
+
+const BTN_PRIMARY: React.CSSProperties = {
+  ...BTN,
+  background:  'var(--accent)',
+  color:       'var(--accent-ink)',
+  borderColor: 'var(--accent-deep)',
+};
+
+const BTN_DESTRUCTIVE: React.CSSProperties = {
+  ...BTN,
+  color:       'var(--accent-deep)',
+};
+
+export function RoomSettingsModal({
+  open, onOpenChange, roomName, onRenameRoom, hasPassword, onSetRoomPassword,
+}: Props) {
   const centerAnchor = useAnchorTarget('center');
   const [draft, setDraft] = useState(roomName);
+  const [passwordDraft, setPasswordDraft] = useState('');
 
   // Resync the field whenever the modal reopens or the server-confirmed name
   // changes underneath us (rename echoes back through roomSettingsUpdated).
@@ -97,10 +149,28 @@ export function RoomSettingsModal({ open, onOpenChange, roomName, onRenameRoom }
     setDraft(roomName);
   }, [roomName, open]);
 
+  // The password input is write-only — clear it whenever the modal opens or
+  // closes so the current value (if any) is never reflected back to the host.
+  useEffect(() => {
+    setPasswordDraft('');
+  }, [open, hasPassword]);
+
   const commit = () => {
     const next = draft.trim();
     if (next === roomName.trim()) return;
     onRenameRoom(next);
+  };
+
+  const submitPassword = () => {
+    const trimmed = passwordDraft.trim();
+    if (trimmed === '') return;
+    onSetRoomPassword(trimmed);
+    setPasswordDraft('');
+  };
+
+  const clearPassword = () => {
+    onSetRoomPassword(null);
+    setPasswordDraft('');
   };
 
   return (
@@ -130,6 +200,42 @@ export function RoomSettingsModal({ open, onOpenChange, roomName, onRenameRoom }
                 }}
                 aria-label="Room name"
               />
+            </div>
+
+            <div>
+              <div style={FIELD_LABEL}>Password</div>
+              <div style={STATUS_ROW}>
+                <span style={STATUS_BADGE(hasPassword)}>
+                  {hasPassword ? 'Password set' : 'No password'}
+                </span>
+              </div>
+              <div style={ROW}>
+                <input
+                  style={INPUT}
+                  type="password"
+                  autoComplete="new-password"
+                  value={passwordDraft}
+                  placeholder={hasPassword ? 'Enter new password' : 'Enter password'}
+                  onChange={(e) => setPasswordDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); submitPassword(); }
+                  }}
+                  aria-label="Room password"
+                />
+                <button
+                  type="button"
+                  style={BTN_PRIMARY}
+                  disabled={passwordDraft.trim() === ''}
+                  onClick={submitPassword}
+                >
+                  {hasPassword ? 'Change' : 'Set'}
+                </button>
+                {hasPassword && (
+                  <button type="button" style={BTN_DESTRUCTIVE} onClick={clearPassword}>
+                    Clear
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </Dialog.Content>

@@ -3,17 +3,27 @@ import { Link, useNavigate } from 'react-router-dom';
 import { AnchorLayout } from '../components/AnchorLayout';
 import { PreferencesModal } from '../components/PreferencesModal';
 import { DisplayNamePromptModal } from '../components/DisplayNamePromptModal';
+import { JoinPasswordModal } from '../components/JoinPasswordModal';
 import { hasPromptedDisplayName } from '../identity/displayName';
 import './Landing.css';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
 interface RoomInfo {
-  roomId:    string;
-  occupancy: number;
-  capacity:  number;
-  name:      string;
+  roomId:      string;
+  occupancy:   number;
+  capacity:    number;
+  name:        string;
+  hasPassword: boolean;
 }
+
+const IconLock = ({ size = 12 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="4" y="11" width="16" height="9" rx="2"/>
+    <path d="M8 11V8a4 4 0 0 1 8 0v3"/>
+  </svg>
+);
 
 const IconUsers = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -64,6 +74,7 @@ export function Landing() {
   const [loading,      setLoading]      = useState(true);
   const [prefsOpen,    setPrefsOpen]    = useState(false);
   const [namePromptOpen, setNamePromptOpen] = useState(() => !hasPromptedDisplayName());
+  const [passwordPromptRoomId, setPasswordPromptRoomId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -153,9 +164,18 @@ export function Landing() {
                   const isFull = r.occupancy >= r.capacity;
                   return (
                   <Link key={r.roomId} className="landing__room-card"
-                        to={`/r/${r.roomId}`}>
+                        to={`/r/${r.roomId}`}
+                        onClick={(e) => {
+                          if (r.hasPassword) {
+                            e.preventDefault();
+                            setPasswordPromptRoomId(r.roomId);
+                          }
+                        }}>
                     <div className="landing__room-top">
-                      <span className="landing__room-id" title={r.name}>{r.name || r.roomId.slice(0, 8)}</span>
+                      <span className="landing__room-id" title={r.name}>
+                        {r.hasPassword && <span className="landing__room-lock" aria-label="Locked"><IconLock/></span>}
+                        {r.name || r.roomId.slice(0, 8)}
+                      </span>
                       <span className={`landing__chip ${isFull ? 'landing__chip--full' : ''}`}>
                         <span className="landing__chip-dot"/>{isFull ? 'Full' : 'Open'}
                       </span>
@@ -191,6 +211,11 @@ export function Landing() {
       </div>
       <PreferencesModal open={prefsOpen} onOpenChange={setPrefsOpen}/>
       <DisplayNamePromptModal open={namePromptOpen} onOpenChange={setNamePromptOpen}/>
+      <JoinPasswordModal
+        roomId={passwordPromptRoomId}
+        open={passwordPromptRoomId !== null}
+        onOpenChange={(o) => { if (!o) setPasswordPromptRoomId(null); }}
+      />
     </AnchorLayout>
   );
 }

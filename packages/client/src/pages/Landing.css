@@ -278,6 +278,13 @@
   gap: 10px;
 }
 
+.landing__room-lock {
+  display: inline-flex;
+  align-items: center;
+  color: var(--ink-mute);
+  margin-right: 6px;
+}
+
 .landing__room-id {
   font-family: var(--font-mono);
   font-weight: 600;
@@ -287,6 +294,9 @@
   border: 1px solid var(--line);
   border-radius: 3px;
   padding: 3px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .landing__chip {

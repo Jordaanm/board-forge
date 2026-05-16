@@ -47,6 +47,10 @@ interface Props {
   // Room name shown in the settings modal and committed via onRenameRoom.
   roomName:             string;
   onRenameRoom:         (name: string) => void;
+  // Password state for the settings modal. The current value is never sent
+  // to the client; only `hasPassword` is exposed.
+  hasPassword:          boolean;
+  onSetRoomPassword:    (password: string | null) => void;
 }
 
 const BAR: React.CSSProperties = {
@@ -95,6 +99,8 @@ export function HostActionBar({
   turns,
   roomName,
   onRenameRoom,
+  hasPassword,
+  onSetRoomPassword,
 }: Props) {
   const [spawnOpen,    setSpawnOpen]    = useState(false);
   const [historyOpen,  setHistoryOpen]  = useState(false);
@@ -242,6 +248,8 @@ export function HostActionBar({
         onOpenChange={setSettingsOpen}
         roomName={roomName}
         onRenameRoom={onRenameRoom}
+        hasPassword={hasPassword}
+        onSetRoomPassword={onSetRoomPassword}
       />
 
       {lastLoaded && (

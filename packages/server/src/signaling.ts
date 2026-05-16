@@ -29,6 +29,11 @@ export function onMessage(ws: WebSocket, raw: string) {
     return;
   }
 
+  if (msg.type === 'setRoomPassword') {
+    handleSetRoomPassword(ws, msg);
+    return;
+  }
+
   if (FORWARDABLE.has(msg.type)) {
     handleForward(ws, msg);
   }
@@ -38,13 +43,34 @@ function handleJoin(ws: WebSocket, msg: Msg) {
   const { roomId, role } = msg;
   if (!roomId || (role !== 'host' && role !== 'guest')) return;
 
-  const displayName = sanitiseDisplayName(msg.displayName);
+  const displayName       = sanitiseDisplayName(msg.displayName);
+  const suppliedPassword  = typeof msg.password === 'string' ? msg.password : undefined;
+
+  // Password gate. Hosts bypass (they own the room); guests pass through
+  // RoomMetadata.checkJoin. A non-existent room can't be locked, so first-
+  // joiners are unaffected.
+  if (role === 'guest') {
+    const existing = getRoomMetadata(roomId);
+    if (existing) {
+      const verdict = existing.checkJoin(suppliedPassword);
+      if (verdict !== 'ok') {
+        send(ws, { type: 'joinRejected', reason: verdict });
+        return;
+      }
+    }
+  }
 
   const result = join(roomId, role, ws, displayName);
   if (result === 'full') {
     send(ws, { type: 'room-full' });
     return;
   }
+
+  const metadata = getRoomMetadata(roomId);
+  const roomSettings = {
+    name:        result.roomName,
+    hasPassword: metadata?.hasPassword() ?? false,
+  };
 
   send(ws, {
     type:         'joined',
@@ -53,7 +79,7 @@ function handleJoin(ws: WebSocket, msg: Msg) {
     hostId:       result.hostId,
     displayName,
     otherPeers:   result.otherPeers,
-    roomSettings: { name: result.roomName },
+    roomSettings,
   });
 
   // Notify existing members of the new peer.
@@ -72,10 +98,31 @@ function handleSetRoomName(ws: WebSocket, msg: Msg) {
   if (!metadata) return;
 
   const rawName = typeof msg.name === 'string' ? msg.name : '';
-  const stored = metadata.setName(rawName);
+  metadata.setName(rawName);
+  broadcastSettings(info.roomId, metadata);
+}
 
-  for (const m of getRoomMembers(info.roomId)) {
-    send(m.ws, { type: 'roomSettingsUpdated', name: stored });
+function handleSetRoomPassword(ws: WebSocket, msg: Msg) {
+  const info = lookup(ws);
+  if (!info) return;
+  if (getHostId(info.roomId) !== info.peerId) return;
+
+  const metadata = getRoomMetadata(info.roomId);
+  if (!metadata) return;
+
+  const raw = typeof msg.password === 'string' ? msg.password : null;
+  metadata.setPassword(raw);
+  broadcastSettings(info.roomId, metadata);
+}
+
+function broadcastSettings(roomId: string, metadata: ReturnType<typeof getRoomMetadata> & object) {
+  const payload = {
+    type:        'roomSettingsUpdated',
+    name:        metadata.getName(),
+    hasPassword: metadata.hasPassword(),
+  };
+  for (const m of getRoomMembers(roomId)) {
+    send(m.ws, payload);
   }
 }
 

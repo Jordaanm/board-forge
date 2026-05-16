@@ -24,9 +24,9 @@ function send(ws: WebSocket, data: unknown) {
   ws.send(JSON.stringify(data));
 }
 
-async function joinRoom(ws: WebSocket, roomId: string, role: 'host' | 'guest', displayName = 'Player') {
+async function joinRoom(ws: WebSocket, roomId: string, role: 'host' | 'guest', displayName = 'Player', password?: string) {
   const joined = nextMsg(ws);
-  send(ws, { type: 'join', roomId, role, displayName });
+  send(ws, { type: 'join', roomId, role, displayName, password });
   return joined;
 }
 
@@ -226,6 +226,164 @@ describe('room name', () => {
     const body = await res.json() as { rooms: { roomId: string; name: string }[] };
     const found = body.rooms.find(r => r.roomId === 'room-list');
     expect(found?.name).toBe('Catan');
+
+    host.close();
+  });
+});
+
+describe('room password', () => {
+  test('joined.roomSettings reports hasPassword=false by default', async () => {
+    const host = await connect();
+    const msg = await joinRoom(host, 'room-pw-default', 'host', 'Alice');
+    expect((msg.roomSettings as { hasPassword: boolean }).hasPassword).toBe(false);
+    host.close();
+  });
+
+  test('setRoomPassword broadcasts hasPassword=true', async () => {
+    const host  = await connect();
+    const guest = await connect();
+    await joinRoom(host, 'room-pw-set', 'host', 'Alice');
+    const peerJoined = nextMsg(host);
+    await joinRoom(guest, 'room-pw-set', 'guest', 'Bob');
+    await peerJoined;
+
+    const hostUpdate  = nextMsg(host);
+    const guestUpdate = nextMsg(guest);
+    send(host, { type: 'setRoomPassword', password: 'hunter2' });
+    expect((await hostUpdate).hasPassword).toBe(true);
+    expect((await guestUpdate).hasPassword).toBe(true);
+
+    host.close();
+    guest.close();
+  });
+
+  test('correct password admits a new guest', async () => {
+    const host = await connect();
+    await joinRoom(host, 'room-pw-admit', 'host', 'Alice');
+    const u = nextMsg(host);
+    send(host, { type: 'setRoomPassword', password: 'hunter2' });
+    await u;
+
+    const guest = await connect();
+    const peerJoined = nextMsg(host);
+    const joined = await joinRoom(guest, 'room-pw-admit', 'guest', 'Bob', 'hunter2');
+    expect(joined.type).toBe('joined');
+    await peerJoined;
+
+    host.close();
+    guest.close();
+  });
+
+  test('wrong password yields joinRejected with reason wrongPassword', async () => {
+    const host = await connect();
+    await joinRoom(host, 'room-pw-wrong', 'host', 'Alice');
+    const u = nextMsg(host);
+    send(host, { type: 'setRoomPassword', password: 'hunter2' });
+    await u;
+
+    const guest = await connect();
+    const rejected = await joinRoom(guest, 'room-pw-wrong', 'guest', 'Bob', 'nope');
+    expect(rejected.type).toBe('joinRejected');
+    expect(rejected.reason).toBe('wrongPassword');
+
+    host.close();
+    guest.close();
+  });
+
+  test('missing password on a locked room is rejected', async () => {
+    const host = await connect();
+    await joinRoom(host, 'room-pw-missing', 'host', 'Alice');
+    const u = nextMsg(host);
+    send(host, { type: 'setRoomPassword', password: 'hunter2' });
+    await u;
+
+    const guest = await connect();
+    const rejected = await joinRoom(guest, 'room-pw-missing', 'guest', 'Bob');
+    expect(rejected.type).toBe('joinRejected');
+    expect(rejected.reason).toBe('wrongPassword');
+
+    host.close();
+    guest.close();
+  });
+
+  test('cleared password reopens the room', async () => {
+    const host = await connect();
+    await joinRoom(host, 'room-pw-clear', 'host', 'Alice');
+    const u1 = nextMsg(host);
+    send(host, { type: 'setRoomPassword', password: 'hunter2' });
+    await u1;
+    const u2 = nextMsg(host);
+    send(host, { type: 'setRoomPassword', password: null });
+    expect((await u2).hasPassword).toBe(false);
+
+    const guest = await connect();
+    const peerJoined = nextMsg(host);
+    const joined = await joinRoom(guest, 'room-pw-clear', 'guest', 'Bob');
+    expect(joined.type).toBe('joined');
+    await peerJoined;
+
+    host.close();
+    guest.close();
+  });
+
+  test('existing guests are not disconnected when host sets a password', async () => {
+    const host  = await connect();
+    const guest = await connect();
+    await joinRoom(host, 'room-pw-stay', 'host', 'Alice');
+    const peerJoined = nextMsg(host);
+    await joinRoom(guest, 'room-pw-stay', 'guest', 'Bob');
+    await peerJoined;
+
+    let guestClosed = false;
+    guest.once('close', () => { guestClosed = true; });
+
+    const u = nextMsg(host);
+    send(host, { type: 'setRoomPassword', password: 'hunter2' });
+    await u;
+
+    // Drain the guest's roomSettingsUpdated message.
+    await nextMsg(guest);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(guestClosed).toBe(false);
+
+    host.close();
+    guest.close();
+  });
+
+  test('guest setRoomPassword is ignored — no broadcast', async () => {
+    const host  = await connect();
+    const guest = await connect();
+    await joinRoom(host, 'room-pw-guard', 'host', 'Alice');
+    const peerJoined = nextMsg(host);
+    await joinRoom(guest, 'room-pw-guard', 'guest', 'Bob');
+    await peerJoined;
+
+    let received = false;
+    const onAny = () => { received = true; };
+    host.once('message', onAny);
+    guest.once('message', onAny);
+
+    send(guest, { type: 'setRoomPassword', password: 'pwn' });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(received).toBe(false);
+
+    host.removeListener('message', onAny);
+    guest.removeListener('message', onAny);
+    host.close();
+    guest.close();
+  });
+
+  test('listRooms exposes hasPassword', async () => {
+    const host = await connect();
+    await joinRoom(host, 'room-pw-list', 'host', 'Alice');
+    const u = nextMsg(host);
+    send(host, { type: 'setRoomPassword', password: 'hunter2' });
+    await u;
+
+    const res = await fetch(`http://localhost:${PORT}/rooms`);
+    const body = await res.json() as { rooms: { roomId: string; hasPassword: boolean }[] };
+    const found = body.rooms.find(r => r.roomId === 'room-pw-list');
+    expect(found?.hasPassword).toBe(true);
 
     host.close();
   });

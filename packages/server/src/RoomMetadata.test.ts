@@ -52,9 +52,79 @@ describe('RoomMetadata — name', () => {
     expect(m.setName('   \t  ')).toBe("Bob's room");
   });
 
-  test('getPublicInfo exposes only the name', () => {
+  test('getPublicInfo exposes name and hasPassword=false by default', () => {
     const m = new RoomMetadata('Alice');
     m.setName('Lobby');
-    expect(m.getPublicInfo()).toEqual({ name: 'Lobby' });
+    expect(m.getPublicInfo()).toEqual({ name: 'Lobby', hasPassword: false });
+  });
+});
+
+describe('RoomMetadata — password', () => {
+  test('new room has no password', () => {
+    const m = new RoomMetadata('Alice');
+    expect(m.hasPassword()).toBe(false);
+  });
+
+  test('setPassword stores and reports hasPassword=true', () => {
+    const m = new RoomMetadata('Alice');
+    m.setPassword('hunter2');
+    expect(m.hasPassword()).toBe(true);
+    expect(m.getPublicInfo().hasPassword).toBe(true);
+  });
+
+  test('setPassword(null) clears', () => {
+    const m = new RoomMetadata('Alice');
+    m.setPassword('hunter2');
+    m.setPassword(null);
+    expect(m.hasPassword()).toBe(false);
+  });
+
+  test('setPassword("") clears', () => {
+    const m = new RoomMetadata('Alice');
+    m.setPassword('hunter2');
+    m.setPassword('');
+    expect(m.hasPassword()).toBe(false);
+  });
+
+  test('setPassword(whitespace-only) clears', () => {
+    const m = new RoomMetadata('Alice');
+    m.setPassword('hunter2');
+    m.setPassword('   ');
+    expect(m.hasPassword()).toBe(false);
+  });
+
+  test('setPassword trims surrounding whitespace', () => {
+    const m = new RoomMetadata('Alice');
+    m.setPassword('  hunter2  ');
+    expect(m.checkJoin('hunter2')).toBe('ok');
+    expect(m.checkJoin('  hunter2  ')).toBe('wrongPassword');
+  });
+
+  test('checkJoin admits everyone on an open room', () => {
+    const m = new RoomMetadata('Alice');
+    expect(m.checkJoin(undefined)).toBe('ok');
+    expect(m.checkJoin('')).toBe('ok');
+    expect(m.checkJoin('anything')).toBe('ok');
+  });
+
+  test('checkJoin admits correct password on a locked room', () => {
+    const m = new RoomMetadata('Alice');
+    m.setPassword('hunter2');
+    expect(m.checkJoin('hunter2')).toBe('ok');
+  });
+
+  test('checkJoin rejects missing or wrong password on a locked room', () => {
+    const m = new RoomMetadata('Alice');
+    m.setPassword('hunter2');
+    expect(m.checkJoin(undefined)).toBe('wrongPassword');
+    expect(m.checkJoin('')).toBe('wrongPassword');
+    expect(m.checkJoin('nope')).toBe('wrongPassword');
+  });
+
+  test('cleared password reverts to open verdict', () => {
+    const m = new RoomMetadata('Alice');
+    m.setPassword('hunter2');
+    m.setPassword(null);
+    expect(m.checkJoin(undefined)).toBe('ok');
   });
 });

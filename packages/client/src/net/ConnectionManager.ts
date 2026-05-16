@@ -1,8 +1,9 @@
-type Status = 'connecting' | 'connected' | 'disconnected' | 'room-full';
+type Status = 'connecting' | 'connected' | 'disconnected' | 'room-full' | 'wrong-password';
 type Role   = 'host' | 'guest';
 
 export interface RoomSettings {
-  name: string;
+  name:        string;
+  hasPassword: boolean;
 }
 
 type MsgHandler             = (peerId: string, msg: unknown) => void;
@@ -65,6 +66,7 @@ export class ConnectionManager {
   private iceServers: RTCIceServer[] = FALLBACK_ICE_SERVERS;
   private disposed    = false;
   private displayName = '';
+  private password: string | null = null;
 
   constructor(
     private readonly onMsg:             MsgHandler,
@@ -77,6 +79,10 @@ export class ConnectionManager {
 
   setRoomName(name: string) {
     this.signal({ type: 'setRoomName', name });
+  }
+
+  setRoomPassword(password: string | null) {
+    this.signal({ type: 'setRoomPassword', password });
   }
 
   getPeerId(): string | null { return this.peerId; }
@@ -92,11 +98,13 @@ export class ConnectionManager {
 
   hostRoom(signalingUrl: string, roomId: string, displayName: string) {
     this.displayName = displayName;
+    this.password = null;
     void this.connect(signalingUrl, roomId, 'host');
   }
 
-  joinRoom(signalingUrl: string, roomId: string, displayName: string) {
+  joinRoom(signalingUrl: string, roomId: string, displayName: string, password: string | null = null) {
     this.displayName = displayName;
+    this.password = password;
     void this.connect(signalingUrl, roomId, 'guest');
   }
 
@@ -147,7 +155,13 @@ export class ConnectionManager {
     this.ws = ws;
 
     ws.addEventListener('open', () => {
-      ws.send(JSON.stringify({ type: 'join', roomId, role, displayName: this.displayName }));
+      ws.send(JSON.stringify({
+        type:        'join',
+        roomId,
+        role,
+        displayName: this.displayName,
+        password:    this.password ?? undefined,
+      }));
     });
 
     ws.addEventListener('message', (e) => {
@@ -182,8 +196,15 @@ export class ConnectionManager {
 
       case 'roomSettingsUpdated':
         if (typeof msg.name === 'string') {
-          this.onRoomSettings({ name: msg.name });
+          this.onRoomSettings({
+            name:        msg.name,
+            hasPassword: msg.hasPassword === true,
+          });
         }
+        break;
+
+      case 'joinRejected':
+        if (msg.reason === 'wrongPassword') this.onStatus('wrong-password');
         break;
 
       case 'peer-joined': {

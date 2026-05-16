@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { ThreeCanvas, type ReplicationTarget, type HandView } from '../ThreeCanvas';
 import { ConnectionManager } from '../net/ConnectionManager';
 import { EditorPanel } from '../components/EditorPanel';
@@ -36,15 +37,16 @@ import { BASE_MANIFEST, PRIMITIVE_MANIFEST } from '../assets/baseManifest';
 import { AssetLoadingIndicator } from '../components/AssetLoadingIndicator';
 import './Room.css';
 
-type Status = 'connecting' | 'connected' | 'disconnected' | 'room-full';
+type Status = 'connecting' | 'connected' | 'disconnected' | 'room-full' | 'wrong-password';
 
 const SIGNALING_URL = import.meta.env.VITE_API_URL.replace(/^http/, 'ws');
 
 const STATUS_LABEL: Record<Status, string> = {
-  connecting:   'Waiting for peer...',
-  connected:    'Connected',
-  disconnected: 'Disconnected',
-  'room-full':  'Room is full',
+  connecting:       'Waiting for peer...',
+  connected:        'Connected',
+  disconnected:     'Disconnected',
+  'room-full':      'Room is full',
+  'wrong-password': 'Wrong password',
 };
 
 interface Props {
@@ -65,6 +67,9 @@ export function Room({ roomId, isHost }: Props) {
   const [showAllZones, setShowAllZones] = useState(false);
   const [showSnapPoints, setShowSnapPoints] = useState(false);
   const [roomName,     setRoomName]     = useState<string>('');
+  const [hasPassword,  setHasPassword]  = useState<boolean>(false);
+  const location = useLocation();
+  const joinPassword: string | null = (location.state as { password?: string } | null)?.password ?? null;
   const [handView, setHandView]         = useState<HandView | null>(null);
   const [lastLoaded, setLastLoaded]     = useState<LastLoaded | null>(null);
   const [historyService, setHistoryService] = useState<SceneHistoryService | null>(null);
@@ -104,6 +109,7 @@ export function Room({ roomId, isHost }: Props) {
   const endTurnRef         = useRef<() => void>(noop);
   const dispatchTurnRef    = useRef<(action: TurnAction) => void>(noop);
   const setRoomNameRef     = useRef<(name: string) => void>(noop);
+  const setRoomPasswordRef = useRef<(password: string | null) => void>(noop);
 
   // Set every render — fine, it's just a ref assignment.
   onContextMenuRef.current   = (req) => setContextMenu(req);
@@ -246,9 +252,13 @@ export function Room({ roomId, isHost }: Props) {
           client.onChange(snap => setRoomSnapshot(snap));
         }
       },
-      (settings) => setRoomName(settings.name),
+      (settings) => {
+        setRoomName(settings.name);
+        setHasPassword(settings.hasPassword);
+      },
     );
-    setRoomNameRef.current = (name) => mgr.setRoomName(name);
+    setRoomNameRef.current     = (name)     => mgr.setRoomName(name);
+    setRoomPasswordRef.current = (password) => mgr.setRoomPassword(password);
     sendRef.current     = (msg, opts)         => mgr.send(msg, opts);
     sendToRef.current   = (peerId, msg, opts) => mgr.sendTo(peerId, msg, opts);
     getTargetsRef.current = () => {
@@ -312,7 +322,7 @@ export function Room({ roomId, isHost }: Props) {
     };
 
     if (isHost) mgr.hostRoom(SIGNALING_URL, roomId, selfDisplayName);
-    else        mgr.joinRoom(SIGNALING_URL, roomId, selfDisplayName);
+    else        mgr.joinRoom(SIGNALING_URL, roomId, selfDisplayName, joinPassword);
 
     return () => {
       mgr.dispose();
@@ -328,12 +338,14 @@ export function Room({ roomId, isHost }: Props) {
       endTurnRef.current       = noop;
       dispatchTurnRef.current  = noop;
       setRoomNameRef.current   = noop;
+      setRoomPasswordRef.current = noop;
       managerRef.current       = null;
       setRoomSnapshot(null);
       setSelfPeerId(null);
       setRoomName('');
+      setHasPassword(false);
     };
-  }, [roomId, isHost]);
+  }, [roomId, isHost, joinPassword]);
 
   // Mirror the live handle into a ref for non-React consumers (the
   // ConnectionManager onLeft callback closes over the effect's scope but
@@ -560,6 +572,8 @@ export function Room({ roomId, isHost }: Props) {
               turns={roomSnapshot?.turns}
               roomName={roomName}
               onRenameRoom={(name) => setRoomNameRef.current(name)}
+              hasPassword={hasPassword}
+              onSetRoomPassword={(password) => setRoomPasswordRef.current(password)}
             />
           </UIPanel>
         )}
