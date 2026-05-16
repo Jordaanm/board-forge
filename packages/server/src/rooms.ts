@@ -9,6 +9,7 @@ export interface Member {
   role:        Role;
   ws:          WebSocket;
   displayName: string;
+  ipHash:      string;
 }
 
 interface Room {
@@ -28,7 +29,7 @@ const rooms        = new Map<string, Room>();
 const clientLookup = new Map<WebSocket, { roomId: string; peerId: string }>();
 let totalRoomsCreated = 0;
 
-export function join(roomId: string, role: Role, ws: WebSocket, displayName: string): JoinResult | 'full' {
+export function join(roomId: string, role: Role, ws: WebSocket, displayName: string, ip: string): JoinResult | 'full' {
   let room = rooms.get(roomId);
   if (!room) {
     room = { hostId: null, members: new Map(), metadata: new RoomMetadata(displayName) };
@@ -51,7 +52,8 @@ export function join(roomId: string, role: Role, ws: WebSocket, displayName: str
   if (room.members.size >= maxRoomPeers) return 'full';
 
   const peerId = crypto.randomUUID();
-  room.members.set(peerId, { peerId, role, ws, displayName });
+  const ipHash = room.metadata.hashIp(ip);
+  room.members.set(peerId, { peerId, role, ws, displayName, ipHash });
   if (role === 'host') room.hostId = peerId;
   clientLookup.set(ws, { roomId, peerId });
 

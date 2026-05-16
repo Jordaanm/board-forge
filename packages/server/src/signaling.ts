@@ -1,6 +1,18 @@
 import type { WebSocket } from 'ws';
 import { join, leave, lookup, getMember, getRoomMembers, getRoomMetadata, getHostId, type Role } from './rooms';
 
+// IP attached at WS open in app.ts. Stored out-of-band so the ws type stays
+// stock and join() / ban look-ups can resolve it deterministically.
+const clientIps = new WeakMap<WebSocket, string>();
+
+export function setClientIp(ws: WebSocket, ip: string) {
+  clientIps.set(ws, ip);
+}
+
+function getClientIp(ws: WebSocket): string {
+  return clientIps.get(ws) ?? '';
+}
+
 type Msg = {
   type:          string;
   roomId?:       string;
@@ -34,6 +46,16 @@ export function onMessage(ws: WebSocket, raw: string) {
     return;
   }
 
+  if (msg.type === 'banPeer') {
+    handleBanPeer(ws, msg);
+    return;
+  }
+
+  if (msg.type === 'unban') {
+    handleUnban(ws, msg);
+    return;
+  }
+
   if (FORWARDABLE.has(msg.type)) {
     handleForward(ws, msg);
   }
@@ -43,16 +65,19 @@ function handleJoin(ws: WebSocket, msg: Msg) {
   const { roomId, role } = msg;
   if (!roomId || (role !== 'host' && role !== 'guest')) return;
 
-  const displayName       = sanitiseDisplayName(msg.displayName);
-  const suppliedPassword  = typeof msg.password === 'string' ? msg.password : undefined;
+  const displayName      = sanitiseDisplayName(msg.displayName);
+  const suppliedPassword = typeof msg.password === 'string' ? msg.password : undefined;
+  const ip               = getClientIp(ws);
 
-  // Password gate. Hosts bypass (they own the room); guests pass through
-  // RoomMetadata.checkJoin. A non-existent room can't be locked, so first-
-  // joiners are unaffected.
+  // Ban + password gate. Hosts bypass (they own the room); guests run
+  // through RoomMetadata.checkJoin, which checks bans (name OR ipHash)
+  // before password. A non-existent room can't be locked or have bans, so
+  // first-joiners are unaffected.
   if (role === 'guest') {
     const existing = getRoomMetadata(roomId);
     if (existing) {
-      const verdict = existing.checkJoin(suppliedPassword);
+      const ipHash  = existing.hashIp(ip);
+      const verdict = existing.checkJoin(displayName, ipHash, suppliedPassword);
       if (verdict !== 'ok') {
         send(ws, { type: 'joinRejected', reason: verdict });
         return;
@@ -60,7 +85,7 @@ function handleJoin(ws: WebSocket, msg: Msg) {
     }
   }
 
-  const result = join(roomId, role, ws, displayName);
+  const result = join(roomId, role, ws, displayName, ip);
   if (result === 'full') {
     send(ws, { type: 'room-full' });
     return;
@@ -80,6 +105,9 @@ function handleJoin(ws: WebSocket, msg: Msg) {
     displayName,
     otherPeers:   result.otherPeers,
     roomSettings,
+    // Hosts get the ban list at join time so the Settings modal can render
+    // it without an extra round-trip. Guests never see the list.
+    bans:         role === 'host' ? (metadata?.getPublicBans() ?? []) : undefined,
   });
 
   // Notify existing members of the new peer.
@@ -124,6 +152,53 @@ function broadcastSettings(roomId: string, metadata: ReturnType<typeof getRoomMe
   for (const m of getRoomMembers(roomId)) {
     send(m.ws, payload);
   }
+}
+
+function handleBanPeer(ws: WebSocket, msg: Msg) {
+  const info = lookup(ws);
+  if (!info) return;
+  if (getHostId(info.roomId) !== info.peerId) return;
+
+  const targetPeerId = typeof msg.peerId === 'string' ? msg.peerId : null;
+  if (!targetPeerId || targetPeerId === info.peerId) return;
+
+  const target = getMember(info.roomId, targetPeerId);
+  if (!target) return;
+
+  const metadata = getRoomMetadata(info.roomId);
+  if (!metadata) return;
+
+  metadata.addBan(target.displayName, target.ipHash);
+
+  // Forcefully disconnect the banned peer. Closing the ws triggers onClose,
+  // which removes them from the room and notifies other members via the
+  // existing peer-left broadcast. Send the kick reason first so the client
+  // can surface it before its ws layer reports the close.
+  try { send(target.ws, { type: 'joinRejected', reason: 'banned' }); } catch { /* ignore */ }
+  try { target.ws.close(); } catch { /* ignore */ }
+
+  sendBansToHost(info.roomId, ws, metadata);
+}
+
+function handleUnban(ws: WebSocket, msg: Msg) {
+  const info = lookup(ws);
+  if (!info) return;
+  if (getHostId(info.roomId) !== info.peerId) return;
+
+  const name = typeof msg.name === 'string' ? msg.name : null;
+  if (name === null) return;
+
+  const metadata = getRoomMetadata(info.roomId);
+  if (!metadata) return;
+
+  if (!metadata.removeBan(name)) return;
+  sendBansToHost(info.roomId, ws, metadata);
+}
+
+function sendBansToHost(roomId: string, hostWs: WebSocket, metadata: NonNullable<ReturnType<typeof getRoomMetadata>>) {
+  // Ban list is host-only — never broadcast to all members.
+  void roomId;
+  send(hostWs, { type: 'bansUpdated', bans: metadata.getPublicBans() });
 }
 
 const MAX_DISPLAY_NAME_LENGTH = 40;

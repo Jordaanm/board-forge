@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useAnchorTarget } from './AnchorLayout';
+import { type PublicBanEntry } from '../net/ConnectionManager';
 
 const ROOM_NAME_MAX_LENGTH = 40;
 
@@ -14,6 +15,8 @@ interface Props {
   onRenameRoom:      (name: string) => void;
   hasPassword:       boolean;
   onSetRoomPassword: (password: string | null) => void;
+  bans:              PublicBanEntry[];
+  onUnban:           (name: string) => void;
 }
 
 const OVERLAY: React.CSSProperties = {
@@ -136,8 +139,44 @@ const BTN_DESTRUCTIVE: React.CSSProperties = {
   color:       'var(--accent-deep)',
 };
 
+const BAN_LIST: React.CSSProperties = {
+  listStyle:     'none',
+  margin:        0,
+  padding:       0,
+  display:       'flex',
+  flexDirection: 'column',
+  gap:           6,
+  maxHeight:     180,
+  overflowY:     'auto',
+};
+
+const BAN_ROW: React.CSSProperties = {
+  display:      'flex',
+  alignItems:   'center',
+  gap:          8,
+  padding:      '6px 8px',
+  background:   'var(--bg)',
+  border:       '1px solid var(--line)',
+  borderRadius: 'var(--card-radius)',
+  fontSize:     12,
+};
+
+function relativeTime(iso: string): string {
+  const then = Date.parse(iso);
+  if (isNaN(then)) return '';
+  const seconds = Math.floor((Date.now() - then) / 1000);
+  if (seconds < 5)     return 'just now';
+  if (seconds < 60)    return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60)    return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24)      return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
 export function RoomSettingsModal({
-  open, onOpenChange, roomName, onRenameRoom, hasPassword, onSetRoomPassword,
+  open, onOpenChange, roomName, onRenameRoom, hasPassword, onSetRoomPassword, bans, onUnban,
 }: Props) {
   const centerAnchor = useAnchorTarget('center');
   const [draft, setDraft] = useState(roomName);
@@ -236,6 +275,29 @@ export function RoomSettingsModal({
                   </button>
                 )}
               </div>
+            </div>
+
+            <div>
+              <div style={FIELD_LABEL}>Bans</div>
+              {bans.length === 0 ? (
+                <div style={{ color: 'var(--ink-mute)', fontSize: 12 }}>No bans</div>
+              ) : (
+                <ul style={BAN_LIST}>
+                  {bans.map((ban) => (
+                    <li key={ban.name} style={BAN_ROW}>
+                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <span style={{ fontWeight: 700 }}>{ban.name}</span>
+                        <span style={{ color: 'var(--ink-mute)', marginLeft: 8 }}>
+                          banned {relativeTime(ban.bannedAt)}
+                        </span>
+                      </span>
+                      <button type="button" style={BTN} onClick={() => onUnban(ban.name)}>
+                        Unban
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
         </Dialog.Content>

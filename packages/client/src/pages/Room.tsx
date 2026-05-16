@@ -27,6 +27,7 @@ import { DiceComponent } from '../entity/components/DiceComponent';
 import { RoomStateManager } from '../seats/RoomStateManager';
 import { RoomStateClient } from '../seats/RoomStateClient';
 import type { RoomStateMessage, RoomStateSnapshot } from '../seats/RoomState';
+import type { PublicBanEntry } from '../net/ConnectionManager';
 import type { TurnAction, TurnEvent } from '../seats/TurnTracker';
 import { type SceneHistoryService, type LastLoaded } from '../entity/SceneHistoryService';
 import { type ScriptErrorLog } from '../scripting/ScriptErrorLog';
@@ -37,7 +38,7 @@ import { BASE_MANIFEST, PRIMITIVE_MANIFEST } from '../assets/baseManifest';
 import { AssetLoadingIndicator } from '../components/AssetLoadingIndicator';
 import './Room.css';
 
-type Status = 'connecting' | 'connected' | 'disconnected' | 'room-full' | 'wrong-password';
+type Status = 'connecting' | 'connected' | 'disconnected' | 'room-full' | 'wrong-password' | 'banned';
 
 const SIGNALING_URL = import.meta.env.VITE_API_URL.replace(/^http/, 'ws');
 
@@ -47,6 +48,7 @@ const STATUS_LABEL: Record<Status, string> = {
   disconnected:     'Disconnected',
   'room-full':      'Room is full',
   'wrong-password': 'Wrong password',
+  banned:           'You are banned from this room',
 };
 
 interface Props {
@@ -68,6 +70,7 @@ export function Room({ roomId, isHost }: Props) {
   const [showSnapPoints, setShowSnapPoints] = useState(false);
   const [roomName,     setRoomName]     = useState<string>('');
   const [hasPassword,  setHasPassword]  = useState<boolean>(false);
+  const [bans,         setBans]         = useState<PublicBanEntry[]>([]);
   const location = useLocation();
   const joinPassword: string | null = (location.state as { password?: string } | null)?.password ?? null;
   const [handView, setHandView]         = useState<HandView | null>(null);
@@ -110,6 +113,7 @@ export function Room({ roomId, isHost }: Props) {
   const dispatchTurnRef    = useRef<(action: TurnAction) => void>(noop);
   const setRoomNameRef     = useRef<(name: string) => void>(noop);
   const setRoomPasswordRef = useRef<(password: string | null) => void>(noop);
+  const unbanRef           = useRef<(name: string) => void>(noop);
 
   // Set every render — fine, it's just a ref assignment.
   onContextMenuRef.current   = (req) => setContextMenu(req);
@@ -256,9 +260,11 @@ export function Room({ roomId, isHost }: Props) {
         setRoomName(settings.name);
         setHasPassword(settings.hasPassword);
       },
+      (next) => setBans(next),
     );
     setRoomNameRef.current     = (name)     => mgr.setRoomName(name);
     setRoomPasswordRef.current = (password) => mgr.setRoomPassword(password);
+    unbanRef.current           = (name)     => mgr.unban(name);
     sendRef.current     = (msg, opts)         => mgr.send(msg, opts);
     sendToRef.current   = (peerId, msg, opts) => mgr.sendTo(peerId, msg, opts);
     getTargetsRef.current = () => {
@@ -316,9 +322,10 @@ export function Room({ roomId, isHost }: Props) {
 
     banPeerRef.current = (peerId) => {
       if (!manager) return;
+      // Tell the peer so they see the kick reason in the UI before the WS
+      // drops; the server is the source of truth for the persistent ban.
       mgr.sendTo(peerId, { type: 'kicked', reason: 'ban' } satisfies RoomStateMessage);
-      manager.banPeer(peerId);
-      mgr.kickPeer(peerId);
+      mgr.banPeer(peerId);
     };
 
     if (isHost) mgr.hostRoom(SIGNALING_URL, roomId, selfDisplayName);
@@ -339,11 +346,13 @@ export function Room({ roomId, isHost }: Props) {
       dispatchTurnRef.current  = noop;
       setRoomNameRef.current   = noop;
       setRoomPasswordRef.current = noop;
+      unbanRef.current         = noop;
       managerRef.current       = null;
       setRoomSnapshot(null);
       setSelfPeerId(null);
       setRoomName('');
       setHasPassword(false);
+      setBans([]);
     };
   }, [roomId, isHost, joinPassword]);
 
@@ -574,6 +583,8 @@ export function Room({ roomId, isHost }: Props) {
               onRenameRoom={(name) => setRoomNameRef.current(name)}
               hasPassword={hasPassword}
               onSetRoomPassword={(password) => setRoomPasswordRef.current(password)}
+              bans={bans}
+              onUnban={(name) => unbanRef.current(name)}
             />
           </UIPanel>
         )}

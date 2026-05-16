@@ -14,6 +14,7 @@ import { AssetManagerModal } from './AssetManagerModal';
 import { GenerateDeckModal, type GenerateDeckRequest } from './GenerateDeckModal';
 import { HostToolsMenu, type MenuEntry } from './HostToolsMenu';
 import { RoomSettingsModal } from './RoomSettingsModal';
+import { type PublicBanEntry } from '../net/ConnectionManager';
 import { type SaveEnvelope } from '../entity/SaveFile';
 import { downloadSceneFile } from '../entity/downloadSceneFile';
 import { type LastLoaded, type SceneHistoryService } from '../entity/SceneHistoryService';
@@ -51,6 +52,9 @@ interface Props {
   // to the client; only `hasPassword` is exposed.
   hasPassword:          boolean;
   onSetRoomPassword:    (password: string | null) => void;
+  // Current ban list for the Bans section.
+  bans:                 PublicBanEntry[];
+  onUnban:              (name: string) => void;
 }
 
 const BAR: React.CSSProperties = {
@@ -101,6 +105,8 @@ export function HostActionBar({
   onRenameRoom,
   hasPassword,
   onSetRoomPassword,
+  bans,
+  onUnban,
 }: Props) {
   const [spawnOpen,    setSpawnOpen]    = useState(false);
   const [historyOpen,  setHistoryOpen]  = useState(false);
@@ -250,6 +256,8 @@ export function HostActionBar({
         onRenameRoom={onRenameRoom}
         hasPassword={hasPassword}
         onSetRoomPassword={onSetRoomPassword}
+        bans={bans}
+        onUnban={onUnban}
       />
 
       {lastLoaded && (

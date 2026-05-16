@@ -1,7 +1,7 @@
 import express from 'express';
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
-import { onMessage, onClose } from './signaling';
+import { onMessage, onClose, setClientIp } from './signaling';
 import { getIceServers } from './config';
 import { listRooms, getTotalRoomsCreated } from './rooms';
 
@@ -34,7 +34,11 @@ app.get('/rooms', (_req, res) => {
 export const server = createServer(app);
 
 const wss = new WebSocketServer({ server });
-wss.on('connection', (ws) => {
+wss.on('connection', (ws, req) => {
+  const xff   = (req.headers['x-forwarded-for'] as string | undefined) ?? '';
+  const first = xff.split(',')[0]?.trim();
+  const ip    = first || req.socket.remoteAddress || '';
+  setClientIp(ws, ip);
   ws.on('message', (data) => onMessage(ws, data.toString()));
   ws.on('close', () => onClose(ws));
 });

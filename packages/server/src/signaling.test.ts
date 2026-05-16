@@ -20,6 +20,36 @@ function nextMsg(ws: WebSocket): Promise<Record<string, unknown>> {
   });
 }
 
+// Drains intermediate messages until one with msg.type === expected arrives.
+// Useful when several messages may queue up on a socket (e.g. host receives
+// peer-joined and bansUpdated in close succession).
+function waitFor(ws: WebSocket, expected: string): Promise<Record<string, unknown>> {
+  return new Promise((resolve) => {
+    const onMsg = (data: Buffer) => {
+      const msg = JSON.parse(data.toString()) as Record<string, unknown>;
+      if (msg.type === expected) {
+        ws.off('message', onMsg);
+        resolve(msg);
+      }
+    };
+    ws.on('message', onMsg);
+  });
+}
+
+// Collects every incoming message on a ws into a list until stop() is
+// called. Use in negative assertions ("the host received no bansUpdated").
+function collectMessages(ws: WebSocket) {
+  const messages: Record<string, unknown>[] = [];
+  const onMsg = (data: Buffer) => {
+    messages.push(JSON.parse(data.toString()) as Record<string, unknown>);
+  };
+  ws.on('message', onMsg);
+  return {
+    types: () => messages.map(m => m.type as string),
+    stop:  () => ws.off('message', onMsg),
+  };
+}
+
 function send(ws: WebSocket, data: unknown) {
   ws.send(JSON.stringify(data));
 }
@@ -231,6 +261,232 @@ describe('room name', () => {
   });
 });
 
+describe('bans', () => {
+  test('host joined payload includes empty bans list by default', async () => {
+    const host = await connect();
+    const msg = await joinRoom(host, 'room-ban-default', 'host', 'Alice');
+    expect(msg.bans).toEqual([]);
+    host.close();
+  });
+
+  test('guests do not receive the bans field in joined', async () => {
+    const host  = await connect();
+    await joinRoom(host, 'room-ban-private', 'host', 'Alice');
+    const peerJoined = nextMsg(host);
+    const guest = await connect();
+    const guestJoined = await joinRoom(guest, 'room-ban-private', 'guest', 'Bob');
+    await peerJoined;
+    expect(guestJoined.bans).toBeUndefined();
+    host.close();
+    guest.close();
+  });
+
+  test('banPeer records a ban and disconnects the target', async () => {
+    const host  = await connect();
+    const guest = await connect();
+    await joinRoom(host, 'room-ban-action', 'host', 'Alice');
+    const peerJoined = nextMsg(host);
+    const guestJoined = await joinRoom(guest, 'room-ban-action', 'guest', 'Mallory');
+    await peerJoined;
+    const guestPeerId = guestJoined.peerId as string;
+
+    const guestClosed = new Promise<void>((r) => guest.once('close', () => r()));
+    const bansUpdated = nextMsg(host);
+    const peerLeft    = waitFor(host, 'peer-left');
+
+    send(host, { type: 'banPeer', peerId: guestPeerId });
+    const update = await bansUpdated;
+    expect(update.type).toBe('bansUpdated');
+    expect(update.bans).toEqual([
+      expect.objectContaining({ name: 'Mallory' }),
+    ]);
+    expect((update.bans as { name: string }[])[0]).not.toHaveProperty('ipHash');
+
+    await guestClosed;
+    const left = await peerLeft;
+    expect(left.peerId).toBe(guestPeerId);
+
+    host.close();
+  });
+
+  test('banned name cannot rejoin under a new peer-id', async () => {
+    const host  = await connect();
+    const guest = await connect();
+    await joinRoom(host, 'room-ban-rename', 'host', 'Alice');
+    const peerJoined = nextMsg(host);
+    const guestJoined = await joinRoom(guest, 'room-ban-rename', 'guest', 'Mallory');
+    await peerJoined;
+    const guestPeerId = guestJoined.peerId as string;
+
+    const bansUpdated = nextMsg(host);
+    void waitFor(host, 'peer-left');
+    send(host, { type: 'banPeer', peerId: guestPeerId });
+    await bansUpdated;
+
+    const retry = await connect();
+    const rejected = await joinRoom(retry, 'room-ban-rename', 'guest', 'Mallory');
+    expect(rejected.type).toBe('joinRejected');
+    expect(rejected.reason).toBe('banned');
+
+    host.close();
+    retry.close();
+  });
+
+  test('banned ip still rejected after renaming (ipHash match)', async () => {
+    const host  = await connect();
+    const guest = await connect();
+    await joinRoom(host, 'room-ban-ip', 'host', 'Alice');
+    const peerJoined = nextMsg(host);
+    const guestJoined = await joinRoom(guest, 'room-ban-ip', 'guest', 'Mallory');
+    await peerJoined;
+    const guestPeerId = guestJoined.peerId as string;
+
+    const bansUpdated = nextMsg(host);
+    void waitFor(host, 'peer-left');
+    send(host, { type: 'banPeer', peerId: guestPeerId });
+    await bansUpdated;
+
+    const retry = await connect();
+    const rejected = await joinRoom(retry, 'room-ban-ip', 'guest', 'NotMallory');
+    expect(rejected.type).toBe('joinRejected');
+    expect(rejected.reason).toBe('banned');
+
+    host.close();
+    retry.close();
+  });
+
+  test('ban check runs before password check', async () => {
+    const host = await connect();
+    const guest = await connect();
+    await joinRoom(host, 'room-ban-precedence', 'host', 'Alice');
+
+    const settingsUpdated = nextMsg(host);
+    send(host, { type: 'setRoomPassword', password: 'pw' });
+    await settingsUpdated;
+
+    const peerJoined = nextMsg(host);
+    const guestJoined = await joinRoom(guest, 'room-ban-precedence', 'guest', 'Mallory', 'pw');
+    await peerJoined;
+    const guestPeerId = guestJoined.peerId as string;
+
+    const bansUpdated = nextMsg(host);
+    void waitFor(host, 'peer-left');
+    send(host, { type: 'banPeer', peerId: guestPeerId });
+    await bansUpdated;
+
+    const retry = await connect();
+    // Correct password — but the user is banned by ipHash. Expect the
+    // truthful `banned` verdict, not `wrongPassword`.
+    const rejected = await joinRoom(retry, 'room-ban-precedence', 'guest', 'Different', 'pw');
+    expect(rejected.reason).toBe('banned');
+
+    host.close();
+    retry.close();
+  });
+
+  test('unban removes the entry and lets the user back in', async () => {
+    const host  = await connect();
+    const guest = await connect();
+    await joinRoom(host, 'room-ban-unban', 'host', 'Alice');
+    const peerJoined = nextMsg(host);
+    const guestJoined = await joinRoom(guest, 'room-ban-unban', 'guest', 'Mallory');
+    await peerJoined;
+    const guestPeerId = guestJoined.peerId as string;
+
+    const bansUpdated = nextMsg(host);
+    void waitFor(host, 'peer-left');
+    send(host, { type: 'banPeer', peerId: guestPeerId });
+    await bansUpdated;
+
+    const cleared = nextMsg(host);
+    send(host, { type: 'unban', name: 'Mallory' });
+    const after = await cleared;
+    expect(after.type).toBe('bansUpdated');
+    expect(after.bans).toEqual([]);
+
+    const retry = await connect();
+    const retryPeer = nextMsg(host);
+    const admitted = await joinRoom(retry, 'room-ban-unban', 'guest', 'Mallory');
+    expect(admitted.type).toBe('joined');
+    await retryPeer;
+
+    host.close();
+    retry.close();
+  });
+
+  test('guest banPeer is ignored — host receives no bansUpdated, target stays open', async () => {
+    const host      = await connect();
+    const guest     = await connect();
+    const evilGuest = await connect();
+    await joinRoom(host, 'room-ban-guard', 'host', 'Alice');
+    const peer1 = nextMsg(host);
+    const guestJoined = await joinRoom(guest, 'room-ban-guard', 'guest', 'Bob');
+    await peer1;
+    const peer2 = nextMsg(host);
+    await joinRoom(evilGuest, 'room-ban-guard', 'guest', 'Evil');
+    await peer2;
+
+    const hostMessages = collectMessages(host);
+
+    send(evilGuest, { type: 'banPeer', peerId: guestJoined.peerId as string });
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(hostMessages.types()).not.toContain('bansUpdated');
+    expect(hostMessages.types()).not.toContain('peer-left');
+    expect(guest.readyState).toBe(WebSocket.OPEN);
+
+    hostMessages.stop();
+    host.close();
+    guest.close();
+    evilGuest.close();
+  });
+
+  test('guest unban is ignored — host receives no bansUpdated', async () => {
+    const host  = await connect();
+    const guest = await connect();
+    await joinRoom(host, 'room-ban-guard-unban', 'host', 'Alice');
+    const peerJoined = nextMsg(host);
+    const guestJoined = await joinRoom(guest, 'room-ban-guard-unban', 'guest', 'Mallory');
+    await peerJoined;
+
+    // Real ban to seed the metadata with an entry.
+    const bansUpdated = waitFor(host, 'bansUpdated');
+    send(host, { type: 'banPeer', peerId: guestJoined.peerId as string });
+    await bansUpdated;
+
+    // Now connect a separate guest who will try to unban without host rights.
+    // No need to wait for the banned guest's peer-left first; collectMessages
+    // below captures every host-bound frame from this point so the assertion
+    // can simply check that no bansUpdated appears.
+    const evil = await connect();
+    await joinRoom(evil, 'room-ban-guard-unban', 'guest', 'Evil');
+
+    const hostMessages = collectMessages(host);
+
+    send(evil, { type: 'unban', name: 'Mallory' });
+    await new Promise((r) => setTimeout(r, 150));
+
+    expect(hostMessages.types()).not.toContain('bansUpdated');
+
+    hostMessages.stop();
+    host.close();
+    evil.close();
+  });
+
+  test('host cannot ban themselves', async () => {
+    const host = await connect();
+    const hostJoined = await joinRoom(host, 'room-ban-self', 'host', 'Alice');
+
+    const hostMessages = collectMessages(host);
+    send(host, { type: 'banPeer', peerId: hostJoined.peerId as string });
+    await new Promise((r) => setTimeout(r, 100));
+    expect(hostMessages.types()).not.toContain('bansUpdated');
+
+    hostMessages.stop();
+    host.close();
+  });
+});
+
 describe('room password', () => {
   test('joined.roomSettings reports hasPassword=false by default', async () => {
     const host = await connect();
@@ -358,17 +614,13 @@ describe('room password', () => {
     await joinRoom(guest, 'room-pw-guard', 'guest', 'Bob');
     await peerJoined;
 
-    let received = false;
-    const onAny = () => { received = true; };
-    host.once('message', onAny);
-    guest.once('message', onAny);
+    const hostMessages = collectMessages(host);
 
     send(guest, { type: 'setRoomPassword', password: 'pwn' });
-    await new Promise((r) => setTimeout(r, 50));
-    expect(received).toBe(false);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(hostMessages.types()).not.toContain('roomSettingsUpdated');
 
-    host.removeListener('message', onAny);
-    guest.removeListener('message', onAny);
+    hostMessages.stop();
     host.close();
     guest.close();
   });

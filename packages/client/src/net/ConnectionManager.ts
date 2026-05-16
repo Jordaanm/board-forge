@@ -1,9 +1,14 @@
-type Status = 'connecting' | 'connected' | 'disconnected' | 'room-full' | 'wrong-password';
+type Status = 'connecting' | 'connected' | 'disconnected' | 'room-full' | 'wrong-password' | 'banned';
 type Role   = 'host' | 'guest';
 
 export interface RoomSettings {
   name:        string;
   hasPassword: boolean;
+}
+
+export interface PublicBanEntry {
+  name:     string;
+  bannedAt: string;
 }
 
 type MsgHandler             = (peerId: string, msg: unknown) => void;
@@ -12,6 +17,7 @@ type PeerLeftHandler        = (peerId: string) => void;
 type PeerConnectedHandler   = (peerId: string, displayName: string) => void;
 type JoinedHandler          = (peerId: string, hostPeerId: string | null) => void;
 type RoomSettingsHandler    = (settings: RoomSettings) => void;
+type BansUpdatedHandler     = (bans: PublicBanEntry[]) => void;
 
 type SignalingMsg = { type: string; [k: string]: unknown };
 
@@ -75,6 +81,7 @@ export class ConnectionManager {
     private readonly onPeerConnected:   PeerConnectedHandler   = () => {},
     private readonly onJoined:          JoinedHandler          = () => {},
     private readonly onRoomSettings:    RoomSettingsHandler    = () => {},
+    private readonly onBansUpdated:     BansUpdatedHandler     = () => {},
   ) {}
 
   setRoomName(name: string) {
@@ -83,6 +90,14 @@ export class ConnectionManager {
 
   setRoomPassword(password: string | null) {
     this.signal({ type: 'setRoomPassword', password });
+  }
+
+  banPeer(peerId: string) {
+    this.signal({ type: 'banPeer', peerId });
+  }
+
+  unban(name: string) {
+    this.signal({ type: 'unban', name });
   }
 
   getPeerId(): string | null { return this.peerId; }
@@ -185,6 +200,9 @@ export class ConnectionManager {
         if (msg.roomSettings && typeof (msg.roomSettings as RoomSettings).name === 'string') {
           this.onRoomSettings(msg.roomSettings as RoomSettings);
         }
+        if (Array.isArray(msg.bans)) {
+          this.onBansUpdated(msg.bans as PublicBanEntry[]);
+        }
         this.onJoined(this.peerId, this.hostId);
         if (this.role === 'host') {
           // Existing peers (rare path: host joining late) get offers.
@@ -204,7 +222,12 @@ export class ConnectionManager {
         break;
 
       case 'joinRejected':
-        if (msg.reason === 'wrongPassword') this.onStatus('wrong-password');
+        if      (msg.reason === 'wrongPassword') this.onStatus('wrong-password');
+        else if (msg.reason === 'banned')        this.onStatus('banned');
+        break;
+
+      case 'bansUpdated':
+        if (Array.isArray(msg.bans)) this.onBansUpdated(msg.bans as PublicBanEntry[]);
         break;
 
       case 'peer-joined': {
