@@ -4,7 +4,7 @@ import { AnchorLayout } from '../components/AnchorLayout';
 import { PreferencesModal } from '../components/PreferencesModal';
 import { DisplayNamePromptModal } from '../components/DisplayNamePromptModal';
 import { JoinPasswordModal } from '../components/JoinPasswordModal';
-import { hasPromptedDisplayName } from '../identity/displayName';
+import { hasPromptedDisplayName, loadDisplayName } from '../identity/displayName';
 import './Landing.css';
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -75,6 +75,15 @@ export function Landing() {
   const [prefsOpen,    setPrefsOpen]    = useState(false);
   const [namePromptOpen, setNamePromptOpen] = useState(() => !hasPromptedDisplayName());
   const [passwordPromptRoomId, setPasswordPromptRoomId] = useState<string | null>(null);
+  const [displayName, setDisplayName] = useState(() => loadDisplayName());
+
+  // Re-read the persisted name once the prompt closes so the avatar
+  // reflects what the user just saved (or skipped to auto-generated).
+  useEffect(() => {
+    if (!namePromptOpen) setDisplayName(loadDisplayName());
+  }, [namePromptOpen]);
+
+  const initial = (Array.from(displayName.trim())[0] ?? '?').toUpperCase();
 
   useEffect(() => {
     let cancelled = false;
@@ -125,7 +134,7 @@ export function Landing() {
                       onClick={() => setPrefsOpen(true)}>
                 <IconSettings size={18}/>
               </button>
-              {/* <div className="landing__avatar" title="Your profile">??</div> */}
+              <div className="landing__avatar" title={displayName}>{initial}</div>
             </div>
           </div>
         </header>
@@ -205,7 +214,7 @@ export function Landing() {
         <footer className="landing__foot">
           <div className="landing__foot-inner">
             <span>Board Together &middot; an online sandbox for playing and prototyping tabletop games</span>
-            <span>v0.1 &middot; night build</span>
+            <span>&middot; v0.1 &middot;</span>
           </div>
         </footer>
       </div>
