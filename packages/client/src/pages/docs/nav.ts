@@ -1,4 +1,4 @@
-export type DocGroup = 'Playing' | 'Hosting & authoring' | 'Working on the codebase';
+export type DocGroup = 'Playing' | 'Hosting' | 'Scripting and Automation';
 
 export interface DocNavEntry {
   slug:  string;
@@ -7,16 +7,14 @@ export interface DocNavEntry {
 }
 
 export const DOC_NAV: readonly DocNavEntry[] = [
-  { slug: 'getting-started', title: 'Getting Started', group: 'Playing' },
   { slug: 'controls',        title: 'Controls',        group: 'Playing' },
-  { slug: 'hosting',         title: 'Hosting',         group: 'Hosting & authoring' },
-  { slug: 'scripting',       title: 'Scripting',       group: 'Hosting & authoring' },
-  { slug: 'architecture',    title: 'Architecture',    group: 'Working on the codebase' },
-  { slug: 'contributing',    title: 'Contributing',    group: 'Working on the codebase' },
+  { slug: 'hosting',         title: 'Hosting',         group: 'Hosting' },
+  { slug: 'spawnables',      title: 'Spawnable Pieces',      group: 'Hosting' },
+  { slug: 'scripting',       title: 'Scripting',       group: 'Scripting and Automation' },
 ];
 
 export const DOC_GROUPS: readonly DocGroup[] = [
   'Playing',
-  'Hosting & authoring',
-  'Working on the codebase',
+  'Hosting',
+  'Scripting and Automation',
 ];

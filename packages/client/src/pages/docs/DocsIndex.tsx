@@ -3,9 +3,9 @@ import { Link } from 'react-router-dom';
 import { DOC_GROUPS, DOC_NAV } from './nav';
 
 const GROUP_BLURBS: Record<string, string> = {
-  'Playing':                   'Pick up a controller and join a table.',
-  'Hosting & authoring':       'Run a room and shape what happens inside it.',
-  'Working on the codebase':   'Dig into the engine itself.',
+  'Playing':                   'Join a table and take a seat.',
+  'Hosting':                   'Create a room and shape what happens inside it.',
+  'Scripting & Automation':    'Improve the experience by automating the tedious parts.',
 };
 
 const ENTRY_BLURBS: Record<string, string> = {
@@ -13,8 +13,7 @@ const ENTRY_BLURBS: Record<string, string> = {
   'controls':        'Camera, tools, context menu, hand panel, claiming a seat.',
   'hosting':         'Host action bar, editor panel, save/load, history.',
   'scripting':       'Author a custom game by extending Game.',
-  'architecture':    'Repository layout, entity/component model, networking.',
-  'contributing':    'Dev setup, scripts, test layout, where to add things.',
+  'spawnables':      'Game pieces and other useful entities.',
 };
 
 export function DocsIndex() {
@@ -29,8 +28,8 @@ export function DocsIndex() {
       <section className="docs-index__hero">
         <h1 className="docs-index__title">Board Together</h1>
         <p className="docs-index__lede">
-          A browser-based virtual tabletop — a real-time physics sandbox for
-          playing and prototyping tabletop games.
+          A browser-based virtual tabletop for
+          playing and prototyping games.
         </p>
       </section>
 
