@@ -1,4 +1,4 @@
-import type { AnchorHTMLAttributes } from 'react';
+import { useEffect, type AnchorHTMLAttributes } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -31,14 +31,35 @@ const SLUG_TO_RAW: Record<string, string> = Object.fromEntries(
   }),
 );
 
+function extractH1(raw: string): string | null {
+  const match = /^#\s+(.+?)\s*$/m.exec(raw);
+  return match ? match[1] : null;
+}
+
 export function DocsPage() {
   const { slug } = useParams<{ slug: string }>();
   const raw = slug ? SLUG_TO_RAW[slug] : undefined;
+
+  useEffect(() => {
+    const previous = document.title;
+    if (!raw) {
+      document.title = 'Doc not found · Board Together Docs';
+    } else {
+      const h1 = extractH1(raw);
+      document.title = h1
+        ? `${h1} · Board Together Docs`
+        : 'Board Together Docs';
+    }
+    return () => { document.title = previous; };
+  }, [raw]);
 
   if (!raw) {
     return (
       <div className="docs-page">
         <h1>Doc not found</h1>
+        <p>
+          <Link to="/docs">← Back to docs</Link>
+        </p>
       </div>
     );
   }

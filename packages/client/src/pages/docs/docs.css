@@ -1,50 +1,219 @@
-/* ─── Docs page (minimal — layout chrome added in Issue #4) ─── */
+/* ─── Docs layout ─────────────────────────────────────────
+   Uses theme tokens from src/styles/theme.css. Class-prefixed
+   under `.docs__*` to avoid colliding with other pages.
+*/
 
-.docs-page {
-  max-width: 880px;
-  margin: 0 auto;
-  padding: 32px 24px;
-  color: var(--ink);
+.docs {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   background: var(--bg);
+  color: var(--ink);
   font-family: var(--font-sans);
   font-size: var(--font-size-base);
-  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-.docs-page h1 { font-size: 28px; margin: 0 0 16px; }
-.docs-page h2 { font-size: 22px; margin: 28px 0 12px; }
-.docs-page h3 { font-size: 18px; margin: 24px 0 10px; }
+/* ─── Header ─── */
+.docs__header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: color-mix(in oklab, var(--bg) 92%, transparent);
+  backdrop-filter: saturate(1.2) blur(10px);
+  -webkit-backdrop-filter: saturate(1.2) blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+.docs__header-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.docs__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  text-decoration: none;
+}
+.docs__brand:hover { color: var(--accent); }
+.docs__brand-mark {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--card-radius);
+  background: var(--accent);
+  color: var(--accent-ink);
+  display: grid;
+  place-items: center;
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 15px;
+  box-shadow: inset 0 -2px 0 rgba(0,0,0,0.18), 0 1px 2px rgba(0,0,0,0.12);
+}
+.docs__brand-tag {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-mute);
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--card-radius);
+}
+
+/* ─── Body / sidebar / main ─── */
+.docs__body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 0;
+  max-width: 1280px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.docs__sidebar {
+  border-right: 1px solid var(--line);
+  padding: 24px 16px;
+  position: sticky;
+  top: 53px;
+  align-self: start;
+  max-height: calc(100vh - 53px);
+  overflow-y: auto;
+}
+.docs__nav-group + .docs__nav-group { margin-top: 18px; }
+.docs__nav-heading {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-mute);
+  margin: 0 0 8px;
+  padding: 0 8px;
+}
+.docs__nav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.docs__nav-link {
+  display: block;
+  padding: 6px 8px;
+  border-radius: var(--card-radius);
+  color: var(--ink-2);
+  text-decoration: none;
+  font-size: 14px;
+}
+.docs__nav-link:hover {
+  background: var(--surface);
+  color: var(--ink);
+}
+.docs__nav-link--active {
+  background: var(--surface-2);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.docs__main {
+  padding: 32px 40px 64px;
+  min-width: 0;
+}
+
+/* ─── Prose ─── */
+.docs-page {
+  max-width: 760px;
+  color: var(--ink);
+  line-height: 1.65;
+}
+.docs-page h1 { font-family: var(--font-serif); font-size: 32px; margin: 0 0 18px; letter-spacing: -0.02em; }
+.docs-page h2 { font-family: var(--font-serif); font-size: 24px; margin: 32px 0 12px; letter-spacing: -0.01em; }
+.docs-page h3 { font-family: var(--font-serif); font-size: 18px; margin: 24px 0 10px; }
 
 .docs-page p,
 .docs-page ul,
 .docs-page ol { margin: 0 0 14px; }
 
+.docs-page a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+}
+.docs-page a:hover { color: var(--accent-deep); }
+
 .docs-page code {
-  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
-  font-size: 0.92em;
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--surface-2);
+  padding: 1px 5px;
+  border-radius: 3px;
 }
 
 .docs-page pre {
-  background: var(--bg-2, #0d1117);
-  border-radius: 6px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--panel-radius);
   padding: 14px 16px;
   overflow-x: auto;
-  margin: 0 0 16px;
+  margin: 0 0 18px;
+  font-size: 13px;
+  line-height: 1.55;
 }
-
 .docs-page pre code {
   background: transparent;
   padding: 0;
+  font-size: inherit;
 }
 
-.docs-page a { color: var(--accent, #2f6feb); }
+.docs-page blockquote {
+  margin: 0 0 16px;
+  padding: 4px 16px;
+  border-left: 3px solid var(--accent);
+  color: var(--ink-2);
+  background: var(--surface);
+}
 
 .docs-page table {
   border-collapse: collapse;
-  margin: 0 0 16px;
+  margin: 0 0 18px;
+  font-size: 14px;
 }
 .docs-page th,
 .docs-page td {
-  border: 1px solid var(--line, #ddd);
-  padding: 6px 10px;
+  border: 1px solid var(--line);
+  padding: 6px 12px;
+  text-align: left;
+}
+.docs-page th {
+  background: var(--surface-2);
+  font-weight: 700;
+}
+
+.docs-page hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 28px 0;
+}
+
+/* Tune highlight.js token colors against the page background. The
+   shipped github-dark.css sets its own background which we override
+   so it inherits the docs `<pre>` styling above. */
+.docs-page pre code.hljs { background: transparent; padding: 0; }
+
+@media (max-width: 760px) {
+  .docs__body { grid-template-columns: 1fr; }
+  .docs__sidebar {
+    position: static;
+    max-height: none;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .docs__main { padding: 24px 20px 48px; }
 }

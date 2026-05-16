@@ -3,6 +3,7 @@ import { BrowserRouter, Route, Routes, useParams, useSearchParams } from 'react-
 import { Landing } from './pages/Landing';
 import { Room } from './pages/Room';
 import { DocsPage } from './pages/docs/DocsPage';
+import { DocsLayout } from './pages/docs/DocsLayout';
 import { PreferencesProvider } from './preferences/PreferencesContext';
 import { usePreferences } from './preferences/usePreferences';
 
@@ -35,8 +36,10 @@ export function App() {
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/r/:roomId" element={<RoomRoute />} />
-          <Route path="/docs" element={<DocsPlaceholder />} />
-          <Route path="/docs/:slug" element={<DocsPage />} />
+          <Route path="/docs" element={<DocsLayout />}>
+            <Route index element={<DocsPlaceholder />} />
+            <Route path=":slug" element={<DocsPage />} />
+          </Route>
         </Routes>
       </BrowserRouter>
     </PreferencesProvider>
