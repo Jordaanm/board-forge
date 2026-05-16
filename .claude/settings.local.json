@@ -83,7 +83,9 @@
       "Bash(unzip -o BoardForge-handoff.zip -d /tmp/boardforge/)",
       "Bash(unzip -l BoardForge-handoff.zip)",
       "Bash(aws s3 *)",
-      "Bash(aws cloudfront *)"
+      "Bash(aws cloudfront *)",
+      "Skill(grill-me)",
+      "Skill(grill-me:*)"
     ]
   }
 }

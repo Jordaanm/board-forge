@@ -1,7 +1,5 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 Please keep your answers terse, and don't feel the need to be polite or use flowery language.
 
 All answers should be written in the present tense, and should be as short as possible.
@@ -9,8 +7,8 @@ All answers should be written in the present tense, and should be as short as po
 The documents in the @./planning directory describe the high-level goals and architectureof the project
 
 ## Project
-
-A Virtual Tabletop platform, implemented as a physics sandbox, playable in the browser.
+This project is called "Board Together".
+It is a multiplayer physics sandbox, playable in the browser, intended to playing tabletop games. Users are encouraged to create their own games, similar to Tabletop Simulator.
 The repo will be hosted on Github, and deployed to AWS.
 
 Built using ThreeJS, Typescript, React, and Websockets/WebRTC.
