@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { BrowserRouter, Route, Routes, useParams, useSearchParams } from 'react-router-dom';
 import { Landing } from './pages/Landing';
 import { Room } from './pages/Room';
+import { DocsPage } from './pages/docs/DocsPage';
 import { PreferencesProvider } from './preferences/PreferencesContext';
 import { usePreferences } from './preferences/usePreferences';
 
@@ -35,7 +36,7 @@ export function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/r/:roomId" element={<RoomRoute />} />
           <Route path="/docs" element={<DocsPlaceholder />} />
-          <Route path="/docs/*" element={<DocsPlaceholder />} />
+          <Route path="/docs/:slug" element={<DocsPage />} />
         </Routes>
       </BrowserRouter>
     </PreferencesProvider>

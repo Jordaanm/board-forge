@@ -1,0 +1,50 @@
+/* ─── Docs page (minimal — layout chrome added in Issue #4) ─── */
+
+.docs-page {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 32px 24px;
+  color: var(--ink);
+  background: var(--bg);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base);
+  line-height: 1.6;
+}
+
+.docs-page h1 { font-size: 28px; margin: 0 0 16px; }
+.docs-page h2 { font-size: 22px; margin: 28px 0 12px; }
+.docs-page h3 { font-size: 18px; margin: 24px 0 10px; }
+
+.docs-page p,
+.docs-page ul,
+.docs-page ol { margin: 0 0 14px; }
+
+.docs-page code {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.92em;
+}
+
+.docs-page pre {
+  background: var(--bg-2, #0d1117);
+  border-radius: 6px;
+  padding: 14px 16px;
+  overflow-x: auto;
+  margin: 0 0 16px;
+}
+
+.docs-page pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.docs-page a { color: var(--accent, #2f6feb); }
+
+.docs-page table {
+  border-collapse: collapse;
+  margin: 0 0 16px;
+}
+.docs-page th,
+.docs-page td {
+  border: 1px solid var(--line, #ddd);
+  padding: 6px 10px;
+}
