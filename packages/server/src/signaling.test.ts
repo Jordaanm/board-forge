@@ -147,6 +147,90 @@ describe('room join', () => {
   });
 });
 
+describe('room name', () => {
+  test('joined payload includes default room name derived from host display name', async () => {
+    const host = await connect();
+    const msg = await joinRoom(host, 'room-name-default', 'host', 'Alice');
+    expect((msg.roomSettings as { name: string }).name).toBe("Alice's room");
+    host.close();
+  });
+
+  test('host setRoomName broadcasts roomSettingsUpdated to all members', async () => {
+    const host  = await connect();
+    const guest = await connect();
+    await joinRoom(host, 'room-rename', 'host', 'Alice');
+    const peerJoined = nextMsg(host);
+    await joinRoom(guest, 'room-rename', 'guest', 'Bob');
+    await peerJoined;
+
+    const hostUpdate  = nextMsg(host);
+    const guestUpdate = nextMsg(guest);
+    send(host, { type: 'setRoomName', name: 'D&D night' });
+    const fromHost  = await hostUpdate;
+    const fromGuest = await guestUpdate;
+    expect(fromHost.type).toBe('roomSettingsUpdated');
+    expect(fromHost.name).toBe('D&D night');
+    expect(fromGuest.type).toBe('roomSettingsUpdated');
+    expect(fromGuest.name).toBe('D&D night');
+
+    host.close();
+    guest.close();
+  });
+
+  test('empty / whitespace setRoomName reverts to the default', async () => {
+    const host = await connect();
+    await joinRoom(host, 'room-revert', 'host', 'Alice');
+
+    const u1 = nextMsg(host);
+    send(host, { type: 'setRoomName', name: 'Custom' });
+    expect((await u1).name).toBe('Custom');
+
+    const u2 = nextMsg(host);
+    send(host, { type: 'setRoomName', name: '   ' });
+    expect((await u2).name).toBe("Alice's room");
+
+    host.close();
+  });
+
+  test('guest setRoomName is rejected — no broadcast', async () => {
+    const host  = await connect();
+    const guest = await connect();
+    await joinRoom(host, 'room-guard', 'host', 'Alice');
+    const peerJoined = nextMsg(host);
+    await joinRoom(guest, 'room-guard', 'guest', 'Bob');
+    await peerJoined;
+
+    let received = false;
+    const onAny = () => { received = true; };
+    host.once('message', onAny);
+    guest.once('message', onAny);
+
+    send(guest, { type: 'setRoomName', name: 'pwn' });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(received).toBe(false);
+
+    host.removeListener('message', onAny);
+    guest.removeListener('message', onAny);
+    host.close();
+    guest.close();
+  });
+
+  test('listRooms exposes the current room name', async () => {
+    const host = await connect();
+    await joinRoom(host, 'room-list', 'host', 'Alice');
+    const u = nextMsg(host);
+    send(host, { type: 'setRoomName', name: 'Catan' });
+    await u;
+
+    const res = await fetch(`http://localhost:${PORT}/rooms`);
+    const body = await res.json() as { rooms: { roomId: string; name: string }[] };
+    const found = body.rooms.find(r => r.roomId === 'room-list');
+    expect(found?.name).toBe('Catan');
+
+    host.close();
+  });
+});
+
 describe('display name', () => {
   test('joined echoes the supplied display name', async () => {
     const host = await connect();

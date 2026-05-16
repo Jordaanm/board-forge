@@ -12,6 +12,7 @@ interface RoomInfo {
   roomId:    string;
   occupancy: number;
   capacity:  number;
+  name:      string;
 }
 
 const IconUsers = () => (
@@ -154,7 +155,7 @@ export function Landing() {
                   <Link key={r.roomId} className="landing__room-card"
                         to={`/r/${r.roomId}`}>
                     <div className="landing__room-top">
-                      <span className="landing__room-id">{r.roomId.slice(0, 8)}</span>
+                      <span className="landing__room-id" title={r.name}>{r.name || r.roomId.slice(0, 8)}</span>
                       <span className={`landing__chip ${isFull ? 'landing__chip--full' : ''}`}>
                         <span className="landing__chip-dot"/>{isFull ? 'Full' : 'Open'}
                       </span>

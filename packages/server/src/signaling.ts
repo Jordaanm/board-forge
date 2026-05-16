@@ -1,5 +1,5 @@
 import type { WebSocket } from 'ws';
-import { join, leave, lookup, getMember, getRoomMembers, type Role } from './rooms';
+import { join, leave, lookup, getMember, getRoomMembers, getRoomMetadata, getHostId, type Role } from './rooms';
 
 type Msg = {
   type:          string;
@@ -24,6 +24,11 @@ export function onMessage(ws: WebSocket, raw: string) {
     return;
   }
 
+  if (msg.type === 'setRoomName') {
+    handleSetRoomName(ws, msg);
+    return;
+  }
+
   if (FORWARDABLE.has(msg.type)) {
     handleForward(ws, msg);
   }
@@ -42,18 +47,35 @@ function handleJoin(ws: WebSocket, msg: Msg) {
   }
 
   send(ws, {
-    type:        'joined',
-    peerId:      result.peerId,
+    type:         'joined',
+    peerId:       result.peerId,
     role,
-    hostId:      result.hostId,
+    hostId:       result.hostId,
     displayName,
-    otherPeers:  result.otherPeers,
+    otherPeers:   result.otherPeers,
+    roomSettings: { name: result.roomName },
   });
 
   // Notify existing members of the new peer.
   for (const other of result.otherPeers) {
     const member = getMember(roomId, other.peerId);
     if (member) send(member.ws, { type: 'peer-joined', peerId: result.peerId, role, displayName });
+  }
+}
+
+function handleSetRoomName(ws: WebSocket, msg: Msg) {
+  const info = lookup(ws);
+  if (!info) return;
+  if (getHostId(info.roomId) !== info.peerId) return;
+
+  const metadata = getRoomMetadata(info.roomId);
+  if (!metadata) return;
+
+  const rawName = typeof msg.name === 'string' ? msg.name : '';
+  const stored = metadata.setName(rawName);
+
+  for (const m of getRoomMembers(info.roomId)) {
+    send(m.ws, { type: 'roomSettingsUpdated', name: stored });
   }
 }
 

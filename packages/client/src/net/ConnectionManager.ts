@@ -1,11 +1,16 @@
 type Status = 'connecting' | 'connected' | 'disconnected' | 'room-full';
 type Role   = 'host' | 'guest';
 
-type MsgHandler           = (peerId: string, msg: unknown) => void;
-type StatusHandler        = (s: Status) => void;
-type PeerLeftHandler      = (peerId: string) => void;
-type PeerConnectedHandler = (peerId: string, displayName: string) => void;
-type JoinedHandler        = (peerId: string, hostPeerId: string | null) => void;
+export interface RoomSettings {
+  name: string;
+}
+
+type MsgHandler             = (peerId: string, msg: unknown) => void;
+type StatusHandler          = (s: Status) => void;
+type PeerLeftHandler        = (peerId: string) => void;
+type PeerConnectedHandler   = (peerId: string, displayName: string) => void;
+type JoinedHandler          = (peerId: string, hostPeerId: string | null) => void;
+type RoomSettingsHandler    = (settings: RoomSettings) => void;
 
 type SignalingMsg = { type: string; [k: string]: unknown };
 
@@ -62,12 +67,17 @@ export class ConnectionManager {
   private displayName = '';
 
   constructor(
-    private readonly onMsg:           MsgHandler,
-    private readonly onStatus:        StatusHandler,
-    private readonly onPeerLeft:      PeerLeftHandler      = () => {},
-    private readonly onPeerConnected: PeerConnectedHandler = () => {},
-    private readonly onJoined:        JoinedHandler        = () => {},
+    private readonly onMsg:             MsgHandler,
+    private readonly onStatus:          StatusHandler,
+    private readonly onPeerLeft:        PeerLeftHandler        = () => {},
+    private readonly onPeerConnected:   PeerConnectedHandler   = () => {},
+    private readonly onJoined:          JoinedHandler          = () => {},
+    private readonly onRoomSettings:    RoomSettingsHandler    = () => {},
   ) {}
+
+  setRoomName(name: string) {
+    this.signal({ type: 'setRoomName', name });
+  }
 
   getPeerId(): string | null { return this.peerId; }
   getHostId(): string | null { return this.hostId; }
@@ -158,12 +168,21 @@ export class ConnectionManager {
         for (const p of (msg.otherPeers as { peerId: string; role: Role; displayName?: string }[] | undefined) ?? []) {
           if (typeof p.displayName === 'string') this.peerNames.set(p.peerId, p.displayName);
         }
+        if (msg.roomSettings && typeof (msg.roomSettings as RoomSettings).name === 'string') {
+          this.onRoomSettings(msg.roomSettings as RoomSettings);
+        }
         this.onJoined(this.peerId, this.hostId);
         if (this.role === 'host') {
           // Existing peers (rare path: host joining late) get offers.
           for (const p of msg.otherPeers as { peerId: string; role: Role; displayName?: string }[]) {
             await this.dialPeer(p.peerId);
           }
+        }
+        break;
+
+      case 'roomSettingsUpdated':
+        if (typeof msg.name === 'string') {
+          this.onRoomSettings({ name: msg.name });
         }
         break;
 

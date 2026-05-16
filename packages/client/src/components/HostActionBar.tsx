@@ -13,6 +13,7 @@ import { ScriptConsoleModal } from './ScriptConsoleModal';
 import { AssetManagerModal } from './AssetManagerModal';
 import { GenerateDeckModal, type GenerateDeckRequest } from './GenerateDeckModal';
 import { HostToolsMenu, type MenuEntry } from './HostToolsMenu';
+import { RoomSettingsModal } from './RoomSettingsModal';
 import { type SaveEnvelope } from '../entity/SaveFile';
 import { downloadSceneFile } from '../entity/downloadSceneFile';
 import { type LastLoaded, type SceneHistoryService } from '../entity/SceneHistoryService';
@@ -43,6 +44,9 @@ interface Props {
   turnControls?:        (controlled: { open: boolean; onOpenChange: (o: boolean) => void; hideTrigger: boolean }) => ReactNode;
   // Current turn-tracker state, embedded in the save envelope.
   turns?:               TurnState;
+  // Room name shown in the settings modal and committed via onRenameRoom.
+  roomName:             string;
+  onRenameRoom:         (name: string) => void;
 }
 
 const BAR: React.CSSProperties = {
@@ -89,15 +93,18 @@ export function HostActionBar({
   onPushManifest,
   turnControls,
   turns,
+  roomName,
+  onRenameRoom,
 }: Props) {
-  const [spawnOpen,   setSpawnOpen]   = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [scriptOpen,  setScriptOpen]  = useState(false);
-  const [consoleOpen, setConsoleOpen] = useState(false);
-  const [assetsOpen,  setAssetsOpen]  = useState(false);
-  const [deckOpen,    setDeckOpen]    = useState(false);
-  const [revertOpen,  setRevertOpen]  = useState(false);
-  const [turnsOpen,   setTurnsOpen]   = useState(false);
+  const [spawnOpen,    setSpawnOpen]    = useState(false);
+  const [historyOpen,  setHistoryOpen]  = useState(false);
+  const [scriptOpen,   setScriptOpen]   = useState(false);
+  const [consoleOpen,  setConsoleOpen]  = useState(false);
+  const [assetsOpen,   setAssetsOpen]   = useState(false);
+  const [deckOpen,     setDeckOpen]     = useState(false);
+  const [revertOpen,   setRevertOpen]   = useState(false);
+  const [turnsOpen,    setTurnsOpen]    = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const loadTriggerRef = useRef<{ open: () => void } | null>(null);
 
   const canRevert = lastLoaded !== null;
@@ -124,6 +131,7 @@ export function HostActionBar({
   };
 
   const entries: MenuEntry[] = [
+    { label: 'Room Settings', onClick: () => setSettingsOpen(true) },
     { label: 'Spawn', onClick: () => setSpawnOpen(true) },
     {
       label: 'Game State',
@@ -228,6 +236,13 @@ export function HostActionBar({
         hideTrigger
       />
       {turnControls?.({ open: turnsOpen, onOpenChange: setTurnsOpen, hideTrigger: true })}
+
+      <RoomSettingsModal
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        roomName={roomName}
+        onRenameRoom={onRenameRoom}
+      />
 
       {lastLoaded && (
         <span style={FILE_LABEL}>

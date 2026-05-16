@@ -1,5 +1,6 @@
 import type { WebSocket } from 'ws';
 import { maxRoomPeers } from './config';
+import { RoomMetadata } from './RoomMetadata';
 
 export type Role = 'host' | 'guest';
 
@@ -11,14 +12,16 @@ export interface Member {
 }
 
 interface Room {
-  hostId:  string | null;
-  members: Map<string, Member>;
+  hostId:   string | null;
+  members:  Map<string, Member>;
+  metadata: RoomMetadata;
 }
 
 export interface JoinResult {
   peerId:     string;
   hostId:     string | null;
   otherPeers: { peerId: string; role: Role; displayName: string }[];
+  roomName:   string;
 }
 
 const rooms        = new Map<string, Room>();
@@ -28,7 +31,7 @@ let totalRoomsCreated = 0;
 export function join(roomId: string, role: Role, ws: WebSocket, displayName: string): JoinResult | 'full' {
   let room = rooms.get(roomId);
   if (!room) {
-    room = { hostId: null, members: new Map() };
+    room = { hostId: null, members: new Map(), metadata: new RoomMetadata(displayName) };
     rooms.set(roomId, room);
     totalRoomsCreated++;
   }
@@ -56,7 +59,15 @@ export function join(roomId: string, role: Role, ws: WebSocket, displayName: str
     .filter(m => m.peerId !== peerId)
     .map(m => ({ peerId: m.peerId, role: m.role, displayName: m.displayName }));
 
-  return { peerId, hostId: room.hostId, otherPeers };
+  return { peerId, hostId: room.hostId, otherPeers, roomName: room.metadata.getName() };
+}
+
+export function getRoomMetadata(roomId: string): RoomMetadata | null {
+  return rooms.get(roomId)?.metadata ?? null;
+}
+
+export function getHostId(roomId: string): string | null {
+  return rooms.get(roomId)?.hostId ?? null;
 }
 
 export function getMember(roomId: string, peerId: string): Member | null {
@@ -72,6 +83,7 @@ export interface RoomInfo {
   roomId:    string;
   occupancy: number;
   capacity:  number;
+  name:      string;
 }
 
 export function listRooms(): RoomInfo[] {
@@ -79,6 +91,7 @@ export function listRooms(): RoomInfo[] {
     roomId,
     occupancy: room.members.size,
     capacity:  maxRoomPeers,
+    name:      room.metadata.getName(),
   }));
 }
 

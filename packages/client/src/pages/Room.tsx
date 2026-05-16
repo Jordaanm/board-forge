@@ -64,6 +64,7 @@ export function Room({ roomId, isHost }: Props) {
   const [activeToolId, setActiveToolId] = useState<string>(TOOL_CATALOGUE[0]?.id ?? 'grab');
   const [showAllZones, setShowAllZones] = useState(false);
   const [showSnapPoints, setShowSnapPoints] = useState(false);
+  const [roomName,     setRoomName]     = useState<string>('');
   const [handView, setHandView]         = useState<HandView | null>(null);
   const [lastLoaded, setLastLoaded]     = useState<LastLoaded | null>(null);
   const [historyService, setHistoryService] = useState<SceneHistoryService | null>(null);
@@ -102,6 +103,7 @@ export function Room({ roomId, isHost }: Props) {
   const manifestStoreRef   = useRef<ManifestStore | null>(null);
   const endTurnRef         = useRef<() => void>(noop);
   const dispatchTurnRef    = useRef<(action: TurnAction) => void>(noop);
+  const setRoomNameRef     = useRef<(name: string) => void>(noop);
 
   // Set every render — fine, it's just a ref assignment.
   onContextMenuRef.current   = (req) => setContextMenu(req);
@@ -244,7 +246,9 @@ export function Room({ roomId, isHost }: Props) {
           client.onChange(snap => setRoomSnapshot(snap));
         }
       },
+      (settings) => setRoomName(settings.name),
     );
+    setRoomNameRef.current = (name) => mgr.setRoomName(name);
     sendRef.current     = (msg, opts)         => mgr.send(msg, opts);
     sendToRef.current   = (peerId, msg, opts) => mgr.sendTo(peerId, msg, opts);
     getTargetsRef.current = () => {
@@ -323,9 +327,11 @@ export function Room({ roomId, isHost }: Props) {
       banPeerRef.current       = noop;
       endTurnRef.current       = noop;
       dispatchTurnRef.current  = noop;
+      setRoomNameRef.current   = noop;
       managerRef.current       = null;
       setRoomSnapshot(null);
       setSelfPeerId(null);
+      setRoomName('');
     };
   }, [roomId, isHost]);
 
@@ -493,7 +499,8 @@ export function Room({ roomId, isHost }: Props) {
       <AnchorLayout>
         <UIPanel anchor="top-center" order={0}>
           <div className={`room__status room__status--${status}`}>
-            {STATUS_LABEL[status]}
+            {roomName ? <span className="room__name">{roomName}</span> : null}
+            <span>{STATUS_LABEL[status]}</span>
           </div>
         </UIPanel>
 
@@ -551,6 +558,8 @@ export function Room({ roomId, isHost }: Props) {
                 />
               )}
               turns={roomSnapshot?.turns}
+              roomName={roomName}
+              onRenameRoom={(name) => setRoomNameRef.current(name)}
             />
           </UIPanel>
         )}
