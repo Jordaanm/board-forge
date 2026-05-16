@@ -85,7 +85,15 @@
       "Bash(aws s3 *)",
       "Bash(aws cloudfront *)",
       "Skill(grill-me)",
-      "Skill(grill-me:*)"
+      "Skill(grill-me:*)",
+      "Bash(./node_modules/.bin/vitest run *)",
+      "Bash(head -621 packages/server/src/signaling.test.ts)",
+      "Bash(tail -n +813 packages/server/src/signaling.test.ts)",
+      "Bash(cd d:/dev/virtual-table && git diff HEAD -- packages/server/src/signaling.test.ts > /tmp/sig-diff.patch && wc -l /tmp/sig-diff.patch && tail -50 /tmp/sig-diff.patch)",
+      "Bash(curl -s https://api.playboardgam.es/rooms)"
+    ],
+    "additionalDirectories": [
+      "\\tmp"
     ]
   }
 }
