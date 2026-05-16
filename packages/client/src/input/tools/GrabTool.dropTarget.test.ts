@@ -35,6 +35,7 @@ class FakeHandle {
         ? ({ object3d: this.obj, state: { position: [this.obj.position.x, this.obj.position.y, this.obj.position.z], rotation: [0,0,0,1], scale: [1,1,1] } } as unknown)
         : undefined,
       hasComponent: () => false,
+      tryGrab: () => ({ kind: 'self' as const }),
     } as unknown as Entity;
   }
 

@@ -87,6 +87,14 @@ export type MenuItem =
 // Slice #5 (drag rewrite) wires this up; opaque for slice #1.
 export interface CollisionEvent {}
 
+// Discriminated union returned by EntityComponent.onTryGrab / Entity.tryGrab.
+// Expresses what GrabTool should carry at the moment a press commits to a
+// grab: the entity itself, or a child peeled off a container (deck top card,
+// future token piles / dice cups).
+export type GrabIntent =
+  | { kind: 'self' }
+  | { kind: 'peel'; sourceId: string };
+
 export interface ActionContext {
   recipientSeat: SeatIndex | null;
   isHost:        boolean;
@@ -176,6 +184,12 @@ export abstract class EntityComponent<TState extends object> {
   onHoverStart (_payload: InputEventPayload): void { }
   onHoverMove  (_payload: InputEventPayload): void { }
   onHoverEnd   (_payload: InputEventPayload): void { }
+
+  // Grab-intent hook. GrabTool calls this on each of an entity's components
+  // (via Entity.tryGrab) at press-commit time. Return null to defer; the
+  // first non-null result wins. Default is null — the entity itself is
+  // carried. DeckComponent overrides to return a peel intent on short press.
+  onTryGrab(_isLongPress: boolean): GrabIntent | null { return null; }
 
   // Internal — called once by `Entity.attachComponent` immediately after the
   // component is bound to its entity. Routes bus events to the corresponding

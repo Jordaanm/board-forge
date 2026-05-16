@@ -3,7 +3,8 @@
 // View artefacts (THREE meshes, CANNON bodies) live on components, not here.
 
 import { type SeatIndex } from '../seats/SeatLayout';
-import { type EntityComponent, type ComponentClass } from './EntityComponent';
+import { type EntityComponent, type ComponentClass, type GrabIntent } from './EntityComponent';
+import { componentRegistry } from './ComponentRegistry';
 import { type SceneImpl } from './Scene';
 import { EntityEventBus, type Listener } from './EntityEventBus';
 
@@ -112,6 +113,22 @@ export class Entity {
 
   dispatchEvent<T = unknown>(event: string, payload: T): void {
     this.bus.dispatch(event, payload);
+  }
+
+  // Resolve the grab intent for this entity at press-commit time. Walks
+  // components in spawn-iteration order (matches aggregateContextMenu),
+  // returns the first non-null result, falls back to { kind: 'self' }.
+  tryGrab(isLongPress: boolean): GrabIntent {
+    const typeIds = [...this.components.keys()];
+    if (typeIds.length === 0) return { kind: 'self' };
+    const order = componentRegistry.getSpawnOrder(typeIds);
+    for (const cls of order) {
+      const comp = this.components.get(cls.typeId);
+      if (!comp) continue;
+      const intent = comp.onTryGrab(isLongPress);
+      if (intent !== null) return intent;
+    }
+    return { kind: 'self' };
   }
 
   // customData mutators (issue #6 of issues--scripting-v1.md). Each

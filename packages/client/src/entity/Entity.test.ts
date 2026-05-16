@@ -1,6 +1,7 @@
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect, beforeEach } from 'vitest';
 import { Entity, defaultEntityName } from './Entity';
-import { EntityComponent } from './EntityComponent';
+import { EntityComponent, type GrabIntent } from './EntityComponent';
+import { componentRegistry } from './ComponentRegistry';
 
 describe('defaultEntityName', () => {
   test('uses the first 8 chars of the GUID', () => {
@@ -59,6 +60,85 @@ describe('Entity', () => {
     const e = new Entity({ id: 'a', type: 'x', name: 'x' });
     e.attachComponent(new TestComp());
     expect(() => e.attachComponent(new TestComp())).toThrow(/already has component/);
+  });
+});
+
+describe('Entity.tryGrab', () => {
+  beforeEach(() => {
+    componentRegistry.clear();
+  });
+
+  test('returns { kind: "self" } when the entity has no components', () => {
+    const e = new Entity({ id: 'a', type: 'x', name: 'x' });
+    expect(e.tryGrab(false)).toEqual({ kind: 'self' });
+    expect(e.tryGrab(true)).toEqual({ kind: 'self' });
+  });
+
+  test('returns { kind: "self" } when no component opines', () => {
+    class Plain extends EntityComponent<object> {
+      static typeId = 'plain';
+      onSpawn() {}
+      onPropertiesChanged() {}
+    }
+    componentRegistry.register(Plain);
+    const e = new Entity({ id: 'a', type: 'x', name: 'x' });
+    const comp = new Plain();
+    comp.state = {};
+    e.attachComponent(comp);
+    expect(e.tryGrab(false)).toEqual({ kind: 'self' });
+    expect(e.tryGrab(true)).toEqual({ kind: 'self' });
+  });
+
+  test('returns the first non-null component result', () => {
+    class Peeler extends EntityComponent<object> {
+      static typeId = 'peeler';
+      onSpawn() {}
+      onPropertiesChanged() {}
+      onTryGrab(isLongPress: boolean): GrabIntent | null {
+        return isLongPress ? null : { kind: 'peel', sourceId: 'src-1' };
+      }
+    }
+    componentRegistry.register(Peeler);
+    const e = new Entity({ id: 'a', type: 'x', name: 'x' });
+    const comp = new Peeler();
+    comp.state = {};
+    e.attachComponent(comp);
+    expect(e.tryGrab(false)).toEqual({ kind: 'peel', sourceId: 'src-1' });
+    // Long-press: component returns null → fall back to self.
+    expect(e.tryGrab(true)).toEqual({ kind: 'self' });
+  });
+
+  test('walks components in spawn-iteration order; first non-null wins', () => {
+    class First extends EntityComponent<object> {
+      static typeId = 'first';
+      onSpawn() {}
+      onPropertiesChanged() {}
+      onTryGrab(): GrabIntent | null { return null; }
+    }
+    class Second extends EntityComponent<object> {
+      static typeId = 'second';
+      static requires = ['first'] as const;
+      onSpawn() {}
+      onPropertiesChanged() {}
+      onTryGrab(): GrabIntent | null { return { kind: 'peel', sourceId: 'from-second' }; }
+    }
+    class Third extends EntityComponent<object> {
+      static typeId = 'third';
+      static requires = ['second'] as const;
+      onSpawn() {}
+      onPropertiesChanged() {}
+      onTryGrab(): GrabIntent | null { return { kind: 'peel', sourceId: 'from-third' }; }
+    }
+    componentRegistry.register(First);
+    componentRegistry.register(Second);
+    componentRegistry.register(Third);
+    const e = new Entity({ id: 'a', type: 'x', name: 'x' });
+    for (const C of [Third, First, Second]) {
+      const c = new C();
+      c.state = {};
+      e.attachComponent(c);
+    }
+    expect(e.tryGrab(false)).toEqual({ kind: 'peel', sourceId: 'from-second' });
   });
 });
 
