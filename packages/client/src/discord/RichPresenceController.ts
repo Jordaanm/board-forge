@@ -17,7 +17,6 @@ import { getApiUrl, getClientId } from './authConfig';
 
 const RPC_PORT_START = 6463;
 const RPC_PORT_END   = 6472;
-const RPC_ORIGIN     = 'https://discord.com';
 const RPC_VERSION    = '1';
 const RPC_SCOPES     = ['rpc.activities.write'];
 const RPC_THROTTLE_MS = 15_000;
@@ -82,8 +81,9 @@ export class RichPresenceController {
 
   private async tryConnect(port: number): Promise<void> {
     if (port > RPC_PORT_END) {
-      // Exhausted the port range — Discord desktop isn't listening. Quiet
-      // exit; the next start() attempt will retry from the top.
+      // Exhausted the port range — Discord desktop isn't listening, or every
+      // upgrade attempt was rejected (origin not allow-listed for the app).
+      console.warn('[discord-rpc] no RPC port responded — Discord not running, or app RPC Origins missing this page\'s origin');
       this.cleanup();
       this.state = 'stopped';
       return;
@@ -91,8 +91,13 @@ export class RichPresenceController {
     const url = `ws://127.0.0.1:${port}/?v=${RPC_VERSION}&client_id=${encodeURIComponent(getClientId())}`;
     let ws: WebSocket;
     try {
-      ws = new WebSocket(url, RPC_ORIGIN);
-    } catch {
+      // No subprotocol — Discord's RPC server checks the `Origin` header
+      // against the app's RPC Origins allowlist (configured in the dev
+      // portal). The browser sets Origin automatically from the page URL,
+      // so the page origin must be listed there for the upgrade to succeed.
+      ws = new WebSocket(url);
+    } catch (err) {
+      console.warn('[discord-rpc] WebSocket ctor threw on port', port, err);
       void this.tryConnect(port + 1);
       return;
     }
@@ -143,7 +148,10 @@ export class RichPresenceController {
     if (frame.cmd === 'AUTHORIZE' && this.state === 'authorizing') {
       const data = frame.data as { code?: unknown } | undefined;
       const code = typeof data?.code === 'string' ? data.code : null;
-      if (code === null) { this.cleanup(); this.state = 'stopped'; return; }
+      if (code === null) {
+        console.warn('[discord-rpc] AUTHORIZE returned no code', frame);
+        this.cleanup(); this.state = 'stopped'; return;
+      }
       void this.exchangeAndAuthenticate(code);
       return;
     }
@@ -155,6 +163,7 @@ export class RichPresenceController {
     }
 
     if (frame.cmd === 'DISPATCH' && frame.evt === 'ERROR') {
+      console.warn('[discord-rpc] ERROR dispatch from Discord', frame);
       this.cleanup();
       this.state = 'stopped';
     }
@@ -168,11 +177,18 @@ export class RichPresenceController {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ grant_type: 'authorization_code', code, flow: 'rpc' }),
       });
-      if (!res.ok) { this.cleanup(); this.state = 'stopped'; return; }
+      if (!res.ok) {
+        console.warn('[discord-rpc] RPC code exchange failed', res.status);
+        this.cleanup(); this.state = 'stopped'; return;
+      }
       const body = await res.json() as { access_token?: unknown };
-      if (typeof body.access_token !== 'string') { this.cleanup(); this.state = 'stopped'; return; }
+      if (typeof body.access_token !== 'string') {
+        console.warn('[discord-rpc] RPC code exchange returned no access_token', body);
+        this.cleanup(); this.state = 'stopped'; return;
+      }
       accessToken = body.access_token;
-    } catch {
+    } catch (err) {
+      console.warn('[discord-rpc] RPC code exchange threw', err);
       this.cleanup(); this.state = 'stopped'; return;
     }
     if (this.ws === null) return;
