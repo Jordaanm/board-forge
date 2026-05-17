@@ -58,6 +58,25 @@ async function mintCloudflareTurn(): Promise<IceServer[]> {
   return Array.isArray(body.iceServers) ? body.iceServers : [body.iceServers];
 }
 
+// Discord OAuth.
+//
+// DISCORD_CLIENT_ID / DISCORD_CLIENT_SECRET — credentials from the Discord
+// developer portal. The client never sees the secret; only this server uses
+// it when exchanging an authorization code (or refresh token) for tokens at
+// POST /oauth/discord/exchange.
+//
+// DISCORD_REDIRECT_URI_ALLOWLIST — CSV of redirect URIs we will accept from
+// callers and forward to Discord. Defense-in-depth on top of Discord's own
+// redirect_uri check.
+export const discordClientId          = process.env.DISCORD_CLIENT_ID     ?? '';
+export const discordClientSecret      = process.env.DISCORD_CLIENT_SECRET ?? '';
+export const discordRedirectAllowlist = new Set(
+  (process.env.DISCORD_REDIRECT_URI_ALLOWLIST ?? '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean),
+);
+
 export async function getIceServers(): Promise<IceServer[]> {
   const stun: IceServer[] = STUN_URLS.length ? [{ urls: STUN_URLS }] : [];
   if (!TURN_KEY_ID || !TURN_API_TOKEN) return stun;

@@ -61,8 +61,10 @@ export class ServerStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    const turnKeyId   = ssm.StringParameter.fromSecureStringParameterAttributes(this, 'TurnKeyId',   { parameterName: '/boardtogether/turn/key_id' });
-    const turnApiTok  = ssm.StringParameter.fromSecureStringParameterAttributes(this, 'TurnApiToken', { parameterName: '/boardtogether/turn/api_token' });
+    const turnKeyId         = ssm.StringParameter.fromSecureStringParameterAttributes(this, 'TurnKeyId',          { parameterName: '/boardtogether/turn/key_id' });
+    const turnApiTok        = ssm.StringParameter.fromSecureStringParameterAttributes(this, 'TurnApiToken',       { parameterName: '/boardtogether/turn/api_token' });
+    const discordClientId   = ssm.StringParameter.fromSecureStringParameterAttributes(this, 'DiscordClientId',    { parameterName: '/boardtogether/discord/client_id' });
+    const discordClientSec  = ssm.StringParameter.fromSecureStringParameterAttributes(this, 'DiscordClientSecret', { parameterName: '/boardtogether/discord/client_secret' });
 
     const taskDef = new ecs.FargateTaskDefinition(this, 'TaskDef', {
       cpu:            256,
@@ -76,10 +78,13 @@ export class ServerStack extends cdk.Stack {
       environment:  {
         NODE_ENV: 'production',
         PORT:     '3001',
+        DISCORD_REDIRECT_URI_ALLOWLIST: `https://${rootDomain}/auth/discord/callback`,
       },
       secrets: {
-        TURN_KEY_ID:    ecs.Secret.fromSsmParameter(turnKeyId),
-        TURN_API_TOKEN: ecs.Secret.fromSsmParameter(turnApiTok),
+        TURN_KEY_ID:           ecs.Secret.fromSsmParameter(turnKeyId),
+        TURN_API_TOKEN:        ecs.Secret.fromSsmParameter(turnApiTok),
+        DISCORD_CLIENT_ID:     ecs.Secret.fromSsmParameter(discordClientId),
+        DISCORD_CLIENT_SECRET: ecs.Secret.fromSsmParameter(discordClientSec),
       },
     });
 

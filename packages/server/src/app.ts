@@ -4,14 +4,22 @@ import { WebSocketServer } from 'ws';
 import { onMessage, onClose, setClientIp } from './signaling';
 import { getIceServers } from './config';
 import { listRooms, getTotalRoomsCreated } from './rooms';
+import { handleDiscordExchange } from './discordOAuth';
 
 const app = express();
 
-app.use((_req, res, next) => {
+app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin',  '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') {
+    res.status(204).end();
+    return;
+  }
   next();
 });
+
+app.use(express.json({ limit: '8kb' }));
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
@@ -30,6 +38,8 @@ app.get('/ice-config', async (_req, res) => {
 app.get('/rooms', (_req, res) => {
   res.json({ rooms: listRooms(), totalRoomsCreated: getTotalRoomsCreated() });
 });
+
+app.post('/oauth/discord/exchange', handleDiscordExchange);
 
 export const server = createServer(app);
 
