@@ -126,6 +126,23 @@
   letter-spacing: -0.02em;
 }
 
+.landing__avatar--btn {
+  padding: 0;
+  cursor: pointer;
+  overflow: hidden;
+  font-family: inherit;
+  transition: transform 120ms ease, box-shadow 160ms ease;
+}
+.landing__avatar--btn:hover  { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.landing__avatar--btn:active { transform: translateY(0); }
+
+.landing__avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 .landing__card {
   flex: 1 0 auto;
   width: 100%;

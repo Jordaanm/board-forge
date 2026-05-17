@@ -4,6 +4,8 @@ import { AnchorLayout } from '../components/AnchorLayout';
 import { PreferencesModal } from '../components/PreferencesModal';
 import { DisplayNamePromptModal } from '../components/DisplayNamePromptModal';
 import { JoinPasswordModal } from '../components/JoinPasswordModal';
+import { ProfileModal } from '../components/ProfileModal';
+import { useDiscordAuth } from '../discord/DiscordAuthProvider';
 import { hasPromptedDisplayName, loadDisplayName } from '../identity/displayName';
 import './Landing.css';
 
@@ -73,9 +75,11 @@ export function Landing() {
   const [totalTables,  setTotalTables]  = useState(0);
   const [loading,      setLoading]      = useState(true);
   const [prefsOpen,    setPrefsOpen]    = useState(false);
+  const [profileOpen,  setProfileOpen]  = useState(false);
   const [namePromptOpen, setNamePromptOpen] = useState(() => !hasPromptedDisplayName());
   const [passwordPromptRoomId, setPasswordPromptRoomId] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState(() => loadDisplayName());
+  const { profile, isSignedIn } = useDiscordAuth();
 
   // Re-read the persisted name once the prompt closes so the avatar
   // reflects what the user just saved (or skipped to auto-generated).
@@ -134,7 +138,17 @@ export function Landing() {
                       onClick={() => setPrefsOpen(true)}>
                 <IconSettings size={18}/>
               </button>
-              <div className="landing__avatar" title={displayName}>{initial}</div>
+              <button
+                type="button"
+                className="landing__avatar landing__avatar--btn"
+                title={isSignedIn && profile ? `${profile.displayNameSeed} · Profile` : `${displayName} · Profile`}
+                aria-label="Profile"
+                onClick={() => setProfileOpen(true)}
+              >
+                {isSignedIn && profile?.avatarUrl
+                  ? <img src={profile.avatarUrl} alt="" className="landing__avatar-img" />
+                  : initial}
+              </button>
             </div>
           </div>
         </header>
@@ -219,6 +233,7 @@ export function Landing() {
         </footer>
       </div>
       <PreferencesModal open={prefsOpen} onOpenChange={setPrefsOpen}/>
+      <ProfileModal open={profileOpen} onOpenChange={setProfileOpen}/>
       <DisplayNamePromptModal open={namePromptOpen} onOpenChange={setNamePromptOpen}/>
       <JoinPasswordModal
         roomId={passwordPromptRoomId}
