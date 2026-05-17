@@ -5,8 +5,8 @@
 // URL. The /auth/discord/callback page calls completeCallback() to finish
 // the round-trip.
 
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
-import { TokenStore } from './tokenStore';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { TokenStore, type TokenSet } from './tokenStore';
 import { mapProfile, type DiscordProfile } from './profileMapper';
 import { generatePkcePair } from './pkce';
 import { encodeState, decodeState, generateNonce } from './oauthState';
@@ -20,10 +20,14 @@ import {
 } from './authConfig';
 
 export interface DiscordAuthContextValue {
-  profile:    DiscordProfile | null;
-  isSignedIn: boolean;
-  signIn:     (returnUrl?: string) => Promise<void>;
-  signOut:    () => void;
+  profile:        DiscordProfile | null;
+  isSignedIn:     boolean;
+  // True after a silent token refresh has rejected to consumers — the user's
+  // session is no longer usable and they must sign in again. Cleared on a
+  // successful sign-in or an explicit sign-out.
+  refreshFailed:  boolean;
+  signIn:         (returnUrl?: string) => Promise<void>;
+  signOut:        () => void;
   // Used by DiscordCallbackPage. Returns the decoded returnUrl on success
   // so the page can navigate the user back where they came from.
   completeCallback: (code: string, stateParam: string) => Promise<string>;
@@ -32,8 +36,48 @@ export interface DiscordAuthContextValue {
 const DiscordAuthContext = createContext<DiscordAuthContextValue | null>(null);
 
 export function DiscordAuthProvider({ children }: { children: ReactNode }) {
-  const tokenStoreRef                    = useRef<TokenStore>(new TokenStore());
-  const [profile, setProfile]            = useState<DiscordProfile | null>(null);
+  const tokenStoreRef                          = useRef<TokenStore>(new TokenStore());
+  const [profile, setProfile]                  = useState<DiscordProfile | null>(null);
+  const [refreshFailed, setRefreshFailed]      = useState<boolean>(false);
+
+  // Plug the network-bound refresh callback into the in-memory token store on
+  // mount. Single-flight + skew logic already live inside TokenStore (#1);
+  // this slice contributes the actual POST + the failure signal that drives
+  // the refresh-failure banner.
+  useEffect(() => {
+    const store = tokenStoreRef.current;
+    store.setRefreshFn(async (refreshToken: string): Promise<TokenSet> => {
+      const res = await fetch(`${getApiUrl()}/oauth/discord/exchange`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ grant_type: 'refresh_token', refresh_token: refreshToken }),
+      });
+      if (!res.ok) {
+        // Surface to consumers; the catch below flips the banner. Tokens are
+        // left in place so any later getAccessToken can attempt a fresh
+        // refresh — the banner persists until sign-in or sign-out resets it.
+        setRefreshFailed(true);
+        throw new Error(`refresh_failed_${res.status}`);
+      }
+      const body = await res.json() as {
+        access_token?:  unknown;
+        refresh_token?: unknown;
+        expires_in?:    unknown;
+      };
+      if (typeof body.access_token !== 'string' || typeof body.expires_in !== 'number') {
+        setRefreshFailed(true);
+        throw new Error('refresh_invalid');
+      }
+      return {
+        accessToken:  body.access_token,
+        // Discord may omit refresh_token on a refresh response; keep the old
+        // one in that case so future refreshes still have credentials.
+        refreshToken: typeof body.refresh_token === 'string' ? body.refresh_token : refreshToken,
+        expiresAt:    Date.now() + body.expires_in * 1000,
+      };
+    });
+    return () => store.setRefreshFn(null);
+  }, []);
 
   const signIn = useCallback(async (returnUrl?: string) => {
     const clientId = getClientId();
@@ -68,6 +112,7 @@ export function DiscordAuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(() => {
     tokenStoreRef.current.clear();
     setProfile(null);
+    setRefreshFailed(false);
   }, []);
 
   const completeCallback = useCallback(async (code: string, stateParam: string): Promise<string> => {
@@ -128,6 +173,8 @@ export function DiscordAuthProvider({ children }: { children: ReactNode }) {
       markDisplayNameCustomised();
     }
     setProfile(mapped);
+    // A fresh sign-in moots any prior refresh-failure banner.
+    setRefreshFailed(false);
 
     // PKCE round-trip done; clear the one-shot state.
     try {
@@ -141,10 +188,11 @@ export function DiscordAuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo<DiscordAuthContextValue>(() => ({
     profile,
     isSignedIn: profile !== null,
+    refreshFailed,
     signIn,
     signOut,
     completeCallback,
-  }), [profile, signIn, signOut, completeCallback]);
+  }), [profile, refreshFailed, signIn, signOut, completeCallback]);
 
   return (
     <DiscordAuthContext.Provider value={value}>{children}</DiscordAuthContext.Provider>

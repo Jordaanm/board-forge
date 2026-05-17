@@ -9,6 +9,7 @@ import { DiscordCallbackPage } from './pages/DiscordCallbackPage';
 import { PreferencesProvider } from './preferences/PreferencesContext';
 import { usePreferences } from './preferences/usePreferences';
 import { DiscordAuthProvider } from './discord/DiscordAuthProvider';
+import { DiscordRefreshBanner } from './components/DiscordRefreshBanner';
 
 function ThemeBinder() {
   const { resolvedTheme } = usePreferences();
@@ -33,6 +34,7 @@ export function App() {
       <DiscordAuthProvider>
         <ThemeBinder/>
         <BrowserRouter>
+          <DiscordRefreshBanner />
           <Routes>
             <Route path="/" element={<Landing />} />
             <Route path="/r/:roomId" element={<RoomRoute />} />
