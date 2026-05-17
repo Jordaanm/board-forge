@@ -207,7 +207,7 @@ export class GrabTool implements Tool {
     if (this.pending) {
       const dx = e.clientX - this.pending.startX;
       const dy = e.clientY - this.pending.startY;
-      if (dx * dx + dy * dy > GRAB_MOVE_THRESHOLD_PX * GRAB_MOVE_THRESHOLD_PX) this.beginCarry(this.pending, ctx);
+      if (dx * dx + dy * dy > GRAB_MOVE_THRESHOLD_PX * GRAB_MOVE_THRESHOLD_PX) this.beginCarry(this.pending, ctx, false);
     }
     if (!this.carry && !this.pendingPeel) return;
     ctx.raycaster.set(e.ray.origin, e.ray.direction);
@@ -277,7 +277,7 @@ export class GrabTool implements Tool {
   // ── Per-frame tick ─────────────────────────────────────────────────────
   update(_dt: number, ctx: ToolContext): void {
     if (this.pending && performance.now() - this.pending.startT >= GRAB_LONG_PRESS_MS) {
-      this.beginCarry(this.pending, ctx);
+      this.beginCarry(this.pending, ctx, true);
     }
 
     // PendingPeel → Carry transition. Mirrors the host hold-claim echo wait
@@ -380,14 +380,18 @@ export class GrabTool implements Tool {
   // Promote a pending pointer down to a hold attempt. Sends the hold-claim
   // (host: synchronous; guest: RPC). Carry is "inactive" until the host's
   // echo flips heldBy(); update() activates it on the next tick.
-  private beginCarry(p: Pending, ctx: ToolContext): void {
+  // `isLongPress` is decided by the trigger, not the clock: onMove past the
+  // distance threshold passes false (fast move = short press), update()'s
+  // timer passes true (held without movement = long press). Mixing the two
+  // — e.g. classifying a slow drag past 150ms as long-press — silently
+  // suppresses peel intent and carries the whole deck instead.
+  private beginCarry(p: Pending, ctx: ToolContext, isLongPress: boolean): void {
     this.pending = null;
     if (!p.handle.canStartDrag()) return;
     const seat = ctx.getSelfSeat();
     if (seat === null) return;
 
-    const isLongPress = performance.now() - p.startT >= GRAB_LONG_PRESS_MS;
-    const intent      = p.handle.entity.tryGrab(isLongPress);
+    const intent = p.handle.entity.tryGrab(isLongPress);
     if (intent.kind === 'peel') {
       this.beginPeel(p, intent.sourceId, ctx, seat);
       return;

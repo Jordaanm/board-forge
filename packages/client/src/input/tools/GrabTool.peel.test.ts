@@ -265,6 +265,27 @@ describe('GrabTool — short-press peel on a deck', () => {
     expect(die.holds).toEqual([0]);
   });
 
+  test('slow drag past the long-press window still peels — move-triggered carries are short-press regardless of elapsed time', () => {
+    // Regression: previously beginCarry computed isLongPress from the wall
+    // clock, so a drag whose first move event fired >150ms after press was
+    // classified as long-press and grabbed the whole deck. Move-triggered
+    // commits must always be short-press (= peel intent).
+    const deck = new FakeHandle('deck-1', 'deck', [0, 0.5, 0]);
+    scene.add(deck.obj);
+    const { world, fake } = makeWorld([deck]);
+    const ctx = makeCtx(world, camera, scene, canvas);
+    tool.onActivate(ctx);
+
+    const t0 = performance.now();
+    tool.onPress(pointerEvent({ timestamp: t0 }), ctx);
+    // Move arrives >150ms after press. No update() call in between so the
+    // pending pointer is still alive when the move commits.
+    tool.onMove(pointerEvent({ timestamp: t0 + 250, clientX: 100, clientY: 100, worldX: 1 }), ctx);
+
+    expect(fake.peelCalls).toEqual([{ deckId: 'deck-1', seat: 0 }]);
+    expect(deck.holds).toEqual([]);
+  });
+
   test('host rejection (null reply) silently resets the tool — no Carry begins', async () => {
     const deck = new FakeHandle('deck-1', 'deck', [0, 0.5, 0]);
     scene.add(deck.obj);
