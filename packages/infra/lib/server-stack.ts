@@ -78,7 +78,7 @@ export class ServerStack extends cdk.Stack {
       environment:  {
         NODE_ENV: 'production',
         PORT:     '3001',
-        DISCORD_REDIRECT_URI_ALLOWLIST: `https://${rootDomain}/auth/discord/callback`,
+        DISCORD_REDIRECT_URI_ALLOWLIST: `https://${rootDomain}/auth/discord/callback,https://www.${rootDomain}/auth/discord/callback`,
       },
       secrets: {
         TURN_KEY_ID:           ecs.Secret.fromSsmParameter(turnKeyId),
