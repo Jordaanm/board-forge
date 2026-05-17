@@ -81,11 +81,12 @@ export function Landing() {
   const [displayName, setDisplayName] = useState(() => loadDisplayName());
   const { profile, isSignedIn } = useDiscordAuth();
 
-  // Re-read the persisted name once the prompt closes so the avatar
-  // reflects what the user just saved (or skipped to auto-generated).
+  // Re-read the persisted name once a name-affecting surface closes (or the
+  // Discord profile lands after a sign-in seed) so the avatar reflects
+  // whatever the user just saved.
   useEffect(() => {
-    if (!namePromptOpen) setDisplayName(loadDisplayName());
-  }, [namePromptOpen]);
+    if (!namePromptOpen && !profileOpen) setDisplayName(loadDisplayName());
+  }, [namePromptOpen, profileOpen, profile]);
 
   const initial = (Array.from(displayName.trim())[0] ?? '?').toUpperCase();
 

@@ -11,6 +11,9 @@ import { mapProfile, type DiscordProfile } from './profileMapper';
 import { generatePkcePair } from './pkce';
 import { encodeState, decodeState, generateNonce } from './oauthState';
 import {
+  hasCustomisedDisplayName, markDisplayNameCustomised, saveDisplayName,
+} from '../identity/displayName';
+import {
   DISCORD_OAUTH_AUTHORIZE_URL, DISCORD_USERS_ME_URL,
   SIGN_IN_SCOPES, SS_VERIFIER, SS_NONCE,
   getRedirectUri, getClientId, getApiUrl,
@@ -116,6 +119,14 @@ export function DiscordAuthProvider({ children }: { children: ReactNode }) {
     const rawProfile = await profileRes.json() as unknown;
     const mapped     = mapProfile(rawProfile);
     if (mapped === null) throw new Error('profile_invalid');
+
+    // Seed the local display name from Discord on first sign-in. The
+    // customised flag covers both an explicit pick in the first-run prompt
+    // and a previously-seeded sign-in, so we never clobber either.
+    if (!hasCustomisedDisplayName()) {
+      saveDisplayName(mapped.displayNameSeed);
+      markDisplayNameCustomised();
+    }
     setProfile(mapped);
 
     // PKCE round-trip done; clear the one-shot state.

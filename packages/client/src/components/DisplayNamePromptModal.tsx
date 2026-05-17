@@ -5,6 +5,7 @@ import {
   MAX_DISPLAY_NAME_LENGTH,
   generateDisplayName,
   loadDisplayName,
+  markDisplayNameCustomised,
   markDisplayNamePrompted,
   saveDisplayName,
 } from '../identity/displayName';
@@ -115,8 +116,12 @@ export function DisplayNamePromptModal({ open, onOpenChange }: Props) {
 
   const commit = (raw: string) => {
     const trimmed = raw.trim();
-    if (trimmed === '') saveDisplayName(generateDisplayName());
-    else                saveDisplayName(trimmed);
+    if (trimmed === '') {
+      saveDisplayName(generateDisplayName());
+    } else {
+      saveDisplayName(trimmed);
+      markDisplayNameCustomised();
+    }
     markDisplayNamePrompted();
     onOpenChange(false);
   };

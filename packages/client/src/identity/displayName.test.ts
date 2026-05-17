@@ -2,8 +2,10 @@
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   generateDisplayName,
+  hasCustomisedDisplayName,
   hasPromptedDisplayName,
   loadDisplayName,
+  markDisplayNameCustomised,
   markDisplayNamePrompted,
   MAX_DISPLAY_NAME_LENGTH,
   sanitiseDisplayName,
@@ -92,6 +94,19 @@ describe('displayName storage', () => {
     expect(hasPromptedDisplayName()).toBe(false);
     saveDisplayName('Dora');
     expect(hasPromptedDisplayName()).toBe(false);
+  });
+
+  test('hasCustomisedDisplayName is false until markDisplayNameCustomised', () => {
+    expect(hasCustomisedDisplayName()).toBe(false);
+    markDisplayNameCustomised();
+    expect(hasCustomisedDisplayName()).toBe(true);
+  });
+
+  test('hasCustomisedDisplayName is independent of saveDisplayName', () => {
+    saveDisplayName('Greta');
+    expect(hasCustomisedDisplayName()).toBe(false);
+    markDisplayNameCustomised();
+    expect(hasCustomisedDisplayName()).toBe(true);
   });
 
   test('loadDisplayName swallows localStorage.getItem throw', () => {

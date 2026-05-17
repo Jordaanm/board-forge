@@ -3,8 +3,13 @@
 // persists it, so callers can always assume a usable string. The lobby shows
 // a one-time prompt the first time `hasPromptedDisplayName` is false.
 
-const NAME_KEY     = 'vt:displayName';
-const PROMPTED_KEY = 'vt:displayName:prompted';
+const NAME_KEY       = 'vt:displayName';
+const PROMPTED_KEY   = 'vt:displayName:prompted';
+// Set when the user explicitly picks a name (typed it in
+// DisplayNamePromptModal, edited it in ProfileModal, or implicitly accepted
+// the Discord seed). Used by the Discord sign-in seed to avoid clobbering a
+// name the user has already customised.
+const CUSTOMISED_KEY = 'vt:displayName:customised';
 
 const ALPHABET = 'ABCDEFGHIJKLMNPQRSTUVWXYZ123456789';
 
@@ -65,4 +70,16 @@ export function markDisplayNamePrompted(): void {
   writeRaw(PROMPTED_KEY, '1');
 }
 
-export const STORAGE_KEYS = { name: NAME_KEY, prompted: PROMPTED_KEY };
+export function hasCustomisedDisplayName(): boolean {
+  return readRaw(CUSTOMISED_KEY) === '1';
+}
+
+export function markDisplayNameCustomised(): void {
+  writeRaw(CUSTOMISED_KEY, '1');
+}
+
+export const STORAGE_KEYS = {
+  name:       NAME_KEY,
+  prompted:   PROMPTED_KEY,
+  customised: CUSTOMISED_KEY,
+};
