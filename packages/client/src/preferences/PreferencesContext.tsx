@@ -3,16 +3,18 @@ import { load, save } from './storage';
 import { DEFAULT_HOTKEYS, DEFAULT_PREFERENCES, type ActionName, type DarkMode, type HotkeyMap, type Preferences, type RotateAmount } from './types';
 
 export interface PreferencesContextValue {
-  darkMode:        DarkMode;
-  rotateAmount:    RotateAmount;
-  hotkeys:         HotkeyMap;
-  resolvedTheme:   'light' | 'dark';
-  setDarkMode:     (mode: DarkMode) => void;
-  setRotateAmount: (amount: RotateAmount) => void;
+  darkMode:               DarkMode;
+  rotateAmount:           RotateAmount;
+  hotkeys:                HotkeyMap;
+  resolvedTheme:          'light' | 'dark';
+  discordPresenceEnabled: boolean;
+  setDarkMode:            (mode: DarkMode) => void;
+  setRotateAmount:        (amount: RotateAmount) => void;
   // `key` is a lower-case single char, or `''` to unbind. Any conflicting
   // binding on a different action is cleared (no swap).
-  setHotkey:       (action: ActionName, key: string) => void;
-  reset:           () => void;
+  setHotkey:              (action: ActionName, key: string) => void;
+  setDiscordPresenceEnabled: (on: boolean) => void;
+  reset:                  () => void;
 }
 
 export const PreferencesContext = createContext<PreferencesContextValue | null>(null);
@@ -77,6 +79,14 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const setDiscordPresenceEnabled = useCallback((on: boolean) => {
+    setPrefs(prev => {
+      const next = { ...prev, discordPresenceEnabled: on };
+      save(next);
+      return next;
+    });
+  }, []);
+
   const reset = useCallback(() => {
     const next: Preferences = { ...DEFAULT_PREFERENCES, hotkeys: { ...DEFAULT_HOTKEYS } };
     save(next);
@@ -84,15 +94,17 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo<PreferencesContextValue>(() => ({
-    darkMode:      prefs.darkMode,
-    rotateAmount:  prefs.rotateAmount,
-    hotkeys:       prefs.hotkeys,
-    resolvedTheme: deriveResolvedTheme(prefs.darkMode, systemTheme),
+    darkMode:               prefs.darkMode,
+    rotateAmount:           prefs.rotateAmount,
+    hotkeys:                prefs.hotkeys,
+    resolvedTheme:          deriveResolvedTheme(prefs.darkMode, systemTheme),
+    discordPresenceEnabled: prefs.discordPresenceEnabled,
     setDarkMode,
     setRotateAmount,
     setHotkey,
+    setDiscordPresenceEnabled,
     reset,
-  }), [prefs.darkMode, prefs.rotateAmount, prefs.hotkeys, systemTheme, setDarkMode, setRotateAmount, setHotkey, reset]);
+  }), [prefs.darkMode, prefs.rotateAmount, prefs.hotkeys, prefs.discordPresenceEnabled, systemTheme, setDarkMode, setRotateAmount, setHotkey, setDiscordPresenceEnabled, reset]);
 
   return (
     <PreferencesContext.Provider value={value}>

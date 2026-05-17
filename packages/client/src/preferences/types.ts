@@ -32,6 +32,10 @@ export interface Preferences {
   // Single-character key bindings (lower-case). `roll` has no default binding
   // — empty string means "unbound" so the HotkeyDispatcher skips it.
   hotkeys:      HotkeyMap;
+  // Whether to publish "Playing Board Together" Rich Presence via the local
+  // Discord client while in a room. No-op when not signed in or the Discord
+  // desktop client isn't running on this machine.
+  discordPresenceEnabled: boolean;
 }
 
 export const DARK_MODE_VALUES: readonly DarkMode[] = ['system', 'light', 'dark'];
@@ -46,8 +50,9 @@ export const DEFAULT_HOTKEYS: HotkeyMap = {
 };
 
 export const DEFAULT_PREFERENCES: Preferences = {
-  version:      1,
-  darkMode:     'system',
-  rotateAmount: 45,
-  hotkeys:      { ...DEFAULT_HOTKEYS },
+  version:                1,
+  darkMode:               'system',
+  rotateAmount:           45,
+  hotkeys:                { ...DEFAULT_HOTKEYS },
+  discordPresenceEnabled: true,
 };

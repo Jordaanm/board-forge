@@ -56,6 +56,7 @@ describe('preferences storage', () => {
     const prefs: Preferences = {
       version: 1, darkMode: 'light', rotateAmount: 30,
       hotkeys: { ...DEFAULT_HOTKEYS },
+      discordPresenceEnabled: true,
     };
     save(prefs);
     expect(load()).toEqual(prefs);
@@ -82,6 +83,7 @@ describe('preferences storage', () => {
         'lock-toggle': 'k',
         'roll':        '',
       },
+      discordPresenceEnabled: true,
     };
     save(prefs);
     expect(load()).toEqual(prefs);
@@ -126,6 +128,7 @@ describe('preferences storage', () => {
       expect(() => save({
         version: 1, darkMode: 'dark', rotateAmount: 15,
         hotkeys: { ...DEFAULT_HOTKEYS },
+        discordPresenceEnabled: true,
       })).not.toThrow();
       expect(warnSpy).toHaveBeenCalled();
     } finally {

@@ -17,6 +17,9 @@ import { PreferencesTrigger } from '../components/PreferencesTrigger';
 import { load as loadPreferences } from '../preferences/storage';
 import { loadDisplayName } from '../identity/displayName';
 import { useDiscordAuth } from '../discord/DiscordAuthProvider';
+import { RichPresenceController } from '../discord/RichPresenceController';
+import { SEAT_COUNT } from '../seats/RoomStateManager';
+import { usePreferences } from '../preferences/usePreferences';
 import { TOOL_CATALOGUE } from '../input/tools';
 import { type ContextMenuRequest, dispatchMenuAction } from '../input/ContextMenuController';
 import { type MenuItem } from '../entity/EntityComponent';
@@ -74,7 +77,8 @@ export function Room({ roomId, isHost }: Props) {
   const [bans,         setBans]         = useState<PublicBanEntry[]>([]);
   const location = useLocation();
   const joinPassword: string | null = (location.state as { password?: string } | null)?.password ?? null;
-  const { profile } = useDiscordAuth();
+  const { profile, isSignedIn } = useDiscordAuth();
+  const { discordPresenceEnabled } = usePreferences();
   const [handView, setHandView]         = useState<HandView | null>(null);
   const [lastLoaded, setLastLoaded]     = useState<LastLoaded | null>(null);
   const [historyService, setHistoryService] = useState<SceneHistoryService | null>(null);
@@ -370,6 +374,47 @@ export function Room({ roomId, isHost }: Props) {
   // needs to read the latest handle each call).
   const handleRef = useRef<SceneHandle | null>(null);
   useEffect(() => { handleRef.current = handle; }, [handle]);
+
+  // Discord Rich Presence — start a controller while signed in + toggle on,
+  // stop on either turning off. The presence string itself is refreshed via
+  // the snapshot-watching effect below; the controller throttles internally.
+  const presenceRef    = useRef<RichPresenceController | null>(null);
+  const joinedAtMsRef  = useRef<number>(0);
+  useEffect(() => {
+    if (!isSignedIn || !discordPresenceEnabled) return;
+    const ctrl = new RichPresenceController();
+    presenceRef.current   = ctrl;
+    joinedAtMsRef.current = Date.now();
+    // Seed with placeholder counts — the snapshot effect below replaces
+    // these as soon as room-state arrives.
+    ctrl.start({
+      roomName:    roomName || 'Room',
+      playerCount: 1,
+      capacity:    SEAT_COUNT,
+      joinedAtMs:  joinedAtMsRef.current,
+      logoKey:     'board_together_logo',
+    });
+    return () => {
+      ctrl.stop();
+      presenceRef.current = null;
+    };
+  }, [isSignedIn, discordPresenceEnabled]);
+
+  // Refresh the presence whenever the snapshot or room name changes.
+  useEffect(() => {
+    const ctrl = presenceRef.current;
+    if (!ctrl) return;
+    const playerCount = roomSnapshot
+      ? roomSnapshot.seats.filter(s => s.peerId !== null).length
+      : 1;
+    ctrl.update({
+      roomName:    roomName || 'Room',
+      playerCount,
+      capacity:    SEAT_COUNT,
+      joinedAtMs:  joinedAtMsRef.current || Date.now(),
+      logoKey:     'board_together_logo',
+    });
+  }, [roomSnapshot, roomName, isSignedIn, discordPresenceEnabled]);
 
   // Clear selection if the selected object is removed
   useEffect(() => {

@@ -151,4 +151,36 @@ describe('POST /oauth/discord/exchange', () => {
     expect(await res.json()).toEqual({ error: 'invalid_request' });
     expect(calls).toHaveLength(0);
   });
+
+  test('rpc flow exchanges without code_verifier or allowlist check', async () => {
+    stubFetch({
+      status: 200,
+      body:   { access_token: 'rpc-at', refresh_token: 'rpc-rt', expires_in: 604800 },
+    });
+
+    const res = await post({
+      grant_type: 'authorization_code',
+      code:       'rpc-code',
+      flow:       'rpc',
+    });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ access_token: 'rpc-at', refresh_token: 'rpc-rt', expires_in: 604800 });
+
+    const form = new URLSearchParams(calls[0].init?.body as string);
+    expect(form.get('grant_type')).toBe('authorization_code');
+    expect(form.get('code')).toBe('rpc-code');
+    expect(form.get('redirect_uri')).toBe('');
+    expect(form.has('code_verifier')).toBe(false);
+  });
+
+  test('rpc flow still rejects when code is missing', async () => {
+    stubFetch({ status: 200, body: {} });
+
+    const res = await post({ grant_type: 'authorization_code', flow: 'rpc' });
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'invalid_request' });
+    expect(calls).toHaveLength(0);
+  });
 });

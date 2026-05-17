@@ -40,19 +40,35 @@ export async function handleDiscordExchange(req: Request, res: Response): Promis
   form.set('client_secret', discordClientSecret);
 
   if (grantType === 'authorization_code') {
-    const { code, code_verifier, redirect_uri } = body;
-    if (!isNonEmptyString(code) || !isNonEmptyString(code_verifier) || !isNonEmptyString(redirect_uri)) {
+    const { code, code_verifier, redirect_uri, flow } = body;
+    if (!isNonEmptyString(code)) {
       res.status(400).json({ error: 'invalid_request' });
       return;
     }
-    if (!discordRedirectAllowlist.has(redirect_uri)) {
-      res.status(400).json({ error: 'redirect_uri_not_allowed' });
-      return;
+    // The RPC flow uses a code returned from Discord's local AUTHORIZE
+    // handshake. The code never round-trips through a browser redirect, so
+    // PKCE and the redirect-URI allowlist don't apply — only the local
+    // socket binding gates issuance, plus the upstream client_secret check.
+    if (flow === 'rpc') {
+      form.set('grant_type', 'authorization_code');
+      form.set('code',       code);
+      // Discord requires the field even though there's no real redirect;
+      // empty string is the documented placeholder for RPC.
+      form.set('redirect_uri', '');
+    } else {
+      if (!isNonEmptyString(code_verifier) || !isNonEmptyString(redirect_uri)) {
+        res.status(400).json({ error: 'invalid_request' });
+        return;
+      }
+      if (!discordRedirectAllowlist.has(redirect_uri)) {
+        res.status(400).json({ error: 'redirect_uri_not_allowed' });
+        return;
+      }
+      form.set('grant_type',    'authorization_code');
+      form.set('code',          code);
+      form.set('code_verifier', code_verifier);
+      form.set('redirect_uri',  redirect_uri);
     }
-    form.set('grant_type',    'authorization_code');
-    form.set('code',          code);
-    form.set('code_verifier', code_verifier);
-    form.set('redirect_uri',  redirect_uri);
   } else if (grantType === 'refresh_token') {
     const { refresh_token } = body;
     if (!isNonEmptyString(refresh_token)) {

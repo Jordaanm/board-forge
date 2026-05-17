@@ -71,10 +71,13 @@ export function load(): Preferences {
   }
 
   return {
-    version:      1,
-    darkMode:     isDarkMode(obj.darkMode)         ? obj.darkMode     : DEFAULT_PREFERENCES.darkMode,
-    rotateAmount: isRotateAmount(obj.rotateAmount) ? obj.rotateAmount : DEFAULT_PREFERENCES.rotateAmount,
-    hotkeys:      sanitiseHotkeys(obj.hotkeys),
+    version:                1,
+    darkMode:               isDarkMode(obj.darkMode)         ? obj.darkMode     : DEFAULT_PREFERENCES.darkMode,
+    rotateAmount:           isRotateAmount(obj.rotateAmount) ? obj.rotateAmount : DEFAULT_PREFERENCES.rotateAmount,
+    hotkeys:                sanitiseHotkeys(obj.hotkeys),
+    discordPresenceEnabled: typeof obj.discordPresenceEnabled === 'boolean'
+      ? obj.discordPresenceEnabled
+      : DEFAULT_PREFERENCES.discordPresenceEnabled,
   };
 }
 

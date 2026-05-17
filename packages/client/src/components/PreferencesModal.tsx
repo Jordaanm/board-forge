@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { usePreferences } from '../preferences/usePreferences';
 import { ACTION_LABELS, ACTION_NAMES, ROTATE_AMOUNT_VALUES, type ActionName, type DarkMode, type RotateAmount } from '../preferences/types';
+import { useDiscordAuth } from '../discord/DiscordAuthProvider';
 import { useAnchorTarget } from './AnchorLayout';
 
 interface Props {
@@ -147,6 +148,21 @@ function chipStyle(active: boolean): React.CSSProperties {
   };
 }
 
+const TOGGLE_ROW: React.CSSProperties = {
+  display:        'flex',
+  alignItems:     'center',
+  justifyContent: 'space-between',
+  width:          '100%',
+  background:     'var(--bg)',
+  border:         '1px solid var(--line)',
+  borderRadius:   'var(--card-radius)',
+  color:          'var(--ink)',
+  padding:        '8px 10px',
+  cursor:         'pointer',
+  fontFamily:     'inherit',
+  fontSize:       13,
+};
+
 const SECTION_TOGGLE: React.CSSProperties = {
   display:        'flex',
   alignItems:     'center',
@@ -211,7 +227,11 @@ function formatKey(key: string): string {
 
 export function PreferencesModal({ open, onOpenChange }: Props) {
   const centerAnchor = useAnchorTarget('center');
-  const { darkMode, setDarkMode, rotateAmount, setRotateAmount, hotkeys, setHotkey, reset } = usePreferences();
+  const {
+    darkMode, setDarkMode, rotateAmount, setRotateAmount, hotkeys, setHotkey, reset,
+    discordPresenceEnabled, setDiscordPresenceEnabled,
+  } = usePreferences();
+  const { isSignedIn } = useDiscordAuth();
   const [hotkeysOpen, setHotkeysOpen] = useState(false);
   const [capturing, setCapturing] = useState<ActionName | null>(null);
 
@@ -287,6 +307,20 @@ export function PreferencesModal({ open, onOpenChange }: Props) {
                 ))}
               </div>
             </div>
+
+            {isSignedIn && (
+              <div>
+                <div style={FIELD_LABEL}>Discord</div>
+                <label style={TOGGLE_ROW}>
+                  <span>Show on Discord profile</span>
+                  <input
+                    type="checkbox"
+                    checked={discordPresenceEnabled}
+                    onChange={(e) => setDiscordPresenceEnabled(e.target.checked)}
+                  />
+                </label>
+              </div>
+            )}
 
             <div>
               <button
