@@ -66,6 +66,7 @@ function handleJoin(ws: WebSocket, msg: Msg) {
   if (!roomId || (role !== 'host' && role !== 'guest')) return;
 
   const displayName      = sanitiseDisplayName(msg.displayName);
+  const avatarUrl        = sanitiseAvatarUrl(msg.avatarUrl);
   const suppliedPassword = typeof msg.password === 'string' ? msg.password : undefined;
   const ip               = getClientIp(ws);
 
@@ -85,7 +86,7 @@ function handleJoin(ws: WebSocket, msg: Msg) {
     }
   }
 
-  const result = join(roomId, role, ws, displayName, ip);
+  const result = join(roomId, role, ws, displayName, ip, avatarUrl);
   if (result === 'full') {
     send(ws, { type: 'room-full' });
     return;
@@ -103,6 +104,7 @@ function handleJoin(ws: WebSocket, msg: Msg) {
     role,
     hostId:       result.hostId,
     displayName,
+    avatarUrl,
     otherPeers:   result.otherPeers,
     roomSettings,
     // Hosts get the ban list at join time so the Settings modal can render
@@ -111,9 +113,13 @@ function handleJoin(ws: WebSocket, msg: Msg) {
   });
 
   // Notify existing members of the new peer.
+  const joinedPayload: { type: string; peerId: string; role: Role; displayName: string; avatarUrl?: string } = {
+    type: 'peer-joined', peerId: result.peerId, role, displayName,
+  };
+  if (avatarUrl !== undefined) joinedPayload.avatarUrl = avatarUrl;
   for (const other of result.otherPeers) {
     const member = getMember(roomId, other.peerId);
-    if (member) send(member.ws, { type: 'peer-joined', peerId: result.peerId, role, displayName });
+    if (member) send(member.ws, joinedPayload);
   }
 
   // When the host arrives after one or more guests, the default room name
@@ -223,6 +229,24 @@ function sanitiseDisplayName(raw: unknown): string {
   const trimmed = raw.trim();
   if (trimmed === '') return '';
   return Array.from(trimmed).slice(0, MAX_DISPLAY_NAME_LENGTH).join('');
+}
+
+const MAX_AVATAR_URL_LENGTH = 512;
+const AVATAR_URL_HOST       = 'cdn.discordapp.com';
+
+// Defense-in-depth on the avatar URL the client sends in `join`. We never
+// fetch from this URL ourselves — but we do echo it to other peers, so a
+// malformed value would propagate. Drop anything that isn't an https URL
+// on Discord's CDN within the size cap.
+function sanitiseAvatarUrl(raw: unknown): string | undefined {
+  if (typeof raw !== 'string')          return undefined;
+  if (raw.length === 0)                 return undefined;
+  if (raw.length > MAX_AVATAR_URL_LENGTH) return undefined;
+  let url: URL;
+  try { url = new URL(raw); } catch { return undefined; }
+  if (url.protocol !== 'https:')        return undefined;
+  if (url.hostname !== AVATAR_URL_HOST) return undefined;
+  return raw;
 }
 
 function handleForward(ws: WebSocket, msg: Msg) {

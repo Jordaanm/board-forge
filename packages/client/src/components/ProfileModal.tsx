@@ -4,6 +4,7 @@
 
 import { useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
+import { useLocation } from 'react-router-dom';
 import { useDiscordAuth } from '../discord/DiscordAuthProvider';
 import {
   MAX_DISPLAY_NAME_LENGTH,
@@ -152,14 +153,24 @@ const SECONDARY_BTN: React.CSSProperties = {
   width:        '100%',
 };
 
+const SECONDARY_BTN_DISABLED: React.CSSProperties = {
+  ...SECONDARY_BTN,
+  color:  'var(--ink-mute)',
+  cursor: 'not-allowed',
+  opacity: 0.6,
+};
+
 export function ProfileModal({ open, onOpenChange }: Props) {
   const centerAnchor = useAnchorTarget('center');
   const { profile, isSignedIn, signIn, signOut } = useDiscordAuth();
   const [name, setName] = useState(() => loadDisplayName());
   const initial         = (Array.from(name.trim())[0] ?? '?').toUpperCase();
+  // Sign-out is locked while in a room (frozen-identity-per-session). The
+  // pathname check matches the /r/:roomId route the room view lives under.
+  const inRoom          = useLocation().pathname.startsWith('/r/');
 
   const onSignIn  = () => { void signIn(); };
-  const onSignOut = () => { signOut(); };
+  const onSignOut = () => { if (!inRoom) signOut(); };
 
   const onNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const next = e.target.value;
@@ -209,8 +220,15 @@ export function ProfileModal({ open, onOpenChange }: Props) {
               : <p style={SUB_LINE}>Not signed in</p>}
 
             {isSignedIn
-              ? <button type="button" style={SECONDARY_BTN} onClick={onSignOut}>Sign out</button>
-              : <button type="button" style={PRIMARY_BTN}   onClick={onSignIn}>Sign in with Discord</button>}
+              ? <button
+                  type="button"
+                  style={inRoom ? SECONDARY_BTN_DISABLED : SECONDARY_BTN}
+                  onClick={onSignOut}
+                  disabled={inRoom}
+                  aria-disabled={inRoom}
+                  title={inRoom ? 'Leave the room to sign out' : undefined}
+                >Sign out</button>
+              : <button type="button" style={PRIMARY_BTN} onClick={onSignIn}>Sign in with Discord</button>}
           </div>
         </Dialog.Content>
       </Dialog.Portal>

@@ -37,53 +37,63 @@ export class RoomStateManager {
   private readonly listeners: Listener[] = [];
   private readonly turnEventListeners: TurnEventListener[] = [];
   private readonly names: Map<string, string> = new Map();
+  private readonly avatars: Map<string, string> = new Map();
   private turns: TurnState = initialTurnState();
 
-  constructor(hostPeerId: string, hostDisplayName: string = '') {
+  constructor(hostPeerId: string, hostDisplayName: string = '', hostAvatarUrl?: string) {
     this.hostPeerId = hostPeerId;
     this.seats[0].peerId = hostPeerId;
     if (hostDisplayName !== '') this.names.set(hostPeerId, hostDisplayName);
+    if (hostAvatarUrl) this.avatars.set(hostPeerId, hostAvatarUrl);
   }
 
-  assignOnJoin(peerId: string, displayName: string = ''): void {
+  assignOnJoin(peerId: string, displayName: string = '', avatarUrl?: string): void {
     if (this.banned.has(peerId)) return;
     const nameChanged = displayName !== '' && this.names.get(peerId) !== displayName;
     if (nameChanged) this.names.set(peerId, displayName);
     const namesPatch = nameChanged ? { [peerId]: displayName } : undefined;
+
+    const avatarChanged = avatarUrl !== undefined && this.avatars.get(peerId) !== avatarUrl;
+    if (avatarChanged) this.avatars.set(peerId, avatarUrl!);
+    const avatarsPatch = avatarChanged ? { [peerId]: avatarUrl! } : undefined;
+
     if (this.locate(peerId)) {
-      if (namesPatch) this.emit({ names: namesPatch });
+      if (namesPatch || avatarsPatch) this.emit({ names: namesPatch, avatars: avatarsPatch });
       return;
     }
 
     const empty = this.seats.find(s => s.peerId === null);
     if (empty) {
       empty.peerId = peerId;
-      this.emit({ seats: [{ ...empty }], names: namesPatch });
+      this.emit({ seats: [{ ...empty }], names: namesPatch, avatars: avatarsPatch });
       return;
     }
 
     this.spectators.push(peerId);
-    this.emit({ spectatorsAdded: [peerId], names: namesPatch });
+    this.emit({ spectatorsAdded: [peerId], names: namesPatch, avatars: avatarsPatch });
   }
 
   removePeer(peerId: string): void {
     const hadName = this.names.delete(peerId);
     const namesPatch: Record<string, string | null> | undefined =
       hadName ? { [peerId]: null } : undefined;
+    const hadAvatar = this.avatars.delete(peerId);
+    const avatarsPatch: Record<string, string | null> | undefined =
+      hadAvatar ? { [peerId]: null } : undefined;
     const seated = this.seats.find(s => s.peerId === peerId);
     if (seated) {
       seated.peerId = null;
-      this.emit({ seats: [{ ...seated }], names: namesPatch });
+      this.emit({ seats: [{ ...seated }], names: namesPatch, avatars: avatarsPatch });
       return;
     }
 
     const idx = this.spectators.indexOf(peerId);
     if (idx === -1) {
-      if (namesPatch) this.emit({ names: namesPatch });
+      if (namesPatch || avatarsPatch) this.emit({ names: namesPatch, avatars: avatarsPatch });
       return;
     }
     this.spectators.splice(idx, 1);
-    this.emit({ spectatorsRemoved: [peerId], names: namesPatch });
+    this.emit({ spectatorsRemoved: [peerId], names: namesPatch, avatars: avatarsPatch });
   }
 
   // Move peerId to seatIndex if it is empty. Returns false if the seat is
@@ -145,6 +155,7 @@ export class RoomStateManager {
       spectators: [...this.spectators],
       turns:      cloneTurns(this.turns),
       names:      Object.fromEntries(this.names),
+      avatars:    Object.fromEntries(this.avatars),
     };
   }
 
@@ -224,7 +235,8 @@ export class RoomStateManager {
       (!patch.spectatorsAdded   || patch.spectatorsAdded.length   === 0) &&
       (!patch.spectatorsRemoved || patch.spectatorsRemoved.length === 0) &&
       !patch.turns &&
-      (!patch.names || Object.keys(patch.names).length === 0)
+      (!patch.names   || Object.keys(patch.names).length   === 0) &&
+      (!patch.avatars || Object.keys(patch.avatars).length === 0)
     ) return;
 
     const change: RoomStateChange = { patch, snapshot: this.snapshot() };

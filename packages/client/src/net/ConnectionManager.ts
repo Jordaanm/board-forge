@@ -14,7 +14,7 @@ export interface PublicBanEntry {
 type MsgHandler             = (peerId: string, msg: unknown) => void;
 type StatusHandler          = (s: Status) => void;
 type PeerLeftHandler        = (peerId: string) => void;
-type PeerConnectedHandler   = (peerId: string, displayName: string) => void;
+type PeerConnectedHandler   = (peerId: string, displayName: string, avatarUrl?: string) => void;
 type JoinedHandler          = (peerId: string, hostPeerId: string | null) => void;
 type RoomSettingsHandler    = (settings: RoomSettings) => void;
 type BansUpdatedHandler     = (bans: PublicBanEntry[]) => void;
@@ -69,9 +69,11 @@ export class ConnectionManager {
   private hostId:     string | null = null;
   private peers       = new Map<string, PeerEntry>();
   private peerNames   = new Map<string, string>();
+  private peerAvatars = new Map<string, string>();
   private iceServers: RTCIceServer[] = FALLBACK_ICE_SERVERS;
   private disposed    = false;
   private displayName = '';
+  private avatarUrl: string | null = null;
   private password: string | null = null;
 
   constructor(
@@ -111,20 +113,26 @@ export class ConnectionManager {
     return ids;
   }
 
-  hostRoom(signalingUrl: string, roomId: string, displayName: string) {
+  hostRoom(signalingUrl: string, roomId: string, displayName: string, avatarUrl: string | null = null) {
     this.displayName = displayName;
-    this.password = null;
+    this.avatarUrl   = avatarUrl;
+    this.password    = null;
     void this.connect(signalingUrl, roomId, 'host');
   }
 
-  joinRoom(signalingUrl: string, roomId: string, displayName: string, password: string | null = null) {
+  joinRoom(signalingUrl: string, roomId: string, displayName: string, password: string | null = null, avatarUrl: string | null = null) {
     this.displayName = displayName;
-    this.password = password;
+    this.avatarUrl   = avatarUrl;
+    this.password    = password;
     void this.connect(signalingUrl, roomId, 'guest');
   }
 
   getPeerDisplayName(peerId: string): string | null {
     return this.peerNames.get(peerId) ?? null;
+  }
+
+  getPeerAvatarUrl(peerId: string): string | null {
+    return this.peerAvatars.get(peerId) ?? null;
   }
 
   // Broadcast (host) or send to host (guest). Defaults to the reliable
@@ -175,6 +183,7 @@ export class ConnectionManager {
         roomId,
         role,
         displayName: this.displayName,
+        avatarUrl:   this.avatarUrl ?? undefined,
         password:    this.password ?? undefined,
       }));
     });
@@ -194,8 +203,9 @@ export class ConnectionManager {
       case 'joined':
         this.peerId = msg.peerId as string;
         this.hostId = (msg.hostId as string | null) ?? null;
-        for (const p of (msg.otherPeers as { peerId: string; role: Role; displayName?: string }[] | undefined) ?? []) {
+        for (const p of (msg.otherPeers as { peerId: string; role: Role; displayName?: string; avatarUrl?: string }[] | undefined) ?? []) {
           if (typeof p.displayName === 'string') this.peerNames.set(p.peerId, p.displayName);
+          if (typeof p.avatarUrl   === 'string') this.peerAvatars.set(p.peerId, p.avatarUrl);
         }
         if (msg.roomSettings && typeof (msg.roomSettings as RoomSettings).name === 'string') {
           this.onRoomSettings(msg.roomSettings as RoomSettings);
@@ -233,7 +243,9 @@ export class ConnectionManager {
       case 'peer-joined': {
         const peerId      = msg.peerId as string;
         const displayName = typeof msg.displayName === 'string' ? msg.displayName : '';
+        const avatarUrl   = typeof msg.avatarUrl   === 'string' ? msg.avatarUrl   : undefined;
         this.peerNames.set(peerId, displayName);
+        if (avatarUrl !== undefined) this.peerAvatars.set(peerId, avatarUrl);
         if (this.role === 'host') await this.dialPeer(peerId);
         break;
       }
@@ -332,7 +344,7 @@ export class ConnectionManager {
       if (ch.label === RELIABLE_LABEL) {
         entry.open = true;
         this.onStatus('connected');
-        this.onPeerConnected(remoteId, this.peerNames.get(remoteId) ?? '');
+        this.onPeerConnected(remoteId, this.peerNames.get(remoteId) ?? '', this.peerAvatars.get(remoteId));
       }
     };
     ch.onclose = () => this.markPeerClosed(remoteId);
@@ -351,6 +363,7 @@ export class ConnectionManager {
     entry.pc.close();
     this.peers.delete(remoteId);
     this.peerNames.delete(remoteId);
+    this.peerAvatars.delete(remoteId);
     if (!this.anyPeerOpen()) this.onStatus('disconnected');
   }
 

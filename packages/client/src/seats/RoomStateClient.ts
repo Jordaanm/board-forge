@@ -26,6 +26,7 @@ export class RoomStateClient {
       spectators: [...snapshot.spectators],
       turns:      snapshot.turns ? cloneTurns(snapshot.turns) : initialTurnState(),
       names:      { ...(snapshot.names ?? {}) },
+      avatars:    { ...(snapshot.avatars ?? {}) },
     };
     this.emit();
   }
@@ -66,6 +67,13 @@ export class RoomStateClient {
       }
     }
 
+    if (patch.avatars) {
+      for (const [peerId, avatar] of Object.entries(patch.avatars)) {
+        if (avatar === null) delete this.currentSnapshot.avatars[peerId];
+        else this.currentSnapshot.avatars[peerId] = avatar;
+      }
+    }
+
     this.emit();
   }
 
@@ -77,6 +85,7 @@ export class RoomStateClient {
       spectators: [...this.currentSnapshot.spectators],
       turns:      cloneTurns(this.currentSnapshot.turns),
       names:      { ...this.currentSnapshot.names },
+      avatars:    { ...this.currentSnapshot.avatars },
     };
   }
 

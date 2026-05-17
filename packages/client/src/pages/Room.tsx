@@ -16,6 +16,7 @@ import { HandPanel } from '../components/HandPanel';
 import { PreferencesTrigger } from '../components/PreferencesTrigger';
 import { load as loadPreferences } from '../preferences/storage';
 import { loadDisplayName } from '../identity/displayName';
+import { useDiscordAuth } from '../discord/DiscordAuthProvider';
 import { TOOL_CATALOGUE } from '../input/tools';
 import { type ContextMenuRequest, dispatchMenuAction } from '../input/ContextMenuController';
 import { type MenuItem } from '../entity/EntityComponent';
@@ -73,6 +74,7 @@ export function Room({ roomId, isHost }: Props) {
   const [bans,         setBans]         = useState<PublicBanEntry[]>([]);
   const location = useLocation();
   const joinPassword: string | null = (location.state as { password?: string } | null)?.password ?? null;
+  const { profile } = useDiscordAuth();
   const [handView, setHandView]         = useState<HandView | null>(null);
   const [lastLoaded, setLastLoaded]     = useState<LastLoaded | null>(null);
   const [historyService, setHistoryService] = useState<SceneHistoryService | null>(null);
@@ -153,8 +155,15 @@ export function Room({ roomId, isHost }: Props) {
     setScriptErrorLog(handle.controller.scripting?.errorLog ?? null);
   }, [handle, isHost]);
 
+  // Frozen-identity-per-session: snapshot the avatar URL at mount and never
+  // change it for this room's lifetime. profile is deliberately not in this
+  // effect's deps so a mid-session profile change does not force a rejoin.
+  const profileAvatarUrlRef = useRef<string | null>(profile?.avatarUrl ?? null);
+  profileAvatarUrlRef.current = profile?.avatarUrl ?? null;
+
   useEffect(() => {
     const selfDisplayName = loadDisplayName();
+    const selfAvatarUrl   = profileAvatarUrlRef.current;
     let manager: RoomStateManager | null = null;
     let client:  RoomStateClient  | null = null;
     let mgr!: ConnectionManager;
@@ -213,14 +222,14 @@ export function Room({ roomId, isHost }: Props) {
         handleRef.current?.controller.releasePeer(peerId);
         onPeerLeftRef.current(peerId);
       },
-      (peerId, displayName) => {
+      (peerId, displayName, avatarUrl) => {
         if (!manager) return;
         if (manager.isBanned(peerId)) {
           mgr.sendTo(peerId, { type: 'kicked', reason: 'ban' } satisfies RoomStateMessage);
           mgr.kickPeer(peerId);
           return;
         }
-        manager.assignOnJoin(peerId, displayName);
+        manager.assignOnJoin(peerId, displayName, avatarUrl);
         const snapshotMsg: RoomStateMessage = { type: 'room-state', snapshot: manager.snapshot() };
         mgr.sendTo(peerId, snapshotMsg);
         const manifestSnap = manifestStoreRef.current?.getPublished().toArray() ?? [];
@@ -232,7 +241,7 @@ export function Room({ roomId, isHost }: Props) {
       (peerId) => {
         setSelfPeerId(peerId);
         if (isHost) {
-          manager = new RoomStateManager(peerId, selfDisplayName);
+          manager = new RoomStateManager(peerId, selfDisplayName, selfAvatarUrl ?? undefined);
           managerRef.current = manager;
           manager.onChange((change) => {
             const patchMsg: RoomStateMessage = { type: 'room-state-patch', patch: change.patch };
@@ -328,8 +337,8 @@ export function Room({ roomId, isHost }: Props) {
       mgr.banPeer(peerId);
     };
 
-    if (isHost) mgr.hostRoom(SIGNALING_URL, roomId, selfDisplayName);
-    else        mgr.joinRoom(SIGNALING_URL, roomId, selfDisplayName, joinPassword);
+    if (isHost) mgr.hostRoom(SIGNALING_URL, roomId, selfDisplayName, selfAvatarUrl);
+    else        mgr.joinRoom(SIGNALING_URL, roomId, selfDisplayName, joinPassword, selfAvatarUrl);
 
     return () => {
       mgr.dispose();

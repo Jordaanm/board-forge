@@ -54,9 +54,9 @@ function send(ws: WebSocket, data: unknown) {
   ws.send(JSON.stringify(data));
 }
 
-async function joinRoom(ws: WebSocket, roomId: string, role: 'host' | 'guest', displayName = 'Player', password?: string) {
+async function joinRoom(ws: WebSocket, roomId: string, role: 'host' | 'guest', displayName = 'Player', password?: string, avatarUrl?: unknown) {
   const joined = nextMsg(ws);
-  send(ws, { type: 'join', roomId, role, displayName, password });
+  send(ws, { type: 'join', roomId, role, displayName, password, avatarUrl });
   return joined;
 }
 
@@ -716,6 +716,75 @@ describe('display name', () => {
 
     host.close();
     longHost.close();
+  });
+});
+
+describe('avatar URL', () => {
+  const GOOD_URL = 'https://cdn.discordapp.com/avatars/12345/abc.webp?size=128';
+
+  test('joined echoes a valid Discord-CDN avatarUrl', async () => {
+    const host = await connect();
+    const msg = await joinRoom(host, 'room-avatar-a', 'host', 'Alice', undefined, GOOD_URL);
+    expect(msg.avatarUrl).toBe(GOOD_URL);
+    host.close();
+  });
+
+  test('avatarUrl propagates in otherPeers and peer-joined', async () => {
+    const host  = await connect();
+    const guest = await connect();
+    await joinRoom(host, 'room-avatar-b', 'host', 'Alice', undefined, GOOD_URL);
+    const peerJoined  = nextMsg(host);
+    const guestJoined = await joinRoom(guest, 'room-avatar-b', 'guest', 'Bob');
+    expect((guestJoined.otherPeers as { avatarUrl?: string }[])[0].avatarUrl).toBe(GOOD_URL);
+    const pj = await peerJoined;
+    expect(pj.avatarUrl).toBeUndefined(); // guest sent none
+    host.close();
+    guest.close();
+  });
+
+  test('missing avatarUrl omits the field on joined', async () => {
+    const host = await connect();
+    const msg  = await joinRoom(host, 'room-avatar-c', 'host', 'Alice');
+    expect(msg.avatarUrl).toBeUndefined();
+    host.close();
+  });
+
+  test('non-https avatarUrl is omitted', async () => {
+    const host = await connect();
+    const msg  = await joinRoom(host, 'room-avatar-d', 'host', 'Alice', undefined,
+      'http://cdn.discordapp.com/avatars/1/x.webp');
+    expect(msg.avatarUrl).toBeUndefined();
+    host.close();
+  });
+
+  test('non-Discord host avatarUrl is omitted', async () => {
+    const host = await connect();
+    const msg  = await joinRoom(host, 'room-avatar-e', 'host', 'Alice', undefined,
+      'https://evil.example.com/avatars/1/x.webp');
+    expect(msg.avatarUrl).toBeUndefined();
+    host.close();
+  });
+
+  test('oversized avatarUrl (> 512 chars) is omitted', async () => {
+    const host = await connect();
+    const long = 'https://cdn.discordapp.com/avatars/12345/' + 'a'.repeat(600);
+    const msg  = await joinRoom(host, 'room-avatar-f', 'host', 'Alice', undefined, long);
+    expect(msg.avatarUrl).toBeUndefined();
+    host.close();
+  });
+
+  test('non-string avatarUrl is omitted', async () => {
+    const host = await connect();
+    const msg  = await joinRoom(host, 'room-avatar-g', 'host', 'Alice', undefined, 12345);
+    expect(msg.avatarUrl).toBeUndefined();
+    host.close();
+  });
+
+  test('malformed avatarUrl is omitted', async () => {
+    const host = await connect();
+    const msg  = await joinRoom(host, 'room-avatar-h', 'host', 'Alice', undefined, 'not a url');
+    expect(msg.avatarUrl).toBeUndefined();
+    host.close();
   });
 });
 

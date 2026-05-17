@@ -52,6 +52,7 @@ export function PlayersPanel({
                 key={`seat-${seat.index}`}
                 seat={seat}
                 displayName={seat.peerId ? displayNameFor(snapshot, seat.peerId) : ''}
+                avatarUrl={seat.peerId ? avatarUrlFor(snapshot, seat.peerId) : null}
                 isSelf={seat.peerId !== null && seat.peerId === selfPeerId}
                 isHostPeer={seat.peerId === snapshot.hostPeerId}
                 isActiveTurn={snapshot.turns.enabled && snapshot.turns.activeSeat === seat.index}
@@ -69,6 +70,7 @@ export function PlayersPanel({
                 key={`spec-${peerId}`}
                 peerId={peerId}
                 displayName={displayNameFor(snapshot, peerId)}
+                avatarUrl={avatarUrlFor(snapshot, peerId)}
                 isSelf={peerId === selfPeerId}
                 onContextMenu={(e) => openMenu(e, {
                   rowKind: 'spectator', peerId,
@@ -99,11 +101,34 @@ function displayNameFor(snapshot: RoomStateSnapshot, peerId: string): string {
   return snapshot.names?.[peerId] ?? peerId.slice(0, 8);
 }
 
+function avatarUrlFor(snapshot: RoomStateSnapshot, peerId: string): string | null {
+  return snapshot.avatars?.[peerId] ?? null;
+}
+
+function Avatar({ avatarUrl, displayName }: { avatarUrl: string | null; displayName: string }) {
+  // Drop the image after a broken-image load and fall back to the letter
+  // circle, matching the anonymous render path.
+  const [broken, setBroken] = useState(false);
+  if (avatarUrl !== null && !broken) {
+    return (
+      <img
+        className="players-panel__avatar"
+        src={avatarUrl}
+        alt=""
+        onError={() => setBroken(true)}
+      />
+    );
+  }
+  const initial = (Array.from(displayName.trim())[0] ?? '?').toUpperCase();
+  return <div className="players-panel__avatar players-panel__avatar--letter">{initial}</div>;
+}
+
 function SeatRow({
-  seat, displayName, isSelf, isHostPeer, isActiveTurn, onContextMenu,
+  seat, displayName, avatarUrl, isSelf, isHostPeer, isActiveTurn, onContextMenu,
 }: {
   seat:          SeatEntry;
   displayName:   string;
+  avatarUrl:     string | null;
   isSelf:        boolean;
   isHostPeer:    boolean;
   isActiveTurn:  boolean;
@@ -126,6 +151,7 @@ function SeatRow({
         style={{ background: occupied ? seat.colour : undefined }}
         title={`Seat ${seat.index} (${seat.colour})`}
       />
+      {occupied && <Avatar avatarUrl={avatarUrl} displayName={displayName} />}
       {occupied
         ? <span className="players-panel__name">{displayName}</span>
         : <span className="players-panel__name players-panel__name--placeholder">empty</span>}
@@ -136,10 +162,11 @@ function SeatRow({
 }
 
 function SpectatorRow({
-  peerId, displayName, isSelf, onContextMenu,
+  peerId, displayName, avatarUrl, isSelf, onContextMenu,
 }: {
   peerId:        string;
   displayName:   string;
+  avatarUrl:     string | null;
   isSelf:        boolean;
   onContextMenu: (e: React.MouseEvent) => void;
 }) {
@@ -150,6 +177,7 @@ function SpectatorRow({
       data-peer-id={peerId}
     >
       <div className="players-panel__swatch players-panel__swatch--empty" />
+      <Avatar avatarUrl={avatarUrl} displayName={displayName} />
       <span className="players-panel__name">{displayName}</span>
       {isSelf && <span className="players-panel__badge">you</span>}
     </div>

@@ -10,6 +10,7 @@ export interface Member {
   ws:          WebSocket;
   displayName: string;
   ipHash:      string;
+  avatarUrl?:  string;
 }
 
 interface Room {
@@ -21,7 +22,7 @@ interface Room {
 export interface JoinResult {
   peerId:     string;
   hostId:     string | null;
-  otherPeers: { peerId: string; role: Role; displayName: string }[];
+  otherPeers: { peerId: string; role: Role; displayName: string; avatarUrl?: string }[];
   roomName:   string;
 }
 
@@ -29,7 +30,14 @@ const rooms        = new Map<string, Room>();
 const clientLookup = new Map<WebSocket, { roomId: string; peerId: string }>();
 let totalRoomsCreated = 0;
 
-export function join(roomId: string, role: Role, ws: WebSocket, displayName: string, ip: string): JoinResult | 'full' {
+export function join(
+  roomId:      string,
+  role:        Role,
+  ws:          WebSocket,
+  displayName: string,
+  ip:          string,
+  avatarUrl?:  string,
+): JoinResult | 'full' {
   let room = rooms.get(roomId);
   if (!room) {
     // Initial host display name only carries through for the typical
@@ -62,13 +70,18 @@ export function join(roomId: string, role: Role, ws: WebSocket, displayName: str
 
   const peerId = crypto.randomUUID();
   const ipHash = room.metadata.hashIp(ip);
-  room.members.set(peerId, { peerId, role, ws, displayName, ipHash });
+  room.members.set(peerId, { peerId, role, ws, displayName, ipHash, avatarUrl });
   if (role === 'host') room.hostId = peerId;
   clientLookup.set(ws, { roomId, peerId });
 
   const otherPeers = Array.from(room.members.values())
     .filter(m => m.peerId !== peerId)
-    .map(m => ({ peerId: m.peerId, role: m.role, displayName: m.displayName }));
+    .map(m => {
+      const entry: { peerId: string; role: Role; displayName: string; avatarUrl?: string } =
+        { peerId: m.peerId, role: m.role, displayName: m.displayName };
+      if (m.avatarUrl !== undefined) entry.avatarUrl = m.avatarUrl;
+      return entry;
+    });
 
   return { peerId, hostId: room.hostId, otherPeers, roomName: room.metadata.getName() };
 }

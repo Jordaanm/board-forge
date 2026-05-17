@@ -82,6 +82,27 @@
   border-color: var(--line-strong);
 }
 
+.players-panel__avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, var(--plum), var(--accent));
+  border: 1px solid var(--line);
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: -0.02em;
+  overflow: hidden;
+  object-fit: cover;
+}
+
+.players-panel__avatar--letter {
+  font-family: var(--font-serif);
+}
+
 .players-panel__name {
   flex: 1;
   font-family: var(--font-mono);
